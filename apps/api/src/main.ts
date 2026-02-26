@@ -22,7 +22,6 @@ const envSchema = z.object({
   LIVEKIT_API_SECRET: z.string().min(1),
   LIVEKIT_AGENT_NAME: z.string().min(1).default('room-assistant'),
   DATABASE_URL: z.string().min(1),
-  REDIS_URL: z.string().min(1),
   JWT_SECRET: z.string().min(1)
 });
 

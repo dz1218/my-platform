@@ -5,7 +5,6 @@
 - 前端：Vercel（`apps/web`）
 - 后端：Railway / Render（`apps/api`）
 - 数据库：Supabase Postgres
-- Redis：Upstash
 - 实时音视频：LiveKit Cloud
 
 ## 1. 上线前检查
@@ -20,11 +19,10 @@ pnpm build
 
 3. 代码已推送到 Git 仓库（GitHub/GitLab）。
 
-## 2. 先准备 3 个云服务
+## 2. 先准备 2 个云服务
 
 1. Supabase：创建 Postgres，拿到 `DATABASE_URL`
-2. Upstash：创建 Redis，拿到 `REDIS_URL`
-3. LiveKit Cloud：创建项目，拿到：
+2. LiveKit Cloud：创建项目，拿到：
    - `LIVEKIT_URL`（`wss://...`）
    - `LIVEKIT_API_KEY`
    - `LIVEKIT_API_SECRET`
@@ -38,7 +36,6 @@ NODE_ENV=production
 PORT=3001
 WEB_ORIGIN=https://<你的-web-域名>
 DATABASE_URL=<Supabase 提供的连接串>
-REDIS_URL=<Upstash 提供的连接串>
 LIVEKIT_URL=<LiveKit Cloud 的 wss 地址>
 LIVEKIT_API_KEY=<LiveKit key>
 LIVEKIT_API_SECRET=<LiveKit secret>
@@ -126,10 +123,9 @@ WEB_ORIGIN=https://<你的-vercel-正式域名>
 
 ## 9. 推荐的上线顺序（最稳）
 
-1. 配好 Supabase / Upstash / LiveKit
+1. 配好 Supabase / LiveKit
 2. 先上 API 并测 `/health`
 3. 初始化数据库 schema（`prisma db push`）
 4. 再上 Web
 5. 回填 API 的 `WEB_ORIGIN`
 6. 全链路验收
-
