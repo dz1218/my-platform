@@ -1,0 +1,11 @@
+{
+  "buildCommand": "cd apps/web && pnpm build",
+  "outputDirectory": "apps/web/.next",
+  "installCommand": "pnpm install",
+  "framework": "nextjs",
+  "regions": ["hkg1"],
+  "env": {
+    "NEXT_PUBLIC_API_BASE_URL": "@api_url",
+    "NEXT_PUBLIC_LIVEKIT_URL": "@livekit_url"
+  }
+}

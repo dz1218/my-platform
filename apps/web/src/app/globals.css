@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    @apply box-border;
+  }
+
+  html,
+  body {
+    @apply min-h-full;
+  }
+
+  body {
+    @apply m-0 bg-bg text-ink antialiased;
+  }
+
+  ::selection {
+    background: rgba(99, 102, 241, 0.35);
+    color: #f8fafc;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  input,
+  button {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply rounded-2xl border border-white/10 bg-white/[0.05] shadow-glass backdrop-blur-xl;
+  }
+
+  .glass-card-soft {
+    @apply rounded-2xl border border-white/10 bg-white/[0.04] shadow-card backdrop-blur-xl;
+  }
+
+  .link-muted {
+    @apply text-[13px] font-medium text-slate-500 no-underline transition-colors hover:text-brand-300;
+  }
+
+  .input-glass {
+    @apply w-full rounded-[10px] border border-white/[0.15] bg-white/[0.06] px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 transition-colors focus:border-brand-400/70 focus:outline-none focus:ring-2 focus:ring-brand-500/20;
+  }
+
+  .btn-solid {
+    @apply inline-flex items-center justify-center gap-2 rounded-[10px] border-0 px-4 py-2.5 text-sm font-semibold text-white transition-all disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .btn-indigo {
+    @apply btn-solid bg-gradient-to-br from-brand-600 to-brand-500 shadow-[0_2px_16px_rgba(99,102,241,0.4)] hover:brightness-110 active:scale-[0.98];
+  }
+
+  .btn-violet {
+    @apply btn-solid bg-gradient-to-br from-violet-600 to-violet-500 shadow-[0_2px_16px_rgba(139,92,246,0.4)] hover:brightness-110 active:scale-[0.98];
+  }
+
+  .btn-emerald {
+    @apply btn-solid bg-gradient-to-br from-emerald-600 to-emerald-400 shadow-[0_2px_16px_rgba(52,211,153,0.35)] hover:brightness-110 active:scale-[0.98];
+  }
+
+  .btn-glass {
+    @apply inline-flex items-center gap-1.5 rounded-[10px] border border-white/[0.15] bg-white/[0.06] px-4 py-2.5 text-[13px] font-medium text-slate-200 transition-colors hover:bg-white/[0.1];
+  }
+
+  .btn-danger-ghost {
+    @apply inline-flex items-center gap-1.5 rounded-[10px] border border-white/10 bg-white/[0.05] px-4 py-2.5 text-[13px] font-medium text-slate-400 transition-all hover:border-rose-400/[0.45] hover:bg-rose-500/[0.15] hover:text-rose-200;
+  }
+
+  .btn-link {
+    @apply text-xs text-slate-600 underline decoration-white/20 underline-offset-2 transition-colors hover:text-slate-400;
+  }
+
+  .badge-live {
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-live-500/[0.35] bg-live-500/[0.12] px-2.5 py-1 text-[11px] font-bold tracking-[0.08em] text-live-300;
+  }
+
+  .badge-success {
+    @apply inline-flex items-center gap-2 rounded-xl border border-success-500/25 bg-success-500/10 px-3.5 py-2 text-[13px] font-semibold text-success-300;
+  }
+
+  .badge-muted {
+    @apply inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2 text-[13px] font-semibold text-slate-400;
+  }
+
+  .icon-chip-live {
+    @apply flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-live-500/[0.35] bg-gradient-to-br from-live-500/30 to-live-500/[0.15];
+  }
+
+  .icon-chip-violet {
+    @apply flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-violet-400/[0.35] bg-gradient-to-br from-violet-500/30 to-violet-500/[0.15];
+  }
+
+  .icon-chip-brand {
+    @apply flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-brand-400/[0.35] bg-gradient-to-br from-brand-500/30 to-brand-500/[0.15];
+  }
+
+  .nav-card {
+    @apply transition-all duration-200 hover:-translate-y-1 hover:border-brand-400/50 hover:bg-white/[0.08] hover:shadow-[0_16px_48px_rgba(99,102,241,0.2),0_4px_16px_rgba(0,0,0,0.4)];
+  }
+
+  .room-card {
+    @apply transition-all duration-200 hover:border-brand-400/[0.35] hover:bg-white/[0.07] hover:shadow-[0_4px_24px_rgba(99,102,241,0.15)];
+  }
+
+  .live-dot {
+    @apply inline-block h-2 w-2 rounded-full bg-live-500 animate-pulse-live;
+  }
+
+  .online-dot {
+    @apply inline-block h-2 w-2 rounded-full bg-success-500 animate-pulse-online;
+  }
+
+  .live-media-track {
+    @apply block w-full max-w-[420px] rounded-xl bg-slate-950 shadow-[0_4px_24px_rgba(0,0,0,0.5)];
+  }
+}
