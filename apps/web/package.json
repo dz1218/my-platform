@@ -14,18 +14,18 @@
   "dependencies": {
     "@my-platform/db": "workspace:*",
     "livekit-client": "^2.15.2",
-    "next": "15.5.0",
+    "next": "15.5.12",
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "autoprefixer": "^10.4.21",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.17",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
     "typescript": "^5.9.2"
   }
 }
