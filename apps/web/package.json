@@ -6,7 +6,7 @@
   },
   "scripts": {
     "dev": "next dev --port 3011",
-    "build": "npx prisma db push --schema ../../packages/db/prisma/schema.prisma --skip-generate && next build",
+    "build": "pnpm --filter @my-platform/db exec prisma db push --schema prisma/schema.prisma --skip-generate && next build",
     "start": "next start --port 3011",
     "lint": "next lint",
     "typecheck": "next typegen && tsc --noEmit"
