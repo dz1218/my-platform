@@ -15,4 +15,32 @@ model User {
   email        String   @unique
   name         String?
   passwordHash String
+  novels       Novel[]
+}
+
+model Novel {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  title       String
+  description String?
+  coverUrl    String?
+  status      String    @default("ongoing")
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id])
+  chapters    Chapter[]
+}
+
+model Chapter {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  title      String
+  content    String   @db.Text
+  orderIndex Int
+  published  Boolean  @default(false)
+  novelId    String
+  novel      Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+
+  @@unique([novelId, orderIndex])
 }
