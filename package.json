@@ -11,6 +11,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "db:generate": "pnpm --filter @my-platform/db run generate",
+    "db:push": "pnpm --filter @my-platform/db exec prisma db push --schema prisma/schema.prisma --skip-generate",
     "db:up": "docker compose -f infra/docker/docker-compose.db.yml up -d",
     "db:down": "docker compose -f infra/docker/docker-compose.db.yml down",
     "postinstall": "pnpm run db:generate",
