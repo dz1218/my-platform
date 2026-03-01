@@ -1,7 +1,7 @@
-import Link from 'next/link';
-import { webEnv } from '@/lib/env';
-import { isAuthenticated, getHostNickname } from '@/lib/auth';
-import { logoutAction } from '@/lib/actions';
+import Link from "next/link";
+import { webEnv } from "@/lib/env";
+import { isAuthenticated, getHostNickname } from "@/lib/auth";
+import { logoutAction } from "@/lib/actions";
 
 type HealthResponse = {
   ok: boolean;
@@ -11,7 +11,7 @@ type HealthResponse = {
 async function getApiHealth() {
   try {
     const response = await fetch(`${webEnv.NEXT_PUBLIC_API_BASE_URL}/health`, {
-      cache: 'no-store',
+      cache: "no-store",
     });
     if (!response.ok) return false;
     const data = (await response.json()) as HealthResponse;
@@ -31,51 +31,9 @@ export default async function Home() {
   return (
     <main className="mx-auto max-w-5xl px-6 pb-24 pt-20">
       <div className="mb-16 text-center">
-        <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-[18px] bg-gradient-to-br from-brand-500 to-violet-500 shadow-brand-glow">
-          <svg
-            width="30"
-            height="30"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0" />
-            <circle cx="12" cy="20" r="1" fill="white" stroke="none" />
-          </svg>
-        </div>
-
-        <h1 className="mb-4 bg-gradient-to-br from-slate-100 via-indigo-200 to-violet-300 bg-clip-text text-[42px] font-extrabold leading-[1.15] tracking-[-1px] text-transparent">
-          My Platform
-        </h1>
         <p className="mx-auto mb-7 max-w-xl text-base leading-7 text-slate-400">
           直播 · 小说 · AI 驱动的下一代内容平台
         </p>
-
-        <div
-          className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 ${
-            isApiUp
-              ? 'border-emerald-400/30 bg-emerald-400/10'
-              : 'border-rose-400/30 bg-rose-400/10'
-          }`}
-        >
-          <span
-            className={
-              isApiUp
-                ? 'online-dot'
-                : 'inline-block h-2 w-2 flex-none rounded-full bg-rose-500'
-            }
-          />
-          <span
-            className={`text-[13px] font-semibold tracking-[0.02em] ${
-              isApiUp ? 'text-emerald-300' : 'text-rose-300'
-            }`}
-          >
-            API {isApiUp ? '在线' : '离线'}
-          </span>
-        </div>
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">
@@ -172,7 +130,8 @@ export default async function Home() {
         {loggedIn ? (
           <div className="inline-flex items-center gap-2.5">
             <span className="text-xs text-slate-600">
-              已以主播身份登录：<span className="text-slate-500">{hostNickname}</span>
+              已以主播身份登录：
+              <span className="text-slate-500">{hostNickname}</span>
             </span>
             <form action={logoutAction} className="inline">
               <button type="submit" className="btn-link">
@@ -182,7 +141,10 @@ export default async function Home() {
           </div>
         ) : (
           <div className="inline-flex items-center gap-3">
-            <Link href="/login" className="text-xs text-slate-600 no-underline transition-colors hover:text-slate-400">
+            <Link
+              href="/login"
+              className="text-xs text-slate-600 no-underline transition-colors hover:text-slate-400"
+            >
               登录
             </Link>
             <span className="text-xs text-slate-800">·</span>
