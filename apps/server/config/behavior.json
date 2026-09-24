@@ -1,0 +1,17 @@
+{
+  "version": "conversation-rhythm-v1",
+  "default": {
+    "debounceSeconds": 3,
+    "minDelaySeconds": 8,
+    "maxDelaySeconds": 25,
+    "charactersPerSecond": 12,
+    "maxTypingSeconds": 12,
+    "maxAttempts": 3,
+    "retrySeconds": 15
+  },
+  "identities": {
+    "identity_linwan": {"minDelaySeconds": 10, "maxDelaySeconds": 30},
+    "identity_suhe": {"minDelaySeconds": 6, "maxDelaySeconds": 18},
+    "identity_chennian": {"minDelaySeconds": 12, "maxDelaySeconds": 35}
+  }
+}

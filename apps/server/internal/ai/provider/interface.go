@@ -6,8 +6,13 @@ type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
-type ChatRequest struct{ Messages []Message }
-type StreamHandler func(string) error
+type ChatRequest struct {
+	Messages []Message `json:"messages"`
+}
+type Reply struct {
+	Content       string `json:"content"`
+	PromptVersion string `json:"promptVersion"`
+}
 type ChatModel interface {
-	Stream(context.Context, ChatRequest, StreamHandler) error
+	Generate(context.Context, ChatRequest) (Reply, error)
 }

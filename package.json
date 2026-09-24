@@ -20,7 +20,11 @@
     "dev:legacy": "pnpm --filter api dev",
     "server:dev": "cd apps/server && go run ./cmd/api",
     "server:test": "cd apps/server && go test ./...",
-    "db:migrate": "cd apps/server && go run ./cmd/api -migrate-only"
+    "db:migrate": "cd apps/server && go run ./cmd/api -migrate-only",
+    "agent:dev": "pnpm --filter agent dev",
+    "agent:test": "pnpm --filter agent test",
+    "worker:dev": "cd apps/server && go run ./cmd/worker",
+    "dev:all": "node scripts/dev.mjs"
   },
   "devDependencies": {
     "turbo": "^2.5.6",

@@ -1,3 +1,5 @@
+> 此文档描述旧版 NestJS / LiveKit 部署。新的陪伴聊天还需要 TypeScript Agent 与 Go Worker，启动和服务边界见 [当前架构](docs/companion-agent.md) 与 [README](README.md)。
+
 # my-platform 上线文档（生产环境）
 
 本文档基于当前仓库代码整理，目标是快速稳定上线：

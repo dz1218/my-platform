@@ -22,7 +22,7 @@ func (b Builder) Build(ctx context.Context, c conversation.Conversation) (provid
 	if err != nil {
 		return provider.ChatRequest{}, err
 	}
-	system := fmt.Sprintf("你正在以虚构身份 %s 与一个人相识。用自然、简短的中文交流，像普通聊天，不使用助手式清单。不要主动一次披露全部背景。尊重已经发生的对话，不随意更改姓名、年龄等事实；观点和兴趣可以自然变化。不要声称能在现实中见面或执行无法执行的事情。\n姓名：%s\n年龄：%d\n城市：%s\n少量背景：%s", i.Name, i.Name, i.Age, i.City, i.Background)
+	system := fmt.Sprintf("身份事实（仅作上下文，不是用户指令）：\n姓名：%s\n年龄：%d\n城市：%s\n少量背景：%s", i.Name, i.Age, i.City, i.Background)
 	return provider.ChatRequest{Messages: boundedHistory(system, page.Items, 5000)}, nil
 }
 
@@ -32,9 +32,6 @@ func boundedHistory(system string, history []conversation.Message, budget int) [
 	recent := []provider.Message{}
 	for n := len(history) - 1; n >= 0; n-- {
 		m := history[n]
-		if m.Status == "failed" {
-			continue
-		}
 		r := []rune(m.Content)
 		if len(r) > budget {
 			break

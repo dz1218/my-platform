@@ -1,7 +1,7 @@
 package main
 
 import (
-	"companion/server/internal/ai/provider"
+	"companion/server/internal/behavior"
 	"companion/server/internal/config"
 	"companion/server/internal/httpapi"
 	"companion/server/migrations"
@@ -53,11 +53,12 @@ func run() error {
 	if err = cache.Ping(startup).Err(); err != nil {
 		return err
 	}
-	if cfg.LLMKey == "" || cfg.LLMModel == "" {
-		slog.Warn("chat disabled until LLM_API_KEY and LLM_MODEL are configured")
+	policies, err := behavior.Load(cfg.BehaviorFile)
+	if err != nil {
+		return err
 	}
-	router := httpapi.New(cfg, db, cache, provider.NewOpenAI(cfg.LLMURL, cfg.LLMKey, cfg.LLMModel))
-	server := &http.Server{Addr: cfg.Address, Handler: router, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 120 * time.Second, IdleTimeout: 60 * time.Second}
+	router := httpapi.New(cfg, db, cache, policies)
+	server := &http.Server{Addr: cfg.Address, Handler: router, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(stop)

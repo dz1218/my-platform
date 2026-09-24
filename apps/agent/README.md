@@ -1,14 +1,16 @@
-# apps/agent
+# Companion Agent (TypeScript)
 
-This app is a bootstrap for LiveKit agent integration in this repo.
+LangChain.js (`@langchain/core`, `@langchain/deepseek`) handles prompts and model access.
+LangGraph.js runs `prepare_context → compose_reply → validate_reply` via `invoke`, without streaming.
+The private HTTP service binds to 127.0.0.1:8081 by default and requires `AGENT_TOKEN`.
 
-Current behavior:
-- Reads LiveKit credentials from env.
-- Keeps a long-running process for deployment wiring.
-- Checks Agent Dispatch API connectivity periodically.
+Copy `.env.example` to `.env`, set the same `AGENT_TOKEN` as Go, and configure the model key.
+`pnpm --filter agent dev` starts the service. `pnpm --filter agent test` runs offline tests.
 
-To upgrade to a real in-room AI assistant:
-1. Install official LiveKit Agents runtime and your model plugin.
-2. Register worker with `agentName = LIVEKIT_AGENT_NAME`.
-3. Handle room audio/data and emit text/voice responses.
-4. Keep API dispatch endpoints (`/rooms/:roomId/agent/dispatch`) as the trigger entry.
+Expression prompts live under `src/prompts/`, selected by `PROMPT_VERSION`.
+Delivery timing belongs to `apps/server/config/behavior.json`, not prompts.
+The service has no database credentials and does not own persistent conversations.
+Go supplies a bounded snapshot; no cross-user in-memory checkpoint is shared.
+This initial graph does not yet implement long-term memory or tool calling.
+
+The previous LiveKit dispatch health-check placeholder remains available as `pnpm --filter agent dev:livekit`.

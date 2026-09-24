@@ -1,27 +1,23 @@
 package httpapi
 
 import (
-	aicontext "companion/server/internal/ai/context"
-	"companion/server/internal/ai/provider"
-	"companion/server/internal/ai/runtime"
 	"companion/server/internal/auth"
+	"companion/server/internal/behavior"
 	"companion/server/internal/config"
 	"companion/server/internal/conversation"
+	"companion/server/internal/delivery"
 	"companion/server/internal/identity"
 	"companion/server/internal/matching"
 	"companion/server/pkg/response"
 	"context"
-	"encoding/json"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
-	"log/slog"
 	"net/http"
 	"time"
 )
 
-func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, model provider.ChatModel) *gin.Engine {
+func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies behavior.Catalog) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	_ = r.SetTrustedProxies(nil)
@@ -60,7 +56,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, model provide
 	ids := identity.Repository{DB: db}
 	messages := conversation.Repository{DB: db}
 	mh := matching.Handler{Service: matching.Service{Repo: matching.Repository{DB: db}, Identities: ids}}
-	rt := runtime.Runtime{Messages: messages, Builder: aicontext.Builder{Identities: ids, Messages: messages}, Model: model, Enabled: cfg.LLMKey != "" && cfg.LLMModel != ""}
+	chat := delivery.Service{Repo: delivery.Repository{DB: db}, Messages: messages, Policies: policies}
 	api := r.Group("/api/v1")
 	api.POST("/auth/register", rateLimit(cache, "auth", 60, false), ah.Register)
 	api.POST("/auth/login", rateLimit(cache, "auth", 60, false), ah.Login)
@@ -98,34 +94,14 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, model provide
 			response.Fail(c, response.BadRequest("请求格式不正确"))
 			return
 		}
-		ctx, cancel := context.WithTimeout(c.Request.Context(), 100*time.Second)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 		defer cancel()
-		turn, err := rt.Prepare(ctx, auth.UserID(c), c.Param("id"), b.RequestID, b.Content)
+		message, err := chat.Send(ctx, auth.UserID(c), c.Param("id"), b.RequestID, b.Content)
 		if err != nil {
 			response.Fail(c, err)
 			return
 		}
-		c.Header("Content-Type", "text/event-stream; charset=utf-8")
-		c.Header("X-Accel-Buffering", "no")
-		c.Header("Cache-Control", "no-cache, no-transform")
-		send := func(event string, data interface{}) error {
-			raw, err := json.Marshal(data)
-			if err != nil {
-				return err
-			}
-			_, err = fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", event, raw)
-			c.Writer.Flush()
-			return err
-		}
-		// accepted means the user message is durable, not that the response succeeded.
-		_ = send("accepted", gin.H{"id": turn.UserMessageID, "requestId": b.RequestID})
-		m, err := rt.Reply(ctx, turn, func(delta string) error { return send("delta", gin.H{"content": delta}) })
-		if err != nil {
-			slog.Error("chat reply failed", "conversation", turn.Conversation.ID, "error", err)
-			_ = send("error", gin.H{"code": "reply_failed", "message": "暂时没有收到回复，你可以稍后重试这条消息"})
-			return
-		}
-		_ = send("done", gin.H{"message": m})
+		c.JSON(http.StatusAccepted, gin.H{"message": message})
 	})
 	return r
 }

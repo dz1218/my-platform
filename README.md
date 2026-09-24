@@ -1,54 +1,51 @@
-# my-platform
+# 今晚 · Companion
 
-Local monorepo for `Next.js + NestJS + LiveKit`.
+Next.js + Go/Gin + TypeScript Agent (LangChain.js / LangGraph.js), PostgreSQL and Redis.
+Chat uses durable asynchronous replies: send succeeds immediately, the complete identity message appears later.
 
-## Requirements
+## Local development
 
-- Node.js 22
-- pnpm 10+
-
-## Quick start
+Use Node 22 and a Go version compatible with your OS (recent Go on macOS 26).
 
 ```bash
-cd my-platform
-source ~/.nvm/nvm.sh && nvm use 22
+nvm use 22
 pnpm install
-cp .env.example .env
-cp apps/web/.env.local.example apps/web/.env.local
-cp apps/api/.env.example apps/api/.env
 pnpm db:up
-pnpm livekit:up
-pnpm dev
 ```
 
-- Web: http://localhost:3000
-- API: http://localhost:3001/health
-- Rooms: http://localhost:3001/rooms
+For a new checkout, copy `apps/server/.env.example` to `apps/server/.env`,
+`apps/agent/.env.example` to `apps/agent/.env`, and merge `apps/web/.env.example` into `apps/web/.env.local`.
+Set a random JWT secret, and the **same** random `AGENT_TOKEN` in server and agent environments.
+Model credentials belong only in `apps/agent/.env`. Go and the existing novel pages must use the same database.
+Never overwrite existing local environment files blindly.
 
-## LiveKit local dev
-
-LiveKit server runs at `ws://127.0.0.1:7880` by default.
+Stop earlier dev processes first, then start all four application processes:
 
 ```bash
-pnpm livekit:up
-pnpm livekit:down
+pnpm dev:all
 ```
 
-## Database local dev
+Open http://localhost:3011. API and worker automatically apply versioned SQL migrations.
+Redis and PostgreSQL must already be running. If you already have PostgreSQL on 5432,
+keep using that instance and start only Redis with `docker compose up -d redis`.
 
-PostgreSQL runs at `127.0.0.1:5432` (`postgres/postgres`, db: `my_platform`) by default.
+Alternatively run each process in its own terminal:
 
 ```bash
-pnpm db:up
-pnpm db:down
+pnpm server:dev   # Go HTTP API :8080
+pnpm worker:dev   # durable generation + delivery jobs
+pnpm agent:dev    # TypeScript Agent :8081
+pnpm dev          # Next.js :3011
 ```
 
-## Live API
+## Customization and checks
 
-- `GET /rooms` list rooms from LiveKit
-- `POST /rooms` create room
-- `POST /rooms/:roomId/join` create join token
-- `POST /rooms/:roomId/agent/dispatch` dispatch AI agent to room
-- `GET /rooms/:roomId/agent/dispatch` list room dispatches
-- `DELETE /rooms/:roomId/agent/dispatch/:dispatchId` remove a dispatch
-- `DELETE /rooms/:roomId` close room
+- [Interaction strategy and architecture](docs/companion-agent.md)
+- Delivery policy: `apps/server/config/behavior.json`
+- Versioned prompts: `apps/agent/src/prompts/`
+- `pnpm server:test`, `pnpm agent:test`, `pnpm typecheck`
+- `pnpm --filter web build`, `pnpm --filter agent build`
+
+Existing LiveKit and novel features remain available. LiveKit still uses the legacy API
+(`pnpm dev:legacy` and `pnpm livekit:up`); novel pages still use Prisma during this migration.
+Older deployment guides describe that legacy stack and do not deploy the new Agent/worker.

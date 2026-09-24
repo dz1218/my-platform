@@ -1,4 +1,4 @@
-.PHONY: dev api infra migrate test check
+.PHONY: dev all api agent worker infra migrate test check
 
 dev:
 	pnpm dev
@@ -13,3 +13,10 @@ test:
 check:
 	pnpm --filter web typecheck
 	cd apps/server && go vet ./... && go test ./...
+
+all:
+	pnpm dev:all
+agent:
+	pnpm agent:dev
+worker:
+	pnpm worker:dev

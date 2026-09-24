@@ -1,46 +1,24 @@
-import 'dotenv/config';
-import { AgentDispatchClient } from 'livekit-server-sdk';
-import { z } from 'zod';
+import { ChatDeepSeek } from '@langchain/deepseek';
+import { env } from './config.js';
+import { createCompanionGraph } from './graph/companion.js';
+import { createAgentServer } from './server.js';
 
-const envSchema = z.object({
-  LIVEKIT_URL: z.string().url(),
-  LIVEKIT_API_KEY: z.string().min(1),
-  LIVEKIT_API_SECRET: z.string().min(1),
-  LIVEKIT_AGENT_NAME: z.string().min(1).default('room-assistant')
+const ready = Boolean(env.LLM_API_KEY && env.LLM_MODEL);
+const model = new ChatDeepSeek({
+  apiKey: env.LLM_API_KEY || 'not-configured', model: env.LLM_MODEL,
+  configuration: { baseURL: env.LLM_BASE_URL },
+  streaming: false, maxTokens: 1000, timeout: 85_000, maxRetries: 0,
+  modelKwargs: { thinking: { type: 'disabled' } },
 });
-
-function toHttpLiveKitHost(wsUrl: string) {
-  if (wsUrl.startsWith('wss://')) {
-    return wsUrl.replace('wss://', 'https://');
-  }
-  if (wsUrl.startsWith('ws://')) {
-    return wsUrl.replace('ws://', 'http://');
-  }
-  return wsUrl;
-}
-
-async function bootstrap() {
-  const env = envSchema.parse(process.env);
-
-  const dispatchClient = new AgentDispatchClient(
-    toHttpLiveKitHost(env.LIVEKIT_URL),
-    env.LIVEKIT_API_KEY,
-    env.LIVEKIT_API_SECRET
-  );
-
-  // Keep a minimal worker alive and verify Agent APIs are reachable.
-  // Replace this process with a full LiveKit Agents worker when integrating LLM/TTS/STT.
-  setInterval(async () => {
-    try {
-      await dispatchClient.listDispatch('health-check-room');
-      console.log(`[agent] ready: ${env.LIVEKIT_AGENT_NAME}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[agent] dispatch API check failed: ${message}`);
-    }
-  }, 30_000);
-
-  console.log(`[agent] placeholder worker started, agentName=${env.LIVEKIT_AGENT_NAME}`);
-}
-
-bootstrap();
+const graph = createCompanionGraph(model, env.PROMPT_VERSION);
+const server = createAgentServer(env.AGENT_TOKEN, async (input, signal) => {
+  const result = await graph.invoke(input, { signal, recursionLimit: 6 });
+  return { content: result.content, promptVersion: result.promptVersion };
+}, ready);
+server.listen(env.AGENT_PORT, env.AGENT_HOST, () => {
+  console.log(`[agent] listening on ${env.AGENT_HOST}:${env.AGENT_PORT}; prompt=${env.PROMPT_VERSION}; ready=${ready}`);
+});
+for (const event of ['SIGTERM', 'SIGINT'] as const) process.once(event, () => {
+  server.close(() => process.exit(0));
+  setTimeout(() => { server.closeAllConnections(); process.exit(0); }, 95_000).unref();
+});

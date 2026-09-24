@@ -3,7 +3,7 @@ import { serverOrigin, sessionCookie } from '@/services/api/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120;
+export const maxDuration = 30;
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
@@ -22,10 +22,10 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
       return Response.json({ error: { message: '消息过长' } }, { status: 413 });
     }
     const upstream = await fetch(`${serverOrigin()}/api/v1/${path.map(encodeURIComponent).join('/')}${request.nextUrl.search}`, {
-      method: request.method, headers, body, cache: 'no-store', signal: request.signal,
+      method: request.method, headers, body, cache: 'no-store', signal: AbortSignal.any([request.signal, AbortSignal.timeout(15_000)]),
     });
-    const output = new Headers({ 'Cache-Control': 'no-store, no-transform' });
-    for (const key of ['content-type', 'set-cookie', 'retry-after', 'x-accel-buffering']) {
+    const output = new Headers({ 'Cache-Control': 'no-store' });
+    for (const key of ['content-type', 'set-cookie', 'retry-after']) {
       const value = upstream.headers.get(key);
       if (value) output.set(key, value);
     }

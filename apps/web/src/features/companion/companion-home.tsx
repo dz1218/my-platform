@@ -8,7 +8,7 @@ import { Avatar } from '@/features/identity/avatar';
 export function CompanionHome() {
   const router = useRouter();
   const identities = useQuery({ queryKey: ['discover'], queryFn: discover });
-  const conversations = useQuery({ queryKey: ['matches'], queryFn: matches });
+  const conversations = useQuery({ queryKey: ['matches'], queryFn: matches, refetchInterval: 10_000 });
   const mutation = useMutation({ mutationFn: meet, onSuccess: match => router.push(`/chat/${match.id}`) });
   const error = identities.error ?? conversations.error ?? mutation.error;
   return <main className="mx-auto max-w-4xl px-6 pb-20 pt-12 sm:pt-20">
