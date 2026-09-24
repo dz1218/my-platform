@@ -4,6 +4,9 @@ import { isAuthenticated } from "@/lib/auth";
 import { loginAction } from "@/lib/actions";
 
 const ERROR_MSG: Record<string, string> = {
+  unavailable: '暂时连接不上，请稍后再试',
+  rate_limit: '操作太频繁，请稍后再试',
+  invalid_request: '请检查邮箱、昵称、8–72 字节密码与互动说明勾选', 
   missing: "请填写邮箱和密码",
   invalid: "邮箱或密码不正确",
 };
@@ -13,7 +16,7 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  if (await isAuthenticated()) redirect("/live");
+  if (await isAuthenticated()) redirect("/companion");
 
   const { error } = await searchParams;
   const errorMsg = error ? (ERROR_MSG[error] ?? "登录失败，请重试") : null;
@@ -40,7 +43,7 @@ export default async function LoginPage({
           <h1 className="mb-1.5 bg-gradient-to-br from-slate-100 to-brand-300 bg-clip-text text-[22px] font-extrabold text-transparent">
             登录
           </h1>
-          <p className="m-0 text-[13px] text-slate-600">登录后可创建直播间</p>
+          <p className="m-0 text-[13px] text-slate-600">回来，继续你们的故事</p>
         </div>
 
         <div className="glass-card p-7">

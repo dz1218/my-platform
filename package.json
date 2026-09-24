@@ -6,17 +6,21 @@
   },
   "packageManager": "pnpm@10.10.0",
   "scripts": {
-    "dev": "turbo run dev --parallel",
+    "dev": "pnpm --filter web dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "db:generate": "pnpm --filter @my-platform/db run generate",
-    "db:push": "pnpm --filter @my-platform/db exec prisma db push --schema prisma/schema.prisma --skip-generate",
-    "db:up": "docker compose -f infra/docker/docker-compose.db.yml up -d",
-    "db:down": "docker compose -f infra/docker/docker-compose.db.yml down",
+    "db:push": "pnpm db:migrate",
+    "db:up": "docker compose up -d postgres redis",
+    "db:down": "docker compose down",
     "postinstall": "pnpm run db:generate",
     "livekit:up": "docker compose -f infra/docker/docker-compose.livekit.yml up -d",
-    "livekit:down": "docker compose -f infra/docker/docker-compose.livekit.yml down"
+    "livekit:down": "docker compose -f infra/docker/docker-compose.livekit.yml down",
+    "dev:legacy": "pnpm --filter api dev",
+    "server:dev": "cd apps/server && go run ./cmd/api",
+    "server:test": "cd apps/server && go test ./...",
+    "db:migrate": "cd apps/server && go run ./cmd/api -migrate-only"
   },
   "devDependencies": {
     "turbo": "^2.5.6",

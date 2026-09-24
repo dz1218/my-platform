@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Providers } from "@/components/providers";
+import { MainNav } from "@/components/main-nav";
 
 export const metadata: Metadata = {
-  title: "xingyun7",
-  description: "Live + Novel + Future Agent platform",
+  title: "今晚 · 陪伴",
+  description: "从一句你好开始，慢慢认识一个人。",
 };
 
 export default function RootLayout({
@@ -16,7 +18,7 @@ export default function RootLayout({
           aria-hidden="true"
           className="pointer-events-none fixed inset-0 -z-10 bg-aurora"
         />
-        <div className="relative z-10">{children}</div>
+        <Providers><div className="relative z-10"><MainNav />{children}</div></Providers>
       </body>
     </html>
   );

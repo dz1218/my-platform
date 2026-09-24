@@ -8,16 +8,18 @@
     "dev": "next dev --port 3011",
     "build": "next build",
     "start": "next start --port 3011",
-    "lint": "next lint",
+    "lint": "tsc --noEmit",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@my-platform/db": "workspace:*",
+    "@tanstack/react-query": "^5.90.2",
     "livekit-client": "^2.15.2",
     "next": "15.5.12",
     "react": "19.1.1",
     "react-dom": "19.1.1",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

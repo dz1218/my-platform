@@ -4,9 +4,12 @@ import { isAuthenticated } from '@/lib/auth';
 import { registerAction } from '@/lib/actions';
 
 const ERROR_MSG: Record<string, string> = {
+  unavailable: '暂时连接不上，请稍后再试',
+  rate_limit: '操作太频繁，请稍后再试',
+  invalid_request: '请检查邮箱、昵称、8–72 字节密码与互动说明勾选', 
   missing: '请填写邮箱和密码',
   mismatch: '两次输入的密码不一致',
-  weak: '密码至少需要 6 位',
+  weak: '密码至少需要 8 位',
   exists: '该邮箱已被注册',
 };
 
@@ -15,7 +18,7 @@ export default async function RegisterPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  if (await isAuthenticated()) redirect('/live');
+  if (await isAuthenticated()) redirect('/companion');
 
   const { error } = await searchParams;
   const errorMsg = error ? (ERROR_MSG[error] ?? '注册失败，请重试') : null;
@@ -43,7 +46,7 @@ export default async function RegisterPage({
           <h1 className="mb-1.5 bg-gradient-to-br from-slate-100 to-violet-300 bg-clip-text text-[22px] font-extrabold text-transparent">
             注册账号
           </h1>
-          <p className="m-0 text-[13px] text-slate-600">注册后即可创建直播间</p>
+          <p className="m-0 text-[13px] text-slate-600">从一句你好，开始慢慢认识</p>
         </div>
 
         <div className="glass-card p-7">
@@ -75,7 +78,7 @@ export default async function RegisterPage({
               <input
                 name="name"
                 type="text"
-                placeholder="你的直播昵称"
+                placeholder="怎么称呼你"
                 autoComplete="nickname"
                 className="input-glass"
               />
@@ -98,7 +101,7 @@ export default async function RegisterPage({
               <input
                 name="password"
                 type="password"
-                placeholder="至少 6 位"
+                placeholder="至少 8 位"
                 required
                 autoComplete="new-password"
                 className="input-glass"
@@ -117,6 +120,10 @@ export default async function RegisterPage({
               />
             </label>
 
+            <label className="flex items-start gap-2 text-xs leading-6 text-slate-400">
+              <input type="checkbox" name="consent" required className="mt-1.5" />
+              <span>我已阅读<Link href="/privacy" className="text-brand-300">平台互动说明</Link>，了解平台中的 AI 身份可能由真实用户参与互动。</span>
+            </label>
             <button type="submit" className="btn-violet mt-1 w-full py-3 text-[15px] font-bold">
               <svg
                 width="15"

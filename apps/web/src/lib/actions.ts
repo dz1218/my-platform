@@ -2,111 +2,46 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import crypto from 'node:crypto';
 import { prisma } from '@/lib/prisma';
-import { signUserId, verifyToken } from '@/lib/auth';
+import { getAuthUserId } from '@/lib/auth';
+import { serverFetch, sessionCookie } from '@/services/api/server';
 
-// ─── Password helpers ────────────────────────────────────────────────────────
-
-function hashPassword(password: string): string {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
-}
-
-function verifyPassword(password: string, stored: string): boolean {
+async function authenticate(kind: 'register' | 'login', formData: FormData) {
+  const password = String(formData.get('password') ?? '');
+  if (kind === 'register' && password !== formData.get('confirm')) redirect('/register?error=mismatch');
+  let failure = '';
   try {
-    const [salt, hash] = stored.split(':');
-    if (!salt || !hash) return false;
-    const derived = crypto.scryptSync(password, salt, 64);
-    return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), derived);
-  } catch {
-    return false;
-  }
+    const result = await serverFetch(`/auth/${kind}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: String(formData.get('email') ?? ''), name: String(formData.get('name') ?? ''), password, consent: formData.get('consent') === 'on' }),
+    });
+    if (!result.ok) {
+      const body = await result.json();
+      failure = body.error?.code ?? 'invalid';
+    } else {
+      const cookie = result.headers.get('set-cookie');
+      const token = cookie?.match(/companion_session=([^;]+)/)?.[1];
+      if (!token) throw new Error('Missing session');
+      const store = await cookies();
+      store.set(sessionCookie, token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 7 * 24 * 3600 });
+      store.delete('mp_auth');
+      store.delete('mp_nickname');
+    }
+  } catch { failure = 'unavailable'; }
+  if (failure) redirect(`/${kind}?error=${encodeURIComponent(failure)}`);
+  redirect('/companion');
 }
-
-// ─── Session helper ───────────────────────────────────────────────────────────
-
-async function setSession(userId: string, name: string) {
-  const store = await cookies();
-  const maxAge = 60 * 60 * 24 * 7; // 7 days
-  store.set('mp_auth', signUserId(userId), {
-    httpOnly: true,
-    path: '/',
-    maxAge,
-    sameSite: 'lax',
-  });
-  store.set('mp_nickname', name, {
-    httpOnly: true,
-    path: '/',
-    maxAge,
-    sameSite: 'lax',
-  });
-}
-
-// ─── Register ─────────────────────────────────────────────────────────────────
-
-export async function registerAction(formData: FormData) {
-  const name = ((formData.get('name') as string) ?? '').trim();
-  const email = ((formData.get('email') as string) ?? '').trim().toLowerCase();
-  const password = (formData.get('password') as string) ?? '';
-  const confirm = (formData.get('confirm') as string) ?? '';
-
-  if (!email || !password) redirect('/register?error=missing');
-  if (password !== confirm) redirect('/register?error=mismatch');
-  if (password.length < 6) redirect('/register?error=weak');
-
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) redirect('/register?error=exists');
-
-  const displayName = name || email.split('@')[0] || '主播';
-  const user = await prisma.user.create({
-    data: {
-      email,
-      name: displayName,
-      passwordHash: hashPassword(password),
-    },
-  });
-
-  await setSession(user.id, user.name ?? displayName);
-  redirect('/live');
-}
-
-// ─── Login ────────────────────────────────────────────────────────────────────
-
-export async function loginAction(formData: FormData) {
-  const email = ((formData.get('email') as string) ?? '').trim().toLowerCase();
-  const password = (formData.get('password') as string) ?? '';
-
-  if (!email || !password) redirect('/login?error=missing');
-
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || !verifyPassword(password, user.passwordHash)) {
-    redirect('/login?error=invalid');
-  }
-
-  await setSession(user.id, user.name ?? email.split('@')[0] ?? '主播');
-  redirect('/live');
-}
-
-// ─── Logout ───────────────────────────────────────────────────────────────────
-
+export async function registerAction(formData: FormData) { return authenticate('register', formData); }
+export async function loginAction(formData: FormData) { return authenticate('login', formData); }
 export async function logoutAction() {
   const store = await cookies();
-  store.delete('mp_auth');
-  store.delete('mp_nickname');
+  store.delete(sessionCookie); store.delete('mp_auth'); store.delete('mp_nickname');
   redirect('/login');
 }
-
-// ─── Novel actions ──────────────────────────────────────────────────────────
-
 async function requireAuth(): Promise<string> {
-  const store = await cookies();
-  const token = store.get('mp_auth')?.value;
-  if (!token) redirect('/login');
-  const userId = verifyToken(token);
-  if (!userId) redirect('/login');
-  return userId;
+  const id = await getAuthUserId();
+  if (!id) redirect('/login');
+  return id;
 }
 
 export async function createNovelAction(formData: FormData) {
