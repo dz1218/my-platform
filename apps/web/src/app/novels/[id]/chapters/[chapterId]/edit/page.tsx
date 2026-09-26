@@ -1,6 +1,9 @@
+import { UnsavedChanges } from '@/components/unsaved-changes';
+import { ConfirmForm } from '@/components/confirm-form';
+import { SubmitButton } from '@/components/submit-button';
 import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
-import { prisma } from '@/lib/prisma';
+import { getChapter } from '@/services/novels';
 import { getAuthUserId } from '@/lib/auth';
 import {
   updateChapterAction,
@@ -20,22 +23,19 @@ export default async function EditChapterPage({
   const userId = await getAuthUserId();
   if (!userId) redirect('/login');
 
-  const chapter = await prisma.chapter.findUnique({
-    where: { id: chapterId },
-    include: { novel: { select: { id: true, title: true, authorId: true } } },
-  });
+  const chapter = await getChapter(id, chapterId);
 
   if (!chapter || chapter.novel.id !== id) notFound();
   if (chapter.novel.authorId !== userId) redirect(`/novels/${id}`);
 
   return (
-    <main className="mx-auto max-w-[820px] px-6 pb-16 pt-10">
-      <div className="mb-7 flex items-center justify-between">
+    <main id="main-content" tabIndex={-1} className="page-list page-content">
+      <div className="mb-5 flex items-center justify-between">
         <Link
           href={`/novels/${id}/edit`}
           className="link-muted inline-flex items-center gap-1.5"
         >
-          <svg
+          <svg aria-hidden="true"
             width="14"
             height="14"
             viewBox="0 0 24 24"
@@ -60,12 +60,12 @@ export default async function EditChapterPage({
 
       {saved && (
         <div className="mb-5 flex items-center gap-2 rounded-[10px] border border-emerald-500/25 bg-emerald-500/[0.12] px-3.5 py-2.5">
-          <svg
+          <svg aria-hidden="true"
             width="15"
             height="15"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#6EE7B7"
+            stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -73,56 +73,58 @@ export default async function EditChapterPage({
           >
             <path d="M20 6L9 17l-5-5" />
           </svg>
-          <span className="text-[13px] text-emerald-300">保存成功</span>
+          <span className="text-[13px] text-emerald-700">保存成功</span>
         </div>
       )}
 
       {error && (
         <div className="mb-5 flex items-center gap-2 rounded-[10px] border border-rose-500/25 bg-rose-500/[0.12] px-3.5 py-2.5">
-          <span className="text-[13px] text-rose-300">请填写章节标题</span>
+          <span className="text-[13px] text-rose-700">请填写章节标题</span>
         </div>
       )}
 
-      <h1 className="mb-1 text-[22px] font-extrabold tracking-[-0.5px] text-slate-100">
+      <h1 className="mb-1 text-[22px] font-semibold tracking-[-0.5px] text-slate-900">
         编辑章节
       </h1>
-      <p className="mb-8 text-[13px] text-slate-500">
+      <p className="mb-6 text-[13px] text-slate-500">
         第 {chapter.orderIndex} 章 · {chapter.novel.title}
       </p>
 
       {/* Edit form */}
-      <div className="glass-card mb-6 p-7">
+      <div className="surface mb-6 p-5">
         <form action={updateChapterAction} className="grid gap-5">
+          <UnsavedChanges />
           <input type="hidden" name="chapterId" value={chapterId} />
+          <input type="hidden" name="novelId" value={id} />
 
           <label className="grid gap-[7px]">
-            <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-400">
+            <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">
               章节标题
             </span>
             <input
-              name="title"
+              name="title" maxLength={200}
               type="text"
               defaultValue={chapter.title}
               required
-              className="input-glass"
+              className="input-field"
             />
           </label>
 
           <label className="grid gap-[7px]">
-            <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-400">
+            <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">
               内容
             </span>
             <textarea
               name="content"
               defaultValue={chapter.content}
               rows={20}
-              placeholder="在这里写下你的故事..."
-              className="input-glass resize-y font-mono text-sm leading-7"
+              placeholder="在这里写下你的故事…"
+              className="input-field resize-y font-mono text-sm leading-7"
             />
           </label>
 
-          <button type="submit" className="btn-violet py-2.5 text-sm font-bold">
-            <svg
+          <SubmitButton className="btn-primary py-2.5 text-sm font-bold">
+            <svg aria-hidden="true"
               width="14"
               height="14"
               viewBox="0 0 24 24"
@@ -137,7 +139,7 @@ export default async function EditChapterPage({
               <polyline points="7 3 7 8 15 8" />
             </svg>
             保存
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -145,20 +147,20 @@ export default async function EditChapterPage({
       <div className="flex items-center gap-3">
         <form action={publishChapterAction}>
           <input type="hidden" name="chapterId" value={chapterId} />
+          <input type="hidden" name="novelId" value={id} />
           <input
             type="hidden"
             name="published"
             value={chapter.published ? '0' : '1'}
           />
-          <button
-            type="submit"
+          <SubmitButton
             className={
-              chapter.published ? 'btn-glass' : 'btn-emerald px-5 py-2.5 text-sm'
+              chapter.published ? 'btn-secondary' : 'btn-success px-5 py-2.5 text-sm'
             }
           >
             {chapter.published ? (
               <>
-                <svg
+                <svg aria-hidden="true"
                   width="14"
                   height="14"
                   viewBox="0 0 24 24"
@@ -175,7 +177,7 @@ export default async function EditChapterPage({
               </>
             ) : (
               <>
-                <svg
+                <svg aria-hidden="true"
                   width="14"
                   height="14"
                   viewBox="0 0 24 24"
@@ -190,13 +192,14 @@ export default async function EditChapterPage({
                 发布此章
               </>
             )}
-          </button>
+          </SubmitButton>
         </form>
 
-        <form action={deleteChapterAction}>
+        <ConfirmForm action={deleteChapterAction} message="删除后无法恢复，确定删除吗？">
           <input type="hidden" name="chapterId" value={chapterId} />
-          <button type="submit" className="btn-danger-ghost">
-            <svg
+          <input type="hidden" name="novelId" value={id} />
+          <SubmitButton className="btn-danger-ghost">
+            <svg aria-hidden="true"
               width="14"
               height="14"
               viewBox="0 0 24 24"
@@ -211,8 +214,8 @@ export default async function EditChapterPage({
               <path d="M10 11v6M14 11v6" />
             </svg>
             删除章节
-          </button>
-        </form>
+          </SubmitButton>
+        </ConfirmForm>
       </div>
     </main>
   );

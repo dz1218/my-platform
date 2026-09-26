@@ -1,17 +1,10 @@
 {
-  "version": "conversation-rhythm-v1",
+  "version": "agent-actions-v3",
   "default": {
-    "debounceSeconds": 3,
-    "minDelaySeconds": 8,
-    "maxDelaySeconds": 25,
-    "charactersPerSecond": 12,
-    "maxTypingSeconds": 12,
+    "debounceSeconds": 1,
     "maxAttempts": 3,
-    "retrySeconds": 15
+    "retrySeconds": 15,
+    "maxWaitSeconds": 10
   },
-  "identities": {
-    "identity_linwan": {"minDelaySeconds": 10, "maxDelaySeconds": 30},
-    "identity_suhe": {"minDelaySeconds": 6, "maxDelaySeconds": 18},
-    "identity_chennian": {"minDelaySeconds": 12, "maxDelaySeconds": 35}
-  }
+  "identities": {}
 }

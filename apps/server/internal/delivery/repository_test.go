@@ -68,7 +68,7 @@ func TestDurableConversationLifecycle(t *testing.T) {
 	ctx := context.Background()
 	repo := Repository{DB: db}
 	messages := conversation.Repository{DB: db}
-	p := behavior.Policy{Version: "test-v1", DebounceSeconds: 1, MinDelaySeconds: 1, MaxDelaySeconds: 2, CharactersPerSecond: 10, MaxTypingSeconds: 2, MaxAttempts: 2, RetrySeconds: 1}
+	p := behavior.Policy{Version: "test-v1", DebounceSeconds: 1, MaxWaitSeconds: 10, MaxAttempts: 2, RetrySeconds: 1}
 	service := Service{Repo: repo, Messages: messages, Policies: behavior.Catalog{Default: p}}
 	send := func(id, content string) conversation.Message {
 		t.Helper()
@@ -192,5 +192,74 @@ func TestDurableConversationLifecycle(t *testing.T) {
 	var count int
 	if err = db.QueryRow(ctx, `SELECT count(*) FROM messages WHERE sender_type='identity'`).Scan(&count); err != nil || count != 2 {
 		t.Fatal("duplicate delivery", count, err)
+	}
+}
+
+func TestAgentWaitIsDurableAndInvalidatedByNewInput(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	repo := Repository{DB: db}
+	p := behavior.Policy{Version: "agent-actions-v3", DebounceSeconds: 1, MaxWaitSeconds: 10, MaxAttempts: 3, RetrySeconds: 1}
+	conv := conversation.Conversation{ID: "c", UserID: "u", IdentityID: "identity_linwan"}
+	enqueue := func(id string) {
+		t.Helper()
+		if _, err := repo.Enqueue(ctx, conv, id, "还有一件事", p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	claim := func() Job {
+		t.Helper()
+		if _, err := db.Exec(ctx, `UPDATE reply_jobs SET due_at=now()-interval '1 second'`); err != nil {
+			t.Fatal(err)
+		}
+		j, err := repo.Claim(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return j
+	}
+	enqueue("request-first")
+	j := claim()
+	if err := repo.Wait(ctx, j, 5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Claim(ctx); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("wait not respected: %v", err)
+	}
+	// A fresh repository sees the durable wait, with failure retry budget intact.
+	repo = Repository{DB: db}
+	after := claim()
+	if after.WaitCount != 1 || after.Attempts != 1 {
+		t.Fatalf("wait consumed retry budget: %+v", after)
+	}
+	if err := repo.Wait(ctx, after, 5); err == nil {
+		t.Fatal("repeated wait accepted")
+	}
+	enqueue("request-newer")
+	if err := repo.Schedule(ctx, after, "stale reply", "v2", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if delivered, err := repo.Deliver(ctx); err != nil || delivered {
+		t.Fatal("stale reply delivered", err)
+	}
+	fresh := claim()
+	if fresh.WaitCount != 0 {
+		t.Fatal("new input did not reset wait allowance")
+	}
+	if err := repo.Wait(ctx, after, 1); err == nil {
+		t.Fatal("repeat wait accepted")
+	}
+	if err := repo.Wait(ctx, j, 1); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRow(ctx, `SELECT wait_count FROM reply_jobs WHERE conversation_id='c'`).Scan(&count); err != nil || count != 0 {
+		t.Fatal("stale wait affected new job", err)
+	}
+	if err := repo.Schedule(ctx, fresh, "我听着", "v2", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if delivered, err := repo.Deliver(ctx); err != nil || !delivered {
+		t.Fatal("fresh reply not delivered", err)
 	}
 }

@@ -8,12 +8,14 @@ import (
 	"companion/server/internal/delivery"
 	"companion/server/internal/identity"
 	"companion/server/internal/matching"
+	"companion/server/internal/novel"
 	"companion/server/pkg/response"
 	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -40,7 +42,11 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 			c.AbortWithStatus(204)
 			return
 		}
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 32*1024)
+		limit := int64(32 * 1024)
+		if c.Request.Method == "POST" && strings.HasPrefix(c.Request.URL.Path, "/api/v1/novels/") {
+			limit = 1024 * 1024
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		c.Next()
 	})
 	r.GET("/health", func(c *gin.Context) {
@@ -61,7 +67,19 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 	api.POST("/auth/register", rateLimit(cache, "auth", 60, false), ah.Register)
 	api.POST("/auth/login", rateLimit(cache, "auth", 60, false), ah.Login)
 	api.POST("/auth/logout", ah.Logout)
+	nh := novel.Handler{Repo: novel.Repository{DB: db}, Auth: ah.Service}
+	api.GET("/novels", nh.List)
+	api.GET("/novels/:id", nh.Get)
+	api.GET("/novels/:id/chapters/:chapterId", nh.Chapter)
 	api.Use(ah.Require)
+	api.POST("/novels", nh.Write("create"))
+	api.POST("/novels/:id/update", nh.Write("update"))
+	api.POST("/novels/:id/delete", nh.Write("delete"))
+	api.POST("/novels/:id/chapters", nh.Write("chapter-create"))
+	api.POST("/novels/:id/chapters/:chapterId/update", nh.Write("chapter-update"))
+	api.POST("/novels/:id/chapters/:chapterId/publish", nh.Write("chapter-publish"))
+	api.POST("/novels/:id/chapters/:chapterId/delete", nh.Write("chapter-delete"))
+	api.GET("/conversations/:id/socket", rateLimit(cache, "chat-connect", 60, true), chatSocket(chat, cache, cfg.WebOrigin))
 	api.GET("/me", ah.Me)
 	api.GET("/discover", identity.Handler{Repo: ids}.Discover)
 	api.GET("/matches", mh.List)

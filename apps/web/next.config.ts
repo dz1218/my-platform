@@ -3,16 +3,10 @@ import path from 'path';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@my-platform/db'],
+  async rewrites() {
+    return [{ source: '/ws/conversations/:id', destination: `${process.env.COMPANION_API_URL ?? 'http://127.0.0.1:8080'}/api/v1/conversations/:id/socket` }];
+  },
   outputFileTracingRoot: path.join(__dirname, '../..'),
-  serverExternalPackages: ['@prisma/client', 'prisma'],
-  outputFileTracingIncludes: {
-    '/*': [
-      './node_modules/.prisma/client/**/*',
-      '../../node_modules/.prisma/client/**/*',
-      '../../node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/**/*'
-    ]
-  }
 };
 
 export default nextConfig;

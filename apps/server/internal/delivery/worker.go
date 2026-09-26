@@ -7,7 +7,6 @@ import (
 	"errors"
 	"github.com/jackc/pgx/v5"
 	"log/slog"
-	"math/rand"
 	"sync"
 	"time"
 )
@@ -82,11 +81,20 @@ func (w Worker) generate(parent context.Context, j Job) {
 	request, err := w.Builder.Build(ctx, j.Conversation)
 	var reply provider.Reply
 	if err == nil {
+		request.AllowWait = j.WaitCount < 1 && j.Policy.MaxWaitSeconds > 0
+		request.MaxWaitSeconds = j.Policy.MaxWaitSeconds
+		request.PendingSeconds = int(time.Since(j.RequestedAt).Seconds())
+		if request.PendingSeconds < 0 {
+			request.PendingSeconds = 0
+		}
 		reply, err = w.Model.Generate(ctx, request)
 	}
 	if err == nil {
-		due := j.Policy.DeliverAt(j.RequestedAt, time.Now(), reply.Content, rand.Float64())
-		err = w.Repo.Schedule(ctx, j, reply.Content, reply.PromptVersion, due)
+		if reply.Action == "wait" {
+			err = w.Repo.Wait(ctx, j, reply.WaitSeconds)
+		} else {
+			err = w.Repo.Schedule(ctx, j, reply.Content, reply.PromptVersion, time.Now())
+		}
 	}
 	if err != nil {
 		// Shutdown leaves the lease for recovery instead of consuming another retry.

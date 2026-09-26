@@ -26,6 +26,6 @@ func (r Repository) ByID(ctx context.Context, id string) (User, error) {
 }
 func (r Repository) Create(ctx context.Context, email, name, hash string) (User, error) {
 	u := User{ID: database.ID(), Email: email, Name: name}
-	_, err := r.DB.Exec(ctx, `INSERT INTO users(id,email,name,password_hash) VALUES($1,$2,$3,$4)`, u.ID, email, name, hash)
+	_, err := r.DB.Exec(ctx, `INSERT INTO users(id,email,name,password_hash,updated_at) VALUES($1,$2,$3,$4,now())`, u.ID, email, name, hash)
 	return u, err
 }

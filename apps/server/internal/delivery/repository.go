@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"time"
@@ -19,6 +20,7 @@ type Job struct {
 	Version      int64
 	TriggerID    string
 	ClaimToken   string
+	WaitCount    int
 	Attempts     int
 	RequestedAt  time.Time
 	Policy       behavior.Policy
@@ -74,7 +76,7 @@ func (r Repository) Enqueue(ctx context.Context, c conversation.Conversation, re
  VALUES($1,$2::bigint,'queued',now()+make_interval(secs=>$3),$4)
  ON CONFLICT(conversation_id) DO UPDATE SET version=reply_jobs.version+1,trigger_message_id=EXCLUDED.trigger_message_id,
  status='queued',due_at=EXCLUDED.due_at,requested_at=now(),policy_json=EXCLUDED.policy_json,
- attempts=0,content=NULL,prompt_version=NULL,lease_until=NULL,claim_token=NULL,last_error=NULL,updated_at=now()`, c.ID, m.ID, p.DebounceSeconds, policy)
+ attempts=0,wait_count=0,content=NULL,prompt_version=NULL,lease_until=NULL,claim_token=NULL,last_error=NULL,updated_at=now()`, c.ID, m.ID, p.DebounceSeconds, policy)
 	if err != nil {
 		return m, err
 	}
@@ -95,7 +97,7 @@ func (r Repository) Claim(ctx context.Context) (Job, error) {
  ORDER BY due_at FOR UPDATE SKIP LOCKED LIMIT 1
  ) UPDATE reply_jobs j SET status='generating',lease_until=now()+interval '120 seconds',claim_token=$1,attempts=attempts+1,updated_at=now()
  FROM candidate c,conversations v WHERE j.conversation_id=c.conversation_id AND v.id=j.conversation_id
- RETURNING v.id,v.user_id,v.identity_id,j.version,j.trigger_message_id::text,j.attempts,j.requested_at,j.policy_json`, j.ClaimToken).Scan(&j.Conversation.ID, &j.Conversation.UserID, &j.Conversation.IdentityID, &j.Version, &j.TriggerID, &j.Attempts, &j.RequestedAt, &policy)
+ RETURNING v.id,v.user_id,v.identity_id,j.version,j.trigger_message_id::text,j.attempts,j.requested_at,j.policy_json,j.wait_count`, j.ClaimToken).Scan(&j.Conversation.ID, &j.Conversation.UserID, &j.Conversation.IdentityID, &j.Version, &j.TriggerID, &j.Attempts, &j.RequestedAt, &policy, &j.WaitCount)
 	if err != nil {
 		return j, err
 	}
@@ -180,4 +182,16 @@ func (r Repository) Deliver(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return true, tx.Commit(ctx)
+}
+
+// Wait is an agent action, not a generation failure. Persist it without consuming
+// the failure retry budget. New input invalidates it through the job version.
+func (r Repository) Wait(ctx context.Context, j Job, seconds int) error {
+	if j.WaitCount >= 1 || seconds < 1 || seconds > j.Policy.MaxWaitSeconds {
+		return fmt.Errorf("agent wait exceeds execution limits")
+	}
+	_, err := r.DB.Exec(ctx, `UPDATE reply_jobs SET status='queued',due_at=now()+make_interval(secs=>$4),
+ wait_count=wait_count+1,attempts=GREATEST(attempts-1,0),lease_until=NULL,claim_token=NULL,updated_at=now()
+ WHERE conversation_id=$1 AND version=$2 AND claim_token=$3 AND status='generating'`, j.Conversation.ID, j.Version, j.ClaimToken, seconds)
+	return err
 }

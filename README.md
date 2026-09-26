@@ -16,7 +16,7 @@ pnpm db:up
 For a new checkout, copy `apps/server/.env.example` to `apps/server/.env`,
 `apps/agent/.env.example` to `apps/agent/.env`, and merge `apps/web/.env.example` into `apps/web/.env.local`.
 Set a random JWT secret, and the **same** random `AGENT_TOKEN` in server and agent environments.
-Model credentials belong only in `apps/agent/.env`. Go and the existing novel pages must use the same database.
+Model credentials belong only in `apps/agent/.env`. Database access, including novels and chapters, belongs to the Go API.
 Never overwrite existing local environment files blindly.
 
 Stop earlier dev processes first, then start all four application processes:
@@ -47,5 +47,6 @@ pnpm dev          # Next.js :3011
 - `pnpm --filter web build`, `pnpm --filter agent build`
 
 Existing LiveKit and novel features remain available. LiveKit still uses the legacy API
-(`pnpm dev:legacy` and `pnpm livekit:up`); novel pages still use Prisma during this migration.
+(`pnpm dev:legacy` and `pnpm livekit:up`). Novel reads, writes, ownership checks and draft visibility are handled by Go.
+Next.js contains page rendering, form-to-API adapters and a same-origin API proxy; it does not connect to the database.
 Older deployment guides describe that legacy stack and do not deploy the new Agent/worker.

@@ -13,7 +13,7 @@ const model = new ChatDeepSeek({
 const graph = createCompanionGraph(model, env.PROMPT_VERSION);
 const server = createAgentServer(env.AGENT_TOKEN, async (input, signal) => {
   const result = await graph.invoke(input, { signal, recursionLimit: 6 });
-  return { content: result.content, promptVersion: result.promptVersion };
+  return { action: result.action, waitSeconds: result.waitSeconds, content: result.content, promptVersion: result.promptVersion };
 }, ready);
 server.listen(env.AGENT_PORT, env.AGENT_HOST, () => {
   console.log(`[agent] listening on ${env.AGENT_HOST}:${env.AGENT_PORT}; prompt=${env.PROMPT_VERSION}; ready=${ready}`);

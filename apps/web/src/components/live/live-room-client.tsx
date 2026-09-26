@@ -56,16 +56,16 @@ function buildParticipantList(room: Room, localIdentity: string): ParticipantIte
 
 const roleMeta: Record<Role | 'AI助手', { badge: string; avatar: string }> = {
   主播: {
-    badge: 'border border-emerald-400/30 bg-emerald-400/[0.15] text-emerald-400',
-    avatar: 'border border-emerald-400/30 bg-emerald-400/[0.15] text-emerald-400',
+    badge: 'border border-emerald-400/30 bg-emerald-400/[0.15] text-emerald-700',
+    avatar: 'border border-emerald-400/30 bg-emerald-400/[0.15] text-emerald-700',
   },
   观众: {
-    badge: 'border border-slate-400/25 bg-slate-400/10 text-slate-400',
-    avatar: 'border border-slate-400/25 bg-white/[0.06] text-slate-400',
+    badge: 'border border-slate-400/25 bg-slate-400/10 text-slate-600',
+    avatar: 'border border-slate-400/25 bg-white text-slate-600',
   },
   AI助手: {
-    badge: 'border border-brand-400/[0.35] bg-brand-500/[0.15] text-brand-300',
-    avatar: 'border border-brand-400/[0.35] bg-brand-500/[0.15] text-brand-300',
+    badge: 'border border-brand-400/[0.35] bg-brand-500/[0.15] text-brand-600',
+    avatar: 'border border-brand-400/[0.35] bg-brand-500/[0.15] text-brand-600',
   },
 };
 
@@ -278,18 +278,18 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
 
   return (
     <div className="grid gap-3.5">
-      <section className="glass-card p-6">
+      <section className="surface p-4 sm:p-5">
         {!isConnected ? (
           <>
             <div className="mb-5 inline-flex items-center gap-2 rounded-[10px] px-3.5 py-2">
               {isLoggedIn ? (
                 <div className="badge-success">
-                  <svg
+                  <svg aria-hidden="true"
                     width="14"
                     height="14"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#34D399"
+                    stroke="currentColor"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -301,12 +301,12 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                 </div>
               ) : (
                 <div className="badge-muted">
-                  <svg
+                  <svg aria-hidden="true"
                     width="14"
                     height="14"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#94A3B8"
+                    stroke="currentColor"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -322,13 +322,14 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
             {!isLoggedIn && (
               <div className="mb-5">
                 <label className="grid gap-[7px]">
-                  <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-400">昵称</span>
+                  <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">昵称</span>
                   <input
+                    name="nickname" autoComplete="nickname"
                     value={nickname}
                     onChange={(e) => setNickname(e.target.value)}
                     disabled={isJoining}
                     placeholder="输入你的昵称"
-                    className="input-glass max-w-[300px]"
+                    className="input-field max-w-[300px]"
                   />
                 </label>
               </div>
@@ -338,11 +339,11 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
               type="button"
               onClick={() => void joinRoom()}
               disabled={isJoining}
-              className={`${isLoggedIn ? 'btn-emerald' : 'btn-indigo'} px-7 py-3`}
+              className={`${isLoggedIn ? 'btn-success' : 'btn-primary'} px-7 py-3`}
             >
               {isJoining ? (
                 <>
-                  <svg
+                  <svg aria-hidden="true"
                     width="14"
                     height="14"
                     viewBox="0 0 24 24"
@@ -359,7 +360,7 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
               ) : (
                 <>
                   {isLoggedIn ? (
-                    <svg
+                    <svg aria-hidden="true"
                       width="14"
                       height="14"
                       viewBox="0 0 24 24"
@@ -373,7 +374,7 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                       <rect x="1" y="5" width="15" height="14" rx="2" />
                     </svg>
                   ) : (
-                    <svg
+                    <svg aria-hidden="true"
                       width="14"
                       height="14"
                       viewBox="0 0 24 24"
@@ -395,15 +396,15 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
           <>
             <div className="mb-[18px] flex flex-wrap items-center gap-2.5 rounded-[10px] border border-emerald-400/20 bg-emerald-400/[0.08] px-3.5 py-2.5">
               <span className="online-dot" />
-              <span className="text-[13px] font-semibold text-emerald-300">已连接</span>
+              <span className="text-[13px] font-semibold text-emerald-700">已连接</span>
               <RoleBadge role={role} />
-              <span className="text-[13px] text-slate-400">{nickname}</span>
+              <span className="text-[13px] text-slate-600">{nickname}</span>
             </div>
 
             <div className="flex flex-wrap gap-2.5">
               {role === '主播' && (
-                <button type="button" onClick={() => void enableLocalMedia()} className="btn-glass">
-                  <svg
+                <button type="button" onClick={() => void enableLocalMedia()} className="btn-secondary">
+                  <svg aria-hidden="true"
                     width="14"
                     height="14"
                     viewBox="0 0 24 24"
@@ -426,11 +427,11 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                 disabled={isDispatchingAgent || hasAgent}
                 className={`inline-flex items-center gap-1.5 rounded-[10px] border px-4 py-2.5 text-[13px] font-medium transition-colors ${
                   hasAgent
-                    ? 'cursor-not-allowed border-brand-400/20 bg-brand-500/[0.08] text-brand-300/70'
-                    : 'border-brand-400/[0.35] bg-brand-500/[0.15] text-brand-300 hover:bg-brand-500/25'
+                    ? 'cursor-not-allowed border-brand-400/20 bg-brand-500/[0.08] text-brand-600/70'
+                    : 'border-brand-400/[0.35] bg-brand-500/[0.15] text-brand-600 hover:bg-brand-500/25'
                 }`}
               >
-                <svg
+                <svg aria-hidden="true"
                   width="14"
                   height="14"
                   viewBox="0 0 24 24"
@@ -447,7 +448,7 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
               </button>
 
               <button type="button" onClick={() => void leaveRoom()} className="btn-danger-ghost">
-                <svg
+                <svg aria-hidden="true"
                   width="14"
                   height="14"
                   viewBox="0 0 24 24"
@@ -467,12 +468,12 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
 
         {error && (
           <div className="mt-3.5 flex items-start gap-2 rounded-[10px] border border-rose-500/20 bg-rose-500/10 px-3.5 py-3">
-            <svg
+            <svg aria-hidden="true"
               width="15"
               height="15"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#FCA5A5"
+              stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -481,20 +482,20 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
               <circle cx="12" cy="12" r="10" />
               <path d="M12 8v4M12 16h.01" />
             </svg>
-            <p className="m-0 text-[13px] leading-6 text-rose-300">{error}</p>
+            <p className="m-0 text-[13px] leading-6 text-rose-700">{error}</p>
           </div>
         )}
       </section>
 
       {isConnected && participants.length > 0 && (
-        <section className="glass-card-soft px-[22px] py-5">
+        <section className="surface-soft px-[22px] py-5">
           <div className="mb-4 flex items-center gap-2">
-            <svg
+            <svg aria-hidden="true"
               width="15"
               height="15"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#64748B"
+              stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -517,17 +518,17 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                 <div
                   key={p.identity}
                   className={`flex items-center gap-3 rounded-[10px] px-2.5 py-2 ${
-                    p.isLocal ? 'border border-white/10 bg-white/[0.04]' : 'border border-transparent'
+                    p.isLocal ? 'border border-slate-200 bg-white' : 'border border-transparent'
                   }`}
                 >
                   <div
-                    className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full text-[13px] font-extrabold ${m.avatar}`}
+                    className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full text-[13px] font-semibold ${m.avatar}`}
                   >
                     {initial}
                   </div>
-                  <span className="flex-1 text-sm font-medium text-slate-200">
+                  <span className="flex-1 text-sm font-medium text-slate-800">
                     {p.displayName}
-                    {p.isLocal && <span className="ml-1.5 text-xs font-normal text-slate-600">（我）</span>}
+                    {p.isLocal && <span className="ml-1.5 text-xs font-normal text-slate-500">（我）</span>}
                   </span>
                   <RoleBadge role={p.role} />
                 </div>
@@ -538,16 +539,16 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
       )}
 
       {isConnected && (
-        <section className="glass-card-soft px-[22px] py-5">
+        <section className="surface-soft px-[22px] py-5">
           <div className="grid gap-5 lg:grid-cols-2">
             <div>
               <div className="mb-3 flex items-center gap-1.5">
-                <svg
+                <svg aria-hidden="true"
                   width="13"
                   height="13"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#64748B"
+                  stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -560,18 +561,18 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
               </div>
               <div
                 ref={localVideoRef}
-                className="min-h-11 rounded-[10px] border border-dashed border-white/10 bg-white/[0.03]"
+                className="min-h-11 rounded-[10px] border border-dashed border-slate-200 bg-white"
               />
             </div>
 
             <div>
               <div className="mb-3 flex items-center gap-1.5">
-                <svg
+                <svg aria-hidden="true"
                   width="13"
                   height="13"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#64748B"
+                  stroke="currentColor"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -583,7 +584,7 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
               </div>
               <div
                 ref={remoteMediaRef}
-                className="flex min-h-11 flex-wrap gap-2.5 rounded-[10px] border border-dashed border-white/10 bg-white/[0.03] p-1"
+                className="flex min-h-11 flex-wrap gap-2.5 rounded-[10px] border border-dashed border-slate-200 bg-white p-1"
               />
             </div>
           </div>

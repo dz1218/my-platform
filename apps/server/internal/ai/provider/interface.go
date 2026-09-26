@@ -7,9 +7,14 @@ type Message struct {
 	Content string `json:"content"`
 }
 type ChatRequest struct {
-	Messages []Message `json:"messages"`
+	Messages       []Message `json:"messages"`
+	AllowWait      bool      `json:"allowWait"`
+	MaxWaitSeconds int       `json:"maxWaitSeconds"`
+	PendingSeconds int       `json:"pendingSeconds"`
 }
 type Reply struct {
+	Action        string `json:"action,omitempty"`
+	WaitSeconds   int    `json:"waitSeconds,omitempty"`
 	Content       string `json:"content"`
 	PromptVersion string `json:"promptVersion"`
 }

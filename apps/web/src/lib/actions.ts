@@ -2,8 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { prisma } from '@/lib/prisma';
-import { getAuthUserId } from '@/lib/auth';
+import { novelRequest } from '@/services/novels';
 import { serverFetch, sessionCookie } from '@/services/api/server';
 
 async function authenticate(kind: 'register' | 'login', formData: FormData) {
@@ -38,135 +37,36 @@ export async function logoutAction() {
   store.delete(sessionCookie); store.delete('mp_auth'); store.delete('mp_nickname');
   redirect('/login');
 }
-async function requireAuth(): Promise<string> {
-  const id = await getAuthUserId();
-  if (!id) redirect('/login');
-  return id;
+// Form adapters only. Validation, ownership checks and persistence live in Go.
+const field = (form: FormData, name: string) => String(form.get(name) ?? '');
+const novelPath = (form: FormData) => `/novels/${encodeURIComponent(field(form, 'novelId'))}`;
+const chapterPath = (form: FormData) => `${novelPath(form)}/chapters/${encodeURIComponent(field(form, 'chapterId'))}`;
+
+export async function createNovelAction(form: FormData) {
+  const result = await novelRequest<{ id: string }>('/novels', { title: field(form, 'title'), description: field(form, 'description') });
+  redirect(`/novels/${result.id}`);
 }
-
-export async function createNovelAction(formData: FormData) {
-  const userId = await requireAuth();
-  const title = ((formData.get('title') as string) ?? '').trim();
-  const description = ((formData.get('description') as string) ?? '').trim();
-
-  if (!title) redirect('/novels/create?error=missing');
-
-  const novel = await prisma.novel.create({
-    data: {
-      title,
-      description: description || null,
-      authorId: userId,
-    },
-  });
-
-  redirect(`/novels/${novel.id}`);
+export async function updateNovelAction(form: FormData) {
+  await novelRequest(`${novelPath(form)}/update`, { title: field(form, 'title'), description: field(form, 'description'), status: field(form, 'status') });
+  redirect(novelPath(form));
 }
-
-export async function updateNovelAction(formData: FormData) {
-  const userId = await requireAuth();
-  const novelId = formData.get('novelId') as string;
-  const title = ((formData.get('title') as string) ?? '').trim();
-  const description = ((formData.get('description') as string) ?? '').trim();
-  const status = (formData.get('status') as string) ?? 'ongoing';
-
-  if (!novelId || !title) redirect(`/novels/${novelId}/edit?error=missing`);
-
-  const novel = await prisma.novel.findUnique({ where: { id: novelId } });
-  if (!novel || novel.authorId !== userId) redirect('/novels');
-
-  await prisma.novel.update({
-    where: { id: novelId },
-    data: { title, description: description || null, status },
-  });
-
-  redirect(`/novels/${novelId}`);
-}
-
-export async function deleteNovelAction(formData: FormData) {
-  const userId = await requireAuth();
-  const novelId = formData.get('novelId') as string;
-
-  const novel = await prisma.novel.findUnique({ where: { id: novelId } });
-  if (!novel || novel.authorId !== userId) redirect('/novels');
-
-  await prisma.novel.delete({ where: { id: novelId } });
+export async function deleteNovelAction(form: FormData) {
+  await novelRequest(`${novelPath(form)}/delete`, {});
   redirect('/novels');
 }
-
-// ─── Chapter actions ────────────────────────────────────────────────────────
-
-export async function createChapterAction(formData: FormData) {
-  const userId = await requireAuth();
-  const novelId = formData.get('novelId') as string;
-  const title = ((formData.get('title') as string) ?? '').trim();
-
-  const novel = await prisma.novel.findUnique({ where: { id: novelId } });
-  if (!novel || novel.authorId !== userId) redirect('/novels');
-  if (!title) redirect(`/novels/${novelId}/edit?error=missing`);
-
-  const lastChapter = await prisma.chapter.findFirst({
-    where: { novelId },
-    orderBy: { orderIndex: 'desc' },
-  });
-  const orderIndex = (lastChapter?.orderIndex ?? 0) + 1;
-
-  const chapter = await prisma.chapter.create({
-    data: { title, content: '', orderIndex, novelId },
-  });
-
-  redirect(`/novels/${novelId}/chapters/${chapter.id}/edit`);
+export async function createChapterAction(form: FormData) {
+  const result = await novelRequest<{ id: string }>(`${novelPath(form)}/chapters`, { title: field(form, 'title') });
+  redirect(`${novelPath(form)}/chapters/${result.id}/edit`);
 }
-
-export async function updateChapterAction(formData: FormData) {
-  const userId = await requireAuth();
-  const chapterId = formData.get('chapterId') as string;
-  const title = ((formData.get('title') as string) ?? '').trim();
-  const content = (formData.get('content') as string) ?? '';
-
-  const chapter = await prisma.chapter.findUnique({
-    where: { id: chapterId },
-    include: { novel: true },
-  });
-  if (!chapter || chapter.novel.authorId !== userId) redirect('/novels');
-  if (!title) redirect(`/novels/${chapter.novelId}/chapters/${chapterId}/edit?error=missing`);
-
-  await prisma.chapter.update({
-    where: { id: chapterId },
-    data: { title, content },
-  });
-
-  redirect(`/novels/${chapter.novelId}/chapters/${chapterId}/edit?saved=1`);
+export async function updateChapterAction(form: FormData) {
+  await novelRequest(`${chapterPath(form)}/update`, { title: field(form, 'title'), content: field(form, 'content') });
+  redirect(`${chapterPath(form)}/edit?saved=1`);
 }
-
-export async function publishChapterAction(formData: FormData) {
-  const userId = await requireAuth();
-  const chapterId = formData.get('chapterId') as string;
-  const published = formData.get('published') === '1';
-
-  const chapter = await prisma.chapter.findUnique({
-    where: { id: chapterId },
-    include: { novel: true },
-  });
-  if (!chapter || chapter.novel.authorId !== userId) redirect('/novels');
-
-  await prisma.chapter.update({
-    where: { id: chapterId },
-    data: { published },
-  });
-
-  redirect(`/novels/${chapter.novelId}/chapters/${chapterId}/edit`);
+export async function publishChapterAction(form: FormData) {
+  await novelRequest(`${chapterPath(form)}/publish`, { published: field(form, 'published') === '1' });
+  redirect(`${chapterPath(form)}/edit`);
 }
-
-export async function deleteChapterAction(formData: FormData) {
-  const userId = await requireAuth();
-  const chapterId = formData.get('chapterId') as string;
-
-  const chapter = await prisma.chapter.findUnique({
-    where: { id: chapterId },
-    include: { novel: true },
-  });
-  if (!chapter || chapter.novel.authorId !== userId) redirect('/novels');
-
-  await prisma.chapter.delete({ where: { id: chapterId } });
-  redirect(`/novels/${chapter.novelId}/edit`);
+export async function deleteChapterAction(form: FormData) {
+  await novelRequest(`${chapterPath(form)}/delete`, {});
+  redirect(`${novelPath(form)}/edit`);
 }

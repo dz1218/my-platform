@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { replyInput, type ReplyInput } from './graph/companion.js';
 
-export type ReplyRunner = (input: ReplyInput, signal: AbortSignal) => Promise<{ content: string; promptVersion: string }>;
+export type ReplyRunner = (input: ReplyInput, signal: AbortSignal) => Promise<{ content: string; promptVersion: string; action?: string; waitSeconds?: number }>;
 export function createAgentServer(token: string, run: ReplyRunner, ready = true) {
   let active = 0;
   const respond = (res: ServerResponse, status: number, body: unknown) => {
@@ -21,6 +21,7 @@ export function createAgentServer(token: string, run: ReplyRunner, ready = true)
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), 90_000);
     res.on('close', () => { if (!res.writableEnded) abort.abort(); });
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
     try {
       const chunks: Buffer[] = []; let size = 0;
       for await (const chunk of req) {
@@ -31,12 +32,17 @@ export function createAgentServer(token: string, run: ReplyRunner, ready = true)
       let input: ReplyInput;
       try { input = replyInput.parse(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
       catch { respond(res, 400, { error: 'invalid_request' }); return; }
+      res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' });
+      res.flushHeaders();
+      res.write(': connected\n\n');
+      heartbeat = setInterval(() => { if (!res.destroyed) res.write(': heartbeat\n\n'); }, 15_000);
       const reply = await run(input, abort.signal);
-      respond(res, 200, reply);
+      if (!res.destroyed) res.end(`event: reply\ndata: ${JSON.stringify(reply)}\n\n`);
     } catch {
       // Provider errors can contain request content. Keep logs free of prompts and secrets.
       console.error('[agent] reply failed');
-      respond(res, 502, { error: 'generation_failed' });
-    } finally { clearTimeout(timer); active--; }
+      if (res.headersSent) { if (!res.destroyed) res.end('event: error\ndata: {"error":"generation_failed"}\n\n'); }
+      else respond(res, 502, { error: 'generation_failed' });
+    } finally { clearTimeout(timer); clearInterval(heartbeat); active--; }
   });
 }
