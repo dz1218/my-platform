@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"companion/server/internal/auth"
@@ -24,15 +25,15 @@ type chatCommand struct {
 }
 
 type socketBackend interface {
-	Owned(context.Context, string, string) (conversation.Conversation, error)
+	Accessible(context.Context, string, string) (conversation.Conversation, error)
 	History(context.Context, conversation.Conversation, int64, int) (conversation.Page, error)
 	Send(context.Context, string, string, string, string) (conversation.Message, error)
 }
 
 type durableSocketBackend struct{ delivery.Service }
 
-func (b durableSocketBackend) Owned(ctx context.Context, user, id string) (conversation.Conversation, error) {
-	return b.Messages.Owned(ctx, user, id)
+func (b durableSocketBackend) Accessible(ctx context.Context, user, id string) (conversation.Conversation, error) {
+	return b.Messages.Accessible(ctx, user, id)
 }
 func (b durableSocketBackend) History(ctx context.Context, conv conversation.Conversation, before int64, limit int) (conversation.Page, error) {
 	return b.Messages.History(ctx, conv, before, limit)
@@ -55,7 +56,7 @@ func chatSocket(chat delivery.Service, cache *redis.Client, origin string) gin.H
 func socketHandler(chat socketBackend, origin string, allow func(context.Context, string) error) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := auth.UserID(c)
-		conv, err := chat.Owned(c.Request.Context(), userID, c.Param("id"))
+		conv, err := chat.Accessible(c.Request.Context(), userID, c.Param("id"))
 		if err != nil {
 			response.Fail(c, err)
 			return
@@ -95,9 +96,30 @@ func socketHandler(chat socketBackend, origin string, allow func(context.Context
 				// The durable database is authoritative across API and worker processes.
 				// Send a fresh snapshot on reconnect and whenever persisted state changes.
 				previous := ""
+				lastMessageID := int64(0)
+				previousSettings := ""
 				syncHistory := func() error {
 					queryCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 					defer stop()
+					if _, err := chat.Accessible(queryCtx, userID, conv.ID); err != nil {
+						return err
+					}
+					if backend, ok := chat.(durableSocketBackend); ok {
+						settings, err := backend.Repo.Settings(queryCtx, conv.ID, userID)
+						if err != nil {
+							return err
+						}
+						encoded, err := json.Marshal(settings)
+						if err != nil {
+							return err
+						}
+						if string(encoded) != previousSettings {
+							if err = write(gin.H{"type": "auto_reply.settings_updated", "settings": settings}); err != nil {
+								return err
+							}
+							previousSettings = string(encoded)
+						}
+					}
 					page, err := chat.History(queryCtx, conv, 0, 50)
 					if err != nil {
 						return err
@@ -106,11 +128,32 @@ func socketHandler(chat socketBackend, origin string, allow func(context.Context
 					if err != nil {
 						return err
 					}
-					if string(data) == previous {
-						return nil
+					if string(data) != previous {
+						if err = write(gin.H{"type": "history", "page": page}); err != nil {
+							return err
+						}
 					}
-					if err = write(gin.H{"type": "history", "page": page}); err != nil {
-						return err
+					events := page.Items
+					if backend, ok := chat.(durableSocketBackend); ok && previous != "" {
+						// A bounded batch is resumed on the next tick even if the snapshot is unchanged.
+						events, err = backend.Messages.After(queryCtx, conv, lastMessageID, 200)
+						if err != nil {
+							return err
+						}
+					}
+					for _, message := range events {
+						id, err := strconv.ParseInt(message.ID, 10, 64)
+						if err != nil {
+							return err
+						}
+						if previous != "" && id > lastMessageID {
+							if err = write(gin.H{"type": "message.created", "message": message}); err != nil {
+								return err
+							}
+						}
+						if id > lastMessageID {
+							lastMessageID = id
+						}
 					}
 					previous = string(data)
 					return nil

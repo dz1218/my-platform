@@ -36,7 +36,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 			c.Header("Vary", "Origin")
 			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
 		}
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -72,6 +72,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 	api.GET("/novels/:id", nh.Get)
 	api.GET("/novels/:id/chapters/:chapterId", nh.Chapter)
 	api.Use(ah.Require)
+	autopilotRoutes(api, chat)
 	api.POST("/novels", nh.Write("create"))
 	api.POST("/novels/:id/update", nh.Write("update"))
 	api.POST("/novels/:id/delete", nh.Write("delete"))
@@ -86,7 +87,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 	api.POST("/matches", mh.Create)
 	api.GET("/matches/:id", mh.Get)
 	api.GET("/conversations/:id/messages", func(c *gin.Context) {
-		conv, err := messages.Owned(c.Request.Context(), auth.UserID(c), c.Param("id"))
+		conv, err := messages.Accessible(c.Request.Context(), auth.UserID(c), c.Param("id"))
 		if err != nil {
 			response.Fail(c, err)
 			return

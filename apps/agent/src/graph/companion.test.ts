@@ -83,7 +83,7 @@ test("multi-turn history uses the same action format as the expected model outpu
 test("agent returns a reply action with natural paragraphs", async () => {
   const graph = createCompanionGraph({
     invoke: async (messages) => {
-      assert.match(String(messages[0].content), /你决定下一步/);
+      assert.match(String(messages[0].content), /接管状态和超时均由后端判断/);
       assert.match(String(messages[0].content), /allowWait=false/);
       return new AIMessage(
         JSON.stringify({

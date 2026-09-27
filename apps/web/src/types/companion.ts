@@ -3,6 +3,11 @@ export type Identity = { id: string; name: string; age: number; avatarUrl: strin
 export type Match = { id: string; conversationId: string; identity: Identity };
 export type Message = {
   id: string; sender: { id: string; name: string }; senderType: 'user' | 'identity';
-  content: string; status: 'pending' | 'complete' | 'failed'; requestId?: string; createdAt: string;
+  source?: 'USER' | 'AI' | 'HUMAN'; content: string; status: 'pending' | 'complete' | 'failed'; requestId?: string; createdAt: string;
 };
-export type MessagePage = { items: Message[]; nextCursor?: string; replyStatus?: 'idle' | 'queued' | 'generating' | 'scheduled' | 'delivered' | 'failed' };
+export type MessagePage = { items: Message[]; nextCursor?: string; replyStatus?: 'idle' | 'queued' | 'generating' | 'scheduled' | 'delivered' | 'failed' | 'cancelled' };
+
+export type AutoReply = {
+  ownerType: 'AI' | 'HUMAN'; mode: 'NEVER' | 'TIMEOUT' | 'ALWAYS';
+  delaySeconds: number; version: number; canManage: boolean;
+};

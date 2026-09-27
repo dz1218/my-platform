@@ -52,6 +52,10 @@ export default async function MePage() {
             ›
           </span>
         </Link>
+        <Link href="/operator" className="settings-row border-t border-line hover:bg-brand-50">
+          <div><h3 className="text-sm font-medium">真人接管</h3><p className="mt-1 text-xs text-muted">回复分配给你的会话，管理 AI 托管</p></div>
+          <span aria-hidden="true">›</span>
+        </Link>
         <div className="settings-row border-t border-slate-200">
           <p className="text-sm text-slate-600">退出当前账号</p>
           <form action={logoutAction}>

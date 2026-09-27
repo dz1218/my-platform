@@ -19,9 +19,9 @@ func (s Service) Send(ctx context.Context, userID, conversationID, requestID, co
 	if strings.TrimSpace(content) == "" || utf8.RuneCountInString(content) > 2000 || len(requestID) < 8 || len(requestID) > 80 {
 		return conversation.Message{}, response.BadRequest("消息不能为空、不能超过 2000 字，并需要有效请求编号")
 	}
-	c, err := s.Messages.Owned(ctx, userID, conversationID)
+	c, err := s.Messages.Accessible(ctx, userID, conversationID)
 	if err != nil {
 		return conversation.Message{}, err
 	}
-	return s.Repo.Enqueue(ctx, c, requestID, content, s.Policies.For(c.IdentityID))
+	return s.Repo.SendAs(ctx, c, userID, requestID, content, s.Policies.For(c.IdentityID))
 }

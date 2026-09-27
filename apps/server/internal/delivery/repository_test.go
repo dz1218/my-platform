@@ -149,13 +149,16 @@ func TestDurableConversationLifecycle(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	conv, _ := messages.Owned(ctx, "u", "c")
+	conv, _ := messages.Accessible(ctx, "u", "c")
 	page, err := messages.History(ctx, conv, 0, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(page.Items) != 3 || page.Items[2].Content != "下午面试，加油。" || page.Items[0].Status != "complete" || page.Items[1].Status != "complete" {
 		t.Fatalf("bad history: %+v", page.Items)
+	}
+	if page.Items[0].Source != "USER" || page.Items[2].Source != "AI" {
+		t.Fatalf("incorrect public message sources: %+v", page.Items)
 	}
 	if repeated := send("request-002", "下午三点"); repeated.ID != second.ID {
 		t.Fatal("completed retry duplicated user message")

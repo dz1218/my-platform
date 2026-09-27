@@ -78,10 +78,33 @@ func (w Worker) generateLoop(ctx context.Context) {
 func (w Worker) generate(parent context.Context, j Job) {
 	ctx, cancel := context.WithTimeout(parent, 100*time.Second)
 	defer cancel()
+	release, locked, err := w.Repo.generationLock(ctx, j.Conversation.ID)
+	if err != nil {
+		slog.Error("generation lock failed", "error", err)
+		return
+	}
+	if !locked {
+		if err = w.Repo.deferBusy(ctx, j); err != nil {
+			slog.Error("defer busy conversation failed", "error", err)
+		}
+		return
+	}
+	defer release()
+	current, err := w.Repo.Current(ctx, j)
+	if err != nil {
+		slog.Error("reply freshness check failed", "conversation", j.Conversation.ID, "error", err)
+		return
+	}
+	if !current {
+		if err = w.Repo.CancelClaim(ctx, j); err != nil {
+			slog.Error("stale reply cancellation failed", "error", err)
+		}
+		return
+	}
 	request, err := w.Builder.Build(ctx, j.Conversation)
 	var reply provider.Reply
 	if err == nil {
-		request.AllowWait = j.WaitCount < 1 && j.Policy.MaxWaitSeconds > 0
+		request.AllowWait = false
 		request.MaxWaitSeconds = j.Policy.MaxWaitSeconds
 		request.PendingSeconds = int(time.Since(j.RequestedAt).Seconds())
 		if request.PendingSeconds < 0 {
@@ -91,7 +114,7 @@ func (w Worker) generate(parent context.Context, j Job) {
 	}
 	if err == nil {
 		if reply.Action == "wait" {
-			err = w.Repo.Wait(ctx, j, reply.WaitSeconds)
+			err = errors.New("agent returned wait although scheduling belongs to server")
 		} else {
 			err = w.Repo.Schedule(ctx, j, reply.Content, reply.PromptVersion, time.Now())
 		}

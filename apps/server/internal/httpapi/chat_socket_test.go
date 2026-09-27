@@ -19,7 +19,7 @@ type fakeSocketBackend struct {
 	messages []conversation.Message
 }
 
-func (b *fakeSocketBackend) Owned(_ context.Context, user, id string) (conversation.Conversation, error) {
+func (b *fakeSocketBackend) Accessible(_ context.Context, user, id string) (conversation.Conversation, error) {
 	if user != "owner" || id != "owned" {
 		return conversation.Conversation{}, response.BadRequest("not owned")
 	}
@@ -91,6 +91,7 @@ func TestChatSocketDeliveryAndReconnect(t *testing.T) {
 	}
 	read("accepted")
 	read("history")
+	read("message.created")
 	ws.Close()
 	ws, err = dial("owned", "http://web")
 	if err != nil {

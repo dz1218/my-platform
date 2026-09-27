@@ -1,5 +1,5 @@
 import { api } from "./api/client";
-import type { Message, MessagePage } from "@/types/companion";
+import type { AutoReply, Message, MessagePage } from "@/types/companion";
 export const history = (id: string, before?: string, signal?: AbortSignal) =>
   api<MessagePage>(
     `/conversations/${encodeURIComponent(id)}/messages${before ? `?before=${encodeURIComponent(before)}` : ""}`,
@@ -21,6 +21,7 @@ export class ChatConnection {
     private id: string,
     private onHistory: (page: MessagePage) => void,
     private onError: (error: Error | null) => void,
+    private onSettings?: (settings: AutoReply) => void,
   ) {
     this.connect();
   }
@@ -41,6 +42,10 @@ export class ChatConnection {
         const data = JSON.parse(event.data);
         if (data.type === "ping") {
           socket.send(JSON.stringify({ type: "pong" }));
+          return;
+        }
+        if (data.type === "auto_reply.settings_updated") {
+          this.onSettings?.(data.settings);
           return;
         }
         if (data.type === "history") {
@@ -97,3 +102,9 @@ export class ChatConnection {
     this.rejectPending();
   }
 }
+
+export const autoReply = (id: string, signal?: AbortSignal) => api<AutoReply>(`/conversations/${encodeURIComponent(id)}/auto-reply`, { signal });
+export const configureAutoReply = (id: string, mode: AutoReply['mode'], delaySeconds: number) =>
+ api<AutoReply>(`/conversations/${encodeURIComponent(id)}/auto-reply`, { method: 'PATCH', body: JSON.stringify({mode,delaySeconds}) });
+export const takeover = (id: string, ownerType: AutoReply['ownerType']) =>
+ api<AutoReply>(`/conversations/${encodeURIComponent(id)}/takeover`, { method: 'POST', body: JSON.stringify({ownerType}) });

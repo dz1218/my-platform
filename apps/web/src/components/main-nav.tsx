@@ -31,6 +31,6 @@ export function MainNav() {
         <span>{label}</span>
       </Link>;
     })}</nav>
-    <div className="nav-footer"><p className="mb-3 text-sm text-ink">聊天、阅读，慢慢来。</p><Link href="/privacy" className="link-muted text-xs">平台互动说明</Link></div>
+    <div className="nav-footer"><Link href="/operator" className="link-muted mb-4 block text-sm">真人接管</Link><p className="mb-3 text-sm text-ink">聊天、阅读，慢慢来。</p><Link href="/privacy" className="link-muted text-xs">平台互动说明</Link></div>
   </header>;
 }

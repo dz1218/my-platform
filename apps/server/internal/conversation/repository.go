@@ -17,7 +17,7 @@ type Message struct {
 	ID         string    `json:"id"`
 	Sender     Sender    `json:"sender"`
 	SenderType string    `json:"senderType"`
- Source string `json:"source"`
+	Source     string    `json:"source"`
 	Content    string    `json:"content"`
 	Status     string    `json:"status"`
 	RequestID  *string   `json:"requestId,omitempty"`
@@ -30,18 +30,20 @@ type Page struct {
 }
 type Repository struct{ DB *pgxpool.Pool }
 
-func (r Repository) Owned(ctx context.Context, userID, id string) (Conversation, error) {
+func (r Repository) Accessible(ctx context.Context, userID, id string) (Conversation, error) {
 	var c Conversation
 	err := r.DB.QueryRow(ctx, `SELECT id,user_id,identity_id FROM conversations WHERE id=$1 AND (user_id=$2 OR EXISTS(SELECT 1 FROM conversation_takeovers t WHERE t.conversation_id=conversations.id AND t.operator_id=$2))`, id, userID).Scan(&c.ID, &c.UserID, &c.IdentityID)
 	return c, err
 }
 
-func (r Repository) History(ctx context.Context, c Conversation, before int64, limit int) (Page, error) {
-	rows, err := r.DB.Query(ctx, `SELECT m.id::text,m.sender_type,CASE WHEN m.sender_type='user' THEN 'USER' WHEN m.driver_type='human' THEN 'HUMAN' ELSE 'AI' END,m.content,CASE WHEN m.sender_type='user' THEN 'complete' ELSE m.status END,m.request_id,m.created_at,
+const messageQuery = `SELECT m.id::text,m.sender_type,CASE WHEN m.sender_type='user' THEN 'USER' WHEN m.driver_type='human' THEN 'HUMAN' ELSE 'AI' END,m.content,CASE WHEN m.sender_type='user' THEN 'complete' ELSE m.status END,m.request_id,m.created_at,
  CASE WHEN m.sender_type='user' THEN u.id ELSE i.id END,
  CASE WHEN m.sender_type='user' THEN COALESCE(u.name,'') ELSE i.name END
  FROM messages m JOIN users u ON u.id=$2 JOIN identities i ON i.id=m.identity_id
- WHERE m.conversation_id=$1 AND ($3::bigint=0 OR m.id<$3) ORDER BY m.id DESC LIMIT $4`, c.ID, c.UserID, before, limit+1)
+`
+
+func (r Repository) History(ctx context.Context, c Conversation, before int64, limit int) (Page, error) {
+	rows, err := r.DB.Query(ctx, messageQuery+` WHERE m.conversation_id=$1 AND ($3::bigint=0 OR m.id<$3) ORDER BY m.id DESC LIMIT $4`, c.ID, c.UserID, before, limit+1)
 	if err != nil {
 		return Page{}, err
 	}
@@ -83,4 +85,23 @@ func Cursor(raw string) (int64, error) {
 		return 0, response.BadRequest("无效的历史游标")
 	}
 	return v, nil
+}
+
+// After reads committed events in order, independently of the 50-message UI
+// window, so a burst cannot silently drop message.created notifications.
+func (r Repository) After(ctx context.Context, c Conversation, after int64, limit int) ([]Message, error) {
+	rows, err := r.DB.Query(ctx, messageQuery+` WHERE m.conversation_id=$1 AND m.id>$3 ORDER BY m.id ASC LIMIT $4`, c.ID, c.UserID, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var m Message
+		if err = rows.Scan(&m.ID, &m.SenderType, &m.Source, &m.Content, &m.Status, &m.RequestID, &m.CreatedAt, &m.Sender.ID, &m.Sender.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, m)
+	}
+	return items, rows.Err()
 }

@@ -6,8 +6,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { history, ChatConnection } from "@/services/chat";
-import type { Message, MessagePage } from "@/types/companion";
+import { autoReply, history, ChatConnection } from "@/services/chat";
+import type { AutoReply, Message, MessagePage } from "@/types/companion";
 
 type Turn = { content: string; requestId: string };
 export function useConversation(conversationId: string) {
@@ -17,6 +17,10 @@ export function useConversation(conversationId: string) {
     queryKey: key,
     queryFn: ({ signal }) => history(conversationId, undefined, signal),
     enabled: !!conversationId,
+  });
+  const settings = useQuery({
+    queryKey: ["auto-reply", conversationId],
+    queryFn: ({ signal }) => autoReply(conversationId, signal),
   });
   const connection = useRef<ChatConnection | null>(null);
   const [connectionError, setConnectionError] = useState<Error | null>(null);
@@ -32,6 +36,12 @@ export function useConversation(conversationId: string) {
         void client.invalidateQueries({ queryKey: ["matches"] });
       },
       setConnectionError,
+      (settings) => {
+        void client.cancelQueries({ queryKey: ["auto-reply", conversationId], exact: true });
+        client.setQueryData<AutoReply>(["auto-reply", conversationId], (current) =>
+          current && current.version > settings.version ? current : settings,
+        );
+      },
     );
     connection.current = socket;
     return () => {
@@ -65,7 +75,7 @@ export function useConversation(conversationId: string) {
           message,
         ],
         nextCursor: page?.nextCursor,
-        replyStatus: "queued",
+        replyStatus: page?.replyStatus,
       }));
       void client.invalidateQueries({ queryKey: ["matches"] });
     },
@@ -91,6 +101,7 @@ export function useConversation(conversationId: string) {
   };
   return {
     messages,
+    settings,
     latest,
     error: mutation.error ?? connectionError,
     sending: mutation.isPending,

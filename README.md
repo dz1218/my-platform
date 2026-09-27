@@ -41,6 +41,7 @@ pnpm dev          # Next.js :3011
 ## Customization and checks
 
 - [Interaction strategy and architecture](docs/companion-agent.md)
+- [真人接管与 AI 托管：接口、授权分配及验证](docs/autopilot.md)
 - Delivery policy: `apps/server/config/behavior.json`
 - Versioned prompts: `apps/agent/src/prompts/`
 - `pnpm server:test`, `pnpm agent:test`, `pnpm typecheck`

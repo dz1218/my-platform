@@ -1,8 +1,8 @@
 import type { Message } from "@/types/companion";
 import { cn } from "@/lib/utils";
 
-export function MessageBubble({ message, sending = false }: { message: Message; sending?: boolean }) {
-  const own = message.senderType === "user";
+export function MessageBubble({ message, sending = false, operator = false }: { message: Message; sending?: boolean; operator?: boolean }) {
+  const own = operator ? message.senderType === "identity" : message.senderType === "user";
   return (
     <article
       className={cn("flex items-start gap-2.5", own && "flex-row-reverse")}
@@ -14,7 +14,7 @@ export function MessageBubble({ message, sending = false }: { message: Message; 
           own && "bg-slate-200 text-slate-600",
         )}
       >
-        {own ? "我" : message.sender.name.slice(-1)}
+        {own && !operator ? "我" : message.sender.name.slice(-1)}
       </div>
       <div
         className={cn(
@@ -23,7 +23,8 @@ export function MessageBubble({ message, sending = false }: { message: Message; 
         )}
       >
         <p className="mx-0.5 mb-1.5 text-xs text-muted">
-          {own ? "我" : message.sender.name}
+          {own && !operator ? "我" : message.sender.name}
+          {operator && (message.source === "AI" ? " · AI 回复" : message.source === "HUMAN" ? " · 真人回复" : "")}
         </p>
         <div
           className={cn(
