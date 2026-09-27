@@ -2,10 +2,11 @@ package response
 
 import (
 	"errors"
-	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
 	"log/slog"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
 type Error struct {

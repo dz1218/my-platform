@@ -1,7 +1,7 @@
-import Link from 'next/link';
-import { LiveRoomClient } from '@/components/live/live-room-client';
-import { webEnv } from '@/lib/env';
-import { isAuthenticated, getHostNickname } from '@/lib/auth';
+import Link from "next/link";
+import { LiveRoomClient } from "@/components/live/live-room-client";
+import { webEnv } from "@/lib/env";
+import { isAuthenticated, getHostNickname } from "@/lib/auth";
 
 export default async function LiveRoomPage({
   params,
@@ -17,8 +17,12 @@ export default async function LiveRoomPage({
   return (
     <main id="main-content" tabIndex={-1} className="page-shell page-content">
       <div className="mb-6">
-        <Link href="/live" className="link-muted inline-flex items-center gap-1.5">
-          <svg aria-hidden="true"
+        <Link
+          href="/live"
+          className="link-muted inline-flex items-center gap-1.5"
+        >
+          <svg
+            aria-hidden="true"
             width="14"
             height="14"
             viewBox="0 0 24 24"
@@ -39,7 +43,9 @@ export default async function LiveRoomPage({
           <span className="live-dot h-[7px] w-[7px]" />
           <span>LIVE</span>
         </div>
-        <h1 className="m-0 truncate text-[22px] font-semibold tracking-[-0.3px] text-slate-900">{roomId}</h1>
+        <h1 className="m-0 truncate text-[22px] font-semibold tracking-[-0.3px] text-slate-900">
+          {roomId}
+        </h1>
         {loggedIn && (
           <span className="shrink-0 rounded-md border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
             主播模式

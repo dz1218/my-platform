@@ -1,12 +1,12 @@
-import { UnsavedChanges } from '@/components/unsaved-changes';
-import { SubmitButton } from '@/components/submit-button';
-import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { isAuthenticated } from '@/lib/auth';
-import { createNovelAction } from '@/lib/actions';
+import { UnsavedChanges } from "@/components/unsaved-changes";
+import { SubmitButton } from "@/components/submit-button";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { isAuthenticated } from "@/lib/auth";
+import { createNovelAction } from "@/lib/actions";
 
 const ERROR_MSG: Record<string, string> = {
-  missing: '请填写小说标题',
+  missing: "请填写小说标题",
 };
 
 export default async function CreateNovelPage({
@@ -14,16 +14,20 @@ export default async function CreateNovelPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  if (!(await isAuthenticated())) redirect('/login');
+  if (!(await isAuthenticated())) redirect("/login");
 
   const { error } = await searchParams;
-  const errorMsg = error ? (ERROR_MSG[error] ?? '创建失败，请重试') : null;
+  const errorMsg = error ? (ERROR_MSG[error] ?? "创建失败，请重试") : null;
 
   return (
     <main id="main-content" tabIndex={-1} className="page-form page-content">
       <div className="mb-5">
-        <Link href="/novels" className="link-muted inline-flex items-center gap-1.5">
-          <svg aria-hidden="true"
+        <Link
+          href="/novels"
+          className="link-muted inline-flex items-center gap-1.5"
+        >
+          <svg
+            aria-hidden="true"
             width="14"
             height="14"
             viewBox="0 0 24 24"
@@ -46,7 +50,8 @@ export default async function CreateNovelPage({
       <div className="surface p-5">
         {errorMsg && (
           <div className="mb-5 flex items-center gap-2 rounded-[10px] border border-rose-500/25 bg-rose-500/[0.12] px-3.5 py-2.5">
-            <svg aria-hidden="true"
+            <svg
+              aria-hidden="true"
               width="15"
               height="15"
               viewBox="0 0 24 24"
@@ -71,7 +76,8 @@ export default async function CreateNovelPage({
               标题 <span className="text-rose-700">*</span>
             </span>
             <input
-              name="title" maxLength={200}
+              name="title"
+              maxLength={200}
               type="text"
               placeholder="输入小说标题"
               required
@@ -84,7 +90,8 @@ export default async function CreateNovelPage({
               简介
             </span>
             <textarea
-              name="description" maxLength={5000}
+              name="description"
+              maxLength={5000}
               placeholder="简要介绍你的小说（可选）"
               rows={4}
               className="input-field resize-none"
@@ -92,7 +99,8 @@ export default async function CreateNovelPage({
           </label>
 
           <SubmitButton className="btn-primary mt-1 w-full py-3 text-[15px] font-bold">
-            <svg aria-hidden="true"
+            <svg
+              aria-hidden="true"
               width="15"
               height="15"
               viewBox="0 0 24 24"

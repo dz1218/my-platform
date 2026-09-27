@@ -37,31 +37,21 @@ func (r Repository) Enqueue(ctx context.Context, c conversation.Conversation, re
 	if _, err = tx.Exec(ctx, `SELECT id FROM conversations WHERE id=$1 FOR UPDATE`, c.ID); err != nil {
 		return conversation.Message{}, err
 	}
-	m := conversation.Message{SenderType: "user", Content: content, Status: "pending", Sender: conversation.Sender{ID: c.UserID}, RequestID: &requestID}
+	m := conversation.Message{SenderType: "user", Content: content, Status: "complete", Sender: conversation.Sender{ID: c.UserID}, RequestID: &requestID}
 	err = tx.QueryRow(ctx, `SELECT id::text,content,status,created_at FROM messages WHERE conversation_id=$1 AND request_id=$2 AND sender_type='user'`, c.ID, requestID).Scan(&m.ID, &m.Content, &m.Status, &m.CreatedAt)
 	if err == nil {
 		if m.Content != content {
 			return m, &response.Error{Status: 409, Code: "request_conflict", Message: "重复请求的消息内容不同"}
 		}
-		if m.Status != "failed" {
-			if err = tx.QueryRow(ctx, `SELECT COALESCE(name,'') FROM users WHERE id=$1`, c.UserID).Scan(&m.Sender.Name); err != nil {
-				return m, err
-			}
-			return m, tx.Commit(ctx)
-		}
-		var newer bool
-		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM messages WHERE conversation_id=$1 AND sender_type='user' AND id>$2::bigint)`, c.ID, m.ID).Scan(&newer); err != nil {
+		// An accepted message stays accepted even if its reply job fails.
+		// Replaying a send only acknowledges the original message.
+		m.Status = "complete"
+		if err = tx.QueryRow(ctx, `SELECT COALESCE(name,'') FROM users WHERE id=$1`, c.UserID).Scan(&m.Sender.Name); err != nil {
 			return m, err
 		}
-		if newer {
-			return m, &response.Error{Status: 409, Code: "stale_retry", Message: "已有后续消息，请发送新消息"}
-		}
-		if _, err = tx.Exec(ctx, `UPDATE messages SET status='pending' WHERE id=$1::bigint`, m.ID); err != nil {
-			return m, err
-		}
-		m.Status = "pending"
+		return m, tx.Commit(ctx)
 	} else if errors.Is(err, pgx.ErrNoRows) {
-		err = tx.QueryRow(ctx, `INSERT INTO messages(conversation_id,identity_id,sender_type,content,request_id,status) VALUES($1,$2,'user',$3,$4,'pending') RETURNING id::text,created_at`, c.ID, c.IdentityID, content, requestID).Scan(&m.ID, &m.CreatedAt)
+		err = tx.QueryRow(ctx, `INSERT INTO messages(conversation_id,identity_id,sender_type,content,request_id,status) VALUES($1,$2,'user',$3,$4,'complete') RETURNING id::text,created_at`, c.ID, c.IdentityID, content, requestID).Scan(&m.ID, &m.CreatedAt)
 		if err != nil {
 			return m, err
 		}
@@ -123,15 +113,10 @@ func (r Repository) Failed(ctx context.Context, j Job) error {
 	if j.Attempts >= j.Policy.MaxAttempts {
 		status = "failed"
 	}
-	tag, err := tx.Exec(ctx, `UPDATE reply_jobs SET status=$4,due_at=now()+make_interval(secs=>$5),lease_until=NULL,last_error='generation_failed',updated_at=now()
+	_, err = tx.Exec(ctx, `UPDATE reply_jobs SET status=$4,due_at=now()+make_interval(secs=>$5),lease_until=NULL,last_error='generation_failed',updated_at=now()
  WHERE conversation_id=$1 AND version=$2 AND claim_token=$3 AND status='generating'`, j.Conversation.ID, j.Version, j.ClaimToken, status, j.Policy.RetrySeconds*j.Attempts)
 	if err != nil {
 		return err
-	}
-	if tag.RowsAffected() > 0 && status == "failed" {
-		if _, err = tx.Exec(ctx, `UPDATE messages SET status='failed' WHERE conversation_id=$1 AND sender_type='user' AND status='pending' AND id<=$2::bigint`, j.Conversation.ID, j.TriggerID); err != nil {
-			return err
-		}
 	}
 	return tx.Commit(ctx)
 }

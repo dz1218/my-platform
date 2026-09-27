@@ -1,7 +1,7 @@
-import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { getChapter } from '@/services/novels';
-import { getAuthUserId } from '@/lib/auth';
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getChapter } from "@/services/novels";
+import { getAuthUserId } from "@/lib/auth";
 
 export default async function ChapterReadPage({
   params,
@@ -18,13 +18,15 @@ export default async function ChapterReadPage({
   const isAuthor = userId === chapter.novel.authorId;
   if (!chapter.published && !isAuthor) notFound();
 
-  const index = chapter.novel.chapters.findIndex(item => item.id === chapterId);
+  const index = chapter.novel.chapters.findIndex(
+    (item) => item.id === chapterId,
+  );
   const prevChapter = chapter.novel.chapters[index - 1];
   const nextChapter = chapter.novel.chapters[index + 1];
 
   // Split content into paragraphs
   const paragraphs = chapter.content
-    .split('\n')
+    .split("\n")
     .filter((line) => line.trim().length > 0);
 
   return (
@@ -35,7 +37,8 @@ export default async function ChapterReadPage({
           href={`/novels/${id}`}
           className="link-muted inline-flex items-center gap-1.5"
         >
-          <svg aria-hidden="true"
+          <svg
+            aria-hidden="true"
             width="14"
             height="14"
             viewBox="0 0 24 24"
@@ -87,7 +90,7 @@ export default async function ChapterReadPage({
               <p
                 key={i}
                 className="text-[15px] leading-[1.9] text-slate-700"
-                style={{ textIndent: '2em' }}
+                style={{ textIndent: "2em" }}
               >
                 {p}
               </p>
@@ -103,7 +106,8 @@ export default async function ChapterReadPage({
             href={`/novels/${id}/chapters/${prevChapter.id}`}
             className="surface-soft room-card flex flex-1 items-center gap-3 px-5 py-4 no-underline text-inherit"
           >
-            <svg aria-hidden="true"
+            <svg
+              aria-hidden="true"
               width="16"
               height="16"
               viewBox="0 0 24 24"
@@ -142,7 +146,8 @@ export default async function ChapterReadPage({
                 {nextChapter.title}
               </p>
             </div>
-            <svg aria-hidden="true"
+            <svg
+              aria-hidden="true"
               width="16"
               height="16"
               viewBox="0 0 24 24"

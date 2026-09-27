@@ -8,13 +8,14 @@ import (
 	"companion/server/pkg/database"
 	"context"
 	"flag"
-	"github.com/redis/go-redis/v9"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {

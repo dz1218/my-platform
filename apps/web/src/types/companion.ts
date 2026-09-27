@@ -5,4 +5,4 @@ export type Message = {
   id: string; sender: { id: string; name: string }; senderType: 'user' | 'identity';
   content: string; status: 'pending' | 'complete' | 'failed'; requestId?: string; createdAt: string;
 };
-export type MessagePage = { items: Message[]; nextCursor?: string };
+export type MessagePage = { items: Message[]; nextCursor?: string; replyStatus?: 'idle' | 'queued' | 'generating' | 'scheduled' | 'delivered' | 'failed' };

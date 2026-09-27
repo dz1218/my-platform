@@ -11,6 +11,7 @@ import (
 	"companion/server/internal/conversation"
 	"companion/server/internal/delivery"
 	"companion/server/pkg/response"
+
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/net/websocket"

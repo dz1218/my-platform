@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

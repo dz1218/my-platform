@@ -145,7 +145,7 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
             </p>
           </div>
         ) : (
-          <div className="grid gap-2.5">
+          <div className="collection-grid">
             {rooms.map((room) => {
               const live = isLive(room);
               const roomIconTone = live
@@ -156,7 +156,7 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
                 : 'border-slate-200 bg-white text-slate-500';
 
               return (
-                <div key={room.id} className="surface-soft room-card flex items-center gap-3.5 px-[18px] py-4">
+                <div key={room.id} className="surface-soft room-card flex flex-wrap items-center gap-3.5 px-[18px] py-4">
                   <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${roomIconTone}`}>
                     {live ? (
                       <span className="live-dot h-2.5 w-2.5" />
@@ -177,7 +177,7 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
                     )}
                   </div>
 
-                  <Link href={`/live/${room.id}`} className="min-w-0 flex-1 no-underline text-inherit">
+                  <Link href={`/live/${room.id}`} className="min-w-0 flex-1 basis-[140px] no-underline text-inherit">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate text-[15px] font-bold text-slate-900">{room.title}</span>
                       <span className={`shrink-0 rounded-lg border px-2 py-0.5 text-[11px] font-bold ${statusTone}`}>

@@ -97,6 +97,9 @@ func TestDurableConversationLifecycle(t *testing.T) {
 		t.Fatalf("ownership failure: %v", err)
 	}
 	first := send("request-001", "明天面试")
+	if first.Status != "complete" {
+		t.Fatal("accepted message is not complete")
+	}
 	if repeated := send("request-001", "明天面试"); repeated.ID != first.ID {
 		t.Fatal("duplicate message")
 	}
@@ -178,16 +181,49 @@ func TestDurableConversationLifecycle(t *testing.T) {
 	if err = db.QueryRow(ctx, `SELECT status FROM reply_jobs WHERE conversation_id='c'`).Scan(&status); err != nil || status != "failed" {
 		t.Fatal(status, err)
 	}
-	send("request-004", "不过我准备好了")
+	page, err = messages.History(ctx, conv, 0, 50)
+	if err != nil || page.ReplyStatus != "failed" {
+		t.Fatal("reply failure not exposed separately", err)
+	}
+	for _, message := range page.Items {
+		if message.SenderType == "user" && message.Status != "complete" {
+			t.Fatal("reply failure changed accepted message status")
+		}
+	}
+	var failedMessages int
+	if err = db.QueryRow(ctx, `SELECT count(*) FROM messages WHERE sender_type='user' AND status<>'complete'`).Scan(&failedMessages); err != nil || failedMessages != 0 {
+		t.Fatal("reply failure changed stored message acceptance", err)
+	}
+	// Histories created by older servers must also remain visibly accepted.
+	if _, err = db.Exec(ctx, `UPDATE messages SET status='failed' WHERE id=$1::bigint`, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := messages.History(ctx, conv, 0, 50)
+	if err != nil || legacy.Items[0].Status != "complete" {
+		t.Fatal("legacy reply failure appeared as a send failure", err)
+	}
+	// Replaying an accepted send must not generate a duplicate or retry a reply.
+	repeated := send("request-004", "不过我准备好了")
+	if repeated.Status != "complete" {
+		t.Fatal("replayed message lost acceptance")
+	}
+	if _, err = repo.Claim(ctx); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatal("replayed send restarted failed reply", err)
+	}
+	send("request-005", "我准备好了，继续聊吧")
 	j5 := claim()
 	if j5.Version <= j4.Version || j5.Attempts != 1 {
-		t.Fatal("explicit retry did not reset job")
+		t.Fatal("new input did not reset job")
 	}
 	if err = repo.Schedule(ctx, j5, "准备好了就好。", "test", time.Now().Add(-time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if ok, err := repo.Deliver(ctx); err != nil || !ok {
 		t.Fatal(ok, err)
+	}
+	page, err = messages.History(ctx, conv, 0, 50)
+	if err != nil || page.ReplyStatus != "delivered" {
+		t.Fatal("reply failure did not clear after recovery", err)
 	}
 	var count int
 	if err = db.QueryRow(ctx, `SELECT count(*) FROM messages WHERE sender_type='identity'`).Scan(&count); err != nil || count != 2 {
