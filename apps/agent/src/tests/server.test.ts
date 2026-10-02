@@ -6,10 +6,22 @@ import { createAgentServer } from "../server.js";
 import { replyErrorCode } from "../reply-error.js";
 
 test("reply diagnostics classify failures without logging provider details", () => {
-  assert.equal(replyErrorCode(new SyntaxError("private output")), "invalid_model_json");
-  assert.equal(replyErrorCode({ status: 429, message: "private token" }), "provider_http_429");
-  assert.equal(replyErrorCode({ name: "APIConnectionTimeoutError" }), "generation_timeout");
-  assert.equal(replyErrorCode(new Error("private prompt")), "generation_failed");
+  assert.equal(
+    replyErrorCode(new SyntaxError("private output")),
+    "invalid_model_json",
+  );
+  assert.equal(
+    replyErrorCode({ status: 429, message: "private token" }),
+    "provider_http_429",
+  );
+  assert.equal(
+    replyErrorCode({ name: "APIConnectionTimeoutError" }),
+    "generation_timeout",
+  );
+  assert.equal(
+    replyErrorCode(new Error("private prompt")),
+    "generation_failed",
+  );
 });
 
 test("private API authenticates and returns an SSE reply stream", async () => {
@@ -85,6 +97,34 @@ test("SSE headers arrive before generation finishes and failures use an error ev
     const stream = await result.text();
     assert.match(stream, /event: error/);
     assert.doesNotMatch(stream, /private provider details/);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test("generate-plan exposes authenticated JSON candidates only", async () => {
+  const plan = {
+    action: "SILENCE",
+    messages: [],
+    promptVersion: "companion-v2",
+  };
+  const server = createAgentServer("test-token", async () => plan);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/internal/agent/generate-plan`;
+    const result = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: "Bearer test-token" },
+      body: JSON.stringify({
+        kind: "PROACTIVE",
+        messages: [{ role: "system", content: "authorized snapshot" }],
+      }),
+    });
+    assert.equal(result.status, 200);
+    assert.match(result.headers.get("content-type")!, /application\/json/);
+    assert.deepEqual(await result.json(), plan);
   } finally {
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));

@@ -7,6 +7,7 @@ import (
 	"companion/server/internal/conversation"
 	"companion/server/internal/delivery"
 	"companion/server/internal/identity"
+	"companion/server/internal/livekit"
 	"companion/server/internal/matching"
 	"companion/server/internal/novel"
 	"companion/server/pkg/response"
@@ -36,7 +37,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 			c.Header("Vary", "Origin")
 			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		}
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -59,11 +60,13 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 		c.JSON(200, gin.H{"ok": true, "service": "companion"})
 	})
 	ah := auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: cfg.JWTSecret}, SecureCookie: cfg.SecureCookie}
+	livekit.Register(r, cfg.LiveKit, ah)
 	ids := identity.Repository{DB: db}
 	messages := conversation.Repository{DB: db}
 	mh := matching.Handler{Service: matching.Service{Repo: matching.Repository{DB: db}, Identities: ids}}
 	chat := delivery.Service{Repo: delivery.Repository{DB: db}, Messages: messages, Policies: policies}
 	api := r.Group("/api/v1")
+	livekit.Register(api, cfg.LiveKit, ah)
 	api.POST("/auth/register", rateLimit(cache, "auth", 60, false), ah.Register)
 	api.POST("/auth/login", rateLimit(cache, "auth", 60, false), ah.Login)
 	api.POST("/auth/logout", ah.Logout)
@@ -73,6 +76,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 	api.GET("/novels/:id/chapters/:chapterId", nh.Chapter)
 	api.Use(ah.Require)
 	autopilotRoutes(api, chat)
+	companionV2Routes(api, chat)
 	api.POST("/novels", nh.Write("create"))
 	api.POST("/novels/:id/update", nh.Write("update"))
 	api.POST("/novels/:id/delete", nh.Write("delete"))
@@ -90,6 +94,20 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 		conv, err := messages.Accessible(c.Request.Context(), auth.UserID(c), c.Param("id"))
 		if err != nil {
 			response.Fail(c, err)
+			return
+		}
+		if c.Query("after") != "" {
+			after, e := conversation.Cursor(c.Query("after"))
+			if e != nil {
+				response.Fail(c, e)
+				return
+			}
+			items, e := messages.After(c.Request.Context(), conv, after, 200)
+			if e != nil {
+				response.Fail(c, e)
+				return
+			}
+			c.JSON(200, gin.H{"items": items})
 			return
 		}
 		before, err := conversation.Cursor(c.Query("before"))

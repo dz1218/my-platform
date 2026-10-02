@@ -1,133 +1,56 @@
-> 此文档描述旧版 NestJS / LiveKit 部署。新的陪伴聊天还需要 TypeScript Agent 与 Go Worker，启动和服务边界见 [当前架构](docs/companion-agent.md) 与 [README](README.md)。
+# 部署
 
-# my-platform 上线文档（生产环境）
+业务 API 与持久化任务 Worker 均由 `apps/server` 提供。`apps/agent` 是独立的 TypeScript 模型服务；前端为 `apps/web`。PostgreSQL、Redis 和 LiveKit 可单独部署或使用托管服务。
 
-本文档基于当前仓库代码整理，目标是快速稳定上线：
+## 配置
 
-- 前端：Vercel（`apps/web`）
-- 后端：Railway / Render（`apps/api`）
-- 数据库：Supabase Postgres
-- 实时音视频：LiveKit Cloud
+1. 从 `apps/server/.env.example`、`apps/agent/.env.example` 创建各自的 `.env`，保留已有配置。
+2. API 和 Worker 使用相同的 `DATABASE_URL`、`REDIS_URL`、`JWT_SECRET`、`AGENT_TOKEN` 和行为配置。Agent 的 `AGENT_TOKEN` 必须与它们一致；模型凭据仅放在 Agent 环境中。
+3. 设置 `WEB_ORIGIN` 为前端的完整地址；HTTPS 环境启用 `COOKIE_SECURE=true`。前端的 `COMPANION_API_URL` 指向 Go API，浏览器通过 Next.js `/api/v1/*` 代理访问业务接口。
+4. 使用直播功能时，设置 `LIVEKIT_URL`、`LIVEKIT_API_KEY`、`LIVEKIT_API_SECRET`。`LIVEKIT_URL` 必须可被浏览器访问；API 可另设 `LIVEKIT_INTERNAL_URL` 指向内网地址。`LIVEKIT_AGENT_NAME` 默认为 `room-assistant`。
 
-## 1. 上线前检查
+不要把模型凭据、LiveKit 密钥或 Agent Token 放入 `NEXT_PUBLIC_*` 环境变量。未配置 LiveKit 时，房间接口返回 503，其余 API 可正常启动。
 
-1. 本地可正常构建：
+## Docker
 
-```bash
-pnpm build
-```
-
-2. Node 版本建议使用 `22.x`（仓库 engines 要求 `>=22 <25`）。
-
-3. 代码已推送到 Git 仓库（GitHub/GitLab）。
-
-## 2. 先准备 2 个云服务
-
-1. Supabase：创建 Postgres，拿到 `DATABASE_URL`
-2. LiveKit Cloud：创建项目，拿到：
-   - `LIVEKIT_URL`（`wss://...`）
-   - `LIVEKIT_API_KEY`
-   - `LIVEKIT_API_SECRET`
-
-## 3. 部署 API（apps/api）
-
-建议 Railway/Render 二选一，核心是把以下环境变量配齐：
+仓库提供 API/Worker 的 Go 多阶段镜像，以及 Agent 的 Node 22 镜像。先配置环境，再执行：
 
 ```bash
-NODE_ENV=production
-PORT=3001
-WEB_ORIGIN=https://<你的-web-域名>
-DATABASE_URL=<Supabase 提供的连接串>
-LIVEKIT_URL=<LiveKit Cloud 的 wss 地址>
-LIVEKIT_API_KEY=<LiveKit key>
-LIVEKIT_API_SECRET=<LiveKit secret>
-LIVEKIT_AGENT_NAME=room-assistant
-JWT_SECRET=<随机32位以上>
+./deploy-docker.sh
+# 查看服务状态和日志
+docker compose -f infra/docker/docker-compose.app.yml ps
+docker compose -f infra/docker/docker-compose.app.yml logs -f
 ```
 
-构建/启动命令建议：
+脚本从当前仓库构建并启动 API、Worker 和 Agent，不会安装 Docker、覆盖配置或创建数据库。API 只绑定宿主机 `127.0.0.1:8080`，Agent 仅在容器网络可见。
+
+数据库和 Redis 地址必须能从容器访问。容器里的 `localhost` 指向容器自身：使用托管地址，或在同一 Docker 网络中使用服务名；访问宿主机服务可使用已配置的 `host.docker.internal`，并确认服务监听地址允许容器访问。根目录的 Compose 文件仅供本地数据库开发，默认只绑定宿主机回环地址。
+
+Compose 已将 API/Worker 的 `AGENT_URL` 设为 `http://agent:8081`。API 与 Worker 启动时会自动应用版本化 SQL 迁移。已有数据库部署前应备份。
+
+## 直接运行
 
 ```bash
-# Build
-pnpm --filter api build
-
-# Start
-pnpm --filter api start
+pnpm install --frozen-lockfile
+pnpm --filter agent build
+pnpm --filter web build
+cd apps/server
+go build -o /tmp/companion-api ./cmd/api
+go build -o /tmp/companion-worker ./cmd/worker
 ```
 
-部署后先测健康检查：
+用进程管理器分别启动 API、Worker、Agent (`pnpm --filter agent start`) 和前端 (`pnpm --filter web start`)。Go 进程的工作目录使用 `apps/server`，以便加载 `.env` 和 `config/behavior.json`。非回环网络监听时设置 `SERVER_ADDR=0.0.0.0:8080`。跨主机部署 Agent 时，应使用私有网络并设置相应 `AGENT_URL`。
+
+## 代理与验证
+
+将前端域名反向代理到 Next.js（默认 3011），支持 WebSocket 升级。Next.js 的 `/api/v1/*` 代理 HTTP 请求，`/ws/conversations/:id` 转发聊天 WebSocket。设置服务器端 `COMPANION_API_URL`；不需要浏览器 API 地址配置。
+
+LiveKit 媒体流直接在浏览器与 LiveKit 之间传输，需要独立配置 TLS、TCP/UDP 端口和外部 IP。本地可运行 `pnpm livekit:up`；仓库的 LiveKit 开发配置使用 `127.0.0.1`，不适用于公网部署。
+
+验证 `/health` 返回 200（含数据库、Redis 连通性），再验证登录、聊天、小说和直播房间。房间接口实现见 `apps/server/internal/livekit`。测试命令：
 
 ```bash
-curl https://<你的-api-域名>/health
+pnpm server:test
+pnpm agent:test
+pnpm typecheck
 ```
-
-返回 `{"ok":true,"service":"api"}` 即正常。
-
-## 4. 初始化生产数据库
-
-当前仓库无 Prisma migration 历史文件，首次上线用 `db push`：
-
-```bash
-pnpm --filter @my-platform/db exec prisma db push --schema prisma/schema.prisma
-```
-
-如果你在 CI/CD 执行这一步，确保环境里的 `DATABASE_URL` 已指向生产库。
-
-## 5. 部署 Web（apps/web）
-
-Vercel 建议配置：
-
-- Framework: Next.js
-- Root Directory: `apps/web`
-
-Web 环境变量：
-
-```bash
-NEXT_PUBLIC_API_BASE_URL=https://<你的-api-域名>
-NEXT_PUBLIC_LIVEKIT_URL=wss://<你的-livekit-域名>
-DATABASE_URL=<Supabase 提供的连接串>
-AUTH_SECRET=<随机32位以上>
-NODE_ENV=production
-```
-
-说明：
-
-- 本项目登录/注册走 Prisma，`web` 运行时也需要 `DATABASE_URL`。
-- `AUTH_SECRET` 用于签名登录态 cookie。
-
-## 6. 发布后回填 CORS
-
-前端域名确定后，回到 API 平台把：
-
-```bash
-WEB_ORIGIN=https://<你的-vercel-正式域名>
-```
-
-更新并重启 API 服务。
-
-## 7. 联调验收清单
-
-1. 打开首页：`https://<web-domain>/`
-2. 注册新账号
-3. 登录
-4. 创建房间
-5. 两个浏览器加入同一房间（测试音视频）
-6. 检查 API 日志无 4xx/5xx 异常
-
-## 8. 常见坑（本仓库已知）
-
-1. `vercel.json` 里写的是 `NEXT_PUBLIC_API_URL`，但代码真实读取的是 `NEXT_PUBLIC_API_BASE_URL`。  
-   请以代码环境变量为准。
-
-2. `LIVEKIT_URL` 必须是客户端可访问地址（通常是 `wss://...`），不能填内网容器地址。
-
-3. `DATABASE_URL` 必须同时配置给 API 和 Web（Web 有服务端 action + Prisma 访问数据库）。
-
-## 9. 推荐的上线顺序（最稳）
-
-1. 配好 Supabase / LiveKit
-2. 先上 API 并测 `/health`
-3. 初始化数据库 schema（`prisma db push`）
-4. 再上 Web
-5. 回填 API 的 `WEB_ORIGIN`
-6. 全链路验收

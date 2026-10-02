@@ -7,16 +7,15 @@
     "start": "node dist/main.js",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/graph/*.test.ts",
+    "test": "node --import tsx --test src/tests/*.test.ts",
     "dev:livekit": "tsx watch src/legacy-livekit.ts"
   },
   "dependencies": {
-    "@langchain/core": "^1.2.12",
-    "@langchain/deepseek": "^1.1.13",
-    "@langchain/langgraph": "^1.4.17",
+    "@openai/agents": "^0.18.0",
     "dotenv": "^17.2.3",
     "livekit-server-sdk": "^2.13.1",
-    "zod": "^3.24.1"
+    "openai": "^7.27.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

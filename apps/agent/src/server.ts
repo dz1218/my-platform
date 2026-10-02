@@ -1,17 +1,18 @@
-import { timingSafeEqual } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import {
   createServer,
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { replyInput, type ReplyInput } from "./graph/companion.js";
+import { replyInput, type ReplyInput } from "./schemas/plan.js";
 import { replyErrorCode } from "./reply-error.js";
 
 export type ReplyRunner = (
   input: ReplyInput,
   signal: AbortSignal,
 ) => Promise<{
-  content: string;
+  content?: string;
+  messages?: { clientItemKey: string; content: string; delayMs: number }[];
   promptVersion: string;
   action?: string;
   waitSeconds?: number;
@@ -46,7 +47,12 @@ export function createAgentServer(
         respond(res, 401, { error: "unauthorized" });
         return;
       }
-      if (req.method !== "POST" || req.url !== "/internal/reply") {
+      if (
+        req.method !== "POST" ||
+        !["/internal/reply", "/internal/agent/generate-plan"].includes(
+          req.url ?? "",
+        )
+      ) {
         respond(res, 404, { error: "not_found" });
         return;
       }
@@ -59,6 +65,8 @@ export function createAgentServer(
         return;
       }
       active++;
+      const requestId = randomUUID(),
+        started = Date.now();
       const abort = new AbortController();
       const timer = setTimeout(() => abort.abort(), 90_000);
       res.on("close", () => {
@@ -86,6 +94,11 @@ export function createAgentServer(
           respond(res, 400, { error: "invalid_request" });
           return;
         }
+        if (req.url === "/internal/agent/generate-plan") {
+          const reply = await run(input, abort.signal);
+          respond(res, 200, reply);
+          return;
+        }
         res.writeHead(200, {
           "Content-Type": "text/event-stream; charset=utf-8",
           "Cache-Control": "no-cache, no-transform",
@@ -105,12 +118,22 @@ export function createAgentServer(
         console.error("[agent] reply failed", code);
         if (res.headersSent) {
           if (!res.destroyed)
-            res.end(`event: error\ndata: ${JSON.stringify({ error: code })}\n\n`);
+            res.end(
+              `event: error\ndata: ${JSON.stringify({ error: code })}\n\n`,
+            );
         } else respond(res, 502, { error: "generation_failed" });
       } finally {
         clearTimeout(timer);
         clearInterval(heartbeat);
         active--;
+        console.info(
+          JSON.stringify({
+            event: "agent_request_finished",
+            requestId,
+            durationMs: Date.now() - started,
+            aborted: abort.signal.aborted,
+          }),
+        );
       }
     },
   );

@@ -67,6 +67,10 @@ func readReply(body io.Reader) (Reply, error) {
 					return Reply{}, fmt.Errorf("missing prompt version")
 				}
 				switch reply.Action {
+				case "REPLY", "SILENCE":
+					if err := ValidatePlan(reply); err != nil {
+						return Reply{}, err
+					}
 				case "", "reply":
 					if strings.TrimSpace(reply.Content) == "" || len(reply.Content) > 32000 || reply.WaitSeconds != 0 {
 						return Reply{}, fmt.Errorf("invalid reply action")

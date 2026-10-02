@@ -8,11 +8,12 @@ import (
 )
 
 type Policy struct {
-	Version         string `json:"version"`
-	DebounceSeconds int    `json:"debounceSeconds"`
-	MaxWaitSeconds  int    `json:"maxWaitSeconds"`
-	MaxAttempts     int    `json:"maxAttempts"`
-	RetrySeconds    int    `json:"retrySeconds"`
+	MaxBufferSeconds int    `json:"maxBufferSeconds"`
+	Version          string `json:"version"`
+	DebounceSeconds  int    `json:"debounceSeconds"`
+	MaxWaitSeconds   int    `json:"maxWaitSeconds"`
+	MaxAttempts      int    `json:"maxAttempts"`
+	RetrySeconds     int    `json:"retrySeconds"`
 }
 type Catalog struct {
 	Default    Policy
@@ -50,7 +51,7 @@ func Load(path string) (Catalog, error) {
 	return c, nil
 }
 func (p Policy) Validate() error {
-	if p.Version == "" || p.DebounceSeconds < 1 || p.DebounceSeconds > 60 || p.MaxWaitSeconds < 1 || p.MaxWaitSeconds > 30 || p.MaxAttempts < 1 || p.MaxAttempts > 5 || p.RetrySeconds < 1 || p.RetrySeconds > 300 {
+	if p.BufferSeconds() < p.DebounceSeconds || p.BufferSeconds() > 60 || p.Version == "" || p.DebounceSeconds < 1 || p.DebounceSeconds > 60 || p.MaxWaitSeconds < 1 || p.MaxWaitSeconds > 30 || p.MaxAttempts < 1 || p.MaxAttempts > 5 || p.RetrySeconds < 1 || p.RetrySeconds > 300 {
 		return fmt.Errorf("invalid behavior policy")
 	}
 	return nil
@@ -60,4 +61,11 @@ func (c Catalog) For(identityID string) Policy {
 		return p
 	}
 	return c.Default
+}
+
+func (p Policy) BufferSeconds() int {
+	if p.MaxBufferSeconds == 0 {
+		return 8
+	}
+	return p.MaxBufferSeconds
 }

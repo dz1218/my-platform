@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { LiveRoomClient } from "@/components/live/live-room-client";
-import { webEnv } from "@/lib/env";
 import { isAuthenticated, getHostNickname } from "@/lib/auth";
 
 export default async function LiveRoomPage({
@@ -54,7 +53,7 @@ export default async function LiveRoomPage({
       </div>
 
       <LiveRoomClient
-        apiBaseUrl={webEnv.NEXT_PUBLIC_API_BASE_URL}
+        apiBaseUrl="/api/v1"
         roomId={roomId}
         isLoggedIn={loggedIn}
         hostNickname={hostNickname}

@@ -32,14 +32,33 @@ export function useConversation(conversationId: string) {
           queryKey: ["messages", conversationId],
           exact: true,
         });
-        client.setQueryData(["messages", conversationId], page);
+        client.setQueryData<MessagePage>(
+          ["messages", conversationId],
+          (current) => {
+            const items = new Map((current?.items ?? []).map((m) => [m.id, m]));
+            for (const m of page.items) items.set(m.id, m);
+            return {
+              ...current,
+              ...page,
+              nextCursor: page.nextCursor ?? current?.nextCursor,
+              items: [...items.values()].sort((a, b) =>
+                BigInt(a.id) < BigInt(b.id) ? -1 : 1,
+              ),
+            };
+          },
+        );
         void client.invalidateQueries({ queryKey: ["matches"] });
       },
       setConnectionError,
       (settings) => {
-        void client.cancelQueries({ queryKey: ["auto-reply", conversationId], exact: true });
-        client.setQueryData<AutoReply>(["auto-reply", conversationId], (current) =>
-          current && current.version > settings.version ? current : settings,
+        void client.cancelQueries({
+          queryKey: ["auto-reply", conversationId],
+          exact: true,
+        });
+        client.setQueryData<AutoReply>(
+          ["auto-reply", conversationId],
+          (current) =>
+            current && current.version > settings.version ? current : settings,
         );
       },
     );
@@ -101,6 +120,7 @@ export function useConversation(conversationId: string) {
   };
   return {
     messages,
+    typing: () => connection.current?.typing(),
     settings,
     latest,
     error: mutation.error ?? connectionError,

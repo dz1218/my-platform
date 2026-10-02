@@ -59,7 +59,7 @@ export function AutoReplyPanel({ id, settings }: { id: string; settings: AutoRep
               value={settings.delaySeconds}
               onChange={(event) => change.mutate({ mode: settings.mode, delaySeconds: Number(event.target.value) })}
             >
-              {[15, 30, 60, 180, 300, 600].map((seconds) => (
+              {[15, 30, 60, 120, 180, 300, 600].map((seconds) => (
                 <option key={seconds} value={seconds}>
                   {seconds < 60 ? `${seconds} 秒` : `${seconds / 60} 分钟`}
                 </option>

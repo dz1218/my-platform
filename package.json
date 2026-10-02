@@ -7,7 +7,7 @@
   "packageManager": "pnpm@10.10.0",
   "scripts": {
     "dev": "pnpm --filter web dev",
-    "build": "turbo run build",
+    "build": "pnpm server:build && turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "db:generate": "pnpm --filter @my-platform/db run generate",
@@ -17,14 +17,14 @@
     "postinstall": "pnpm run db:generate",
     "livekit:up": "docker compose -f infra/docker/docker-compose.livekit.yml up -d",
     "livekit:down": "docker compose -f infra/docker/docker-compose.livekit.yml down",
-    "dev:legacy": "pnpm --filter api dev",
     "server:dev": "cd apps/server && go run ./cmd/api",
     "server:test": "cd apps/server && go test ./...",
     "db:migrate": "cd apps/server && go run ./cmd/api -migrate-only",
     "agent:dev": "pnpm --filter agent dev",
     "agent:test": "pnpm --filter agent test",
     "worker:dev": "cd apps/server && go run ./cmd/worker",
-    "dev:all": "node scripts/dev.mjs"
+    "dev:all": "node scripts/dev.mjs",
+    "server:build": "cd apps/server && go build ./cmd/..."
   },
   "devDependencies": {
     "turbo": "^2.5.6",

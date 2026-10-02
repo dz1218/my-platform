@@ -3,6 +3,7 @@ package main
 import (
 	aicontext "companion/server/internal/ai/context"
 	"companion/server/internal/ai/provider"
+	"companion/server/internal/behavior"
 	"companion/server/internal/config"
 	"companion/server/internal/conversation"
 	"companion/server/internal/delivery"
@@ -40,7 +41,11 @@ func run() error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	worker := delivery.Worker{Repo: delivery.Repository{DB: db}, Builder: aicontext.Builder{Identities: identity.Repository{DB: db}, Messages: conversation.Repository{DB: db}}, Model: provider.NewAgent(cfg.AgentURL, cfg.AgentToken)}
+	policies, err := behavior.Load(cfg.BehaviorFile)
+	if err != nil {
+		return err
+	}
+	worker := delivery.Worker{Policies: policies, Repo: delivery.Repository{DB: db}, Builder: aicontext.Builder{Identities: identity.Repository{DB: db}, Messages: conversation.Repository{DB: db}}, Model: provider.NewAgent(cfg.AgentURL, cfg.AgentToken)}
 	slog.Info("reply worker started")
 	worker.Run(ctx)
 	return nil

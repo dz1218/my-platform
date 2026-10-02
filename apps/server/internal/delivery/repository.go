@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"companion/server/internal/ai/provider"
 	"companion/server/internal/behavior"
 	"companion/server/internal/conversation"
 	"companion/server/pkg/database"
@@ -16,14 +17,16 @@ import (
 
 type Repository struct{ DB *pgxpool.Pool }
 type Job struct {
-	Conversation conversation.Conversation
-	Version      int64
-	TriggerID    string
-	ClaimToken   string
-	WaitCount    int
-	Attempts     int
-	RequestedAt  time.Time
-	Policy       behavior.Policy
+	Kind          string
+	OpportunityID *string
+	Conversation  conversation.Conversation
+	Version       int64
+	TriggerID     string
+	ClaimToken    string
+	WaitCount     int
+	Attempts      int
+	RequestedAt   time.Time
+	Policy        behavior.Policy
 }
 
 // Enqueue serializes only short DB operations, never a model call.
@@ -68,6 +71,8 @@ func (r Repository) SendAs(ctx context.Context, c conversation.Conversation, act
 		if err = tx.QueryRow(ctx, `SELECT CASE WHEN $2='user' THEN (SELECT COALESCE(name,'') FROM users WHERE id=$1) ELSE (SELECT name FROM identities WHERE id=$1) END`, m.Sender.ID, m.SenderType).Scan(&m.Sender.Name); err != nil {
 			return m, err
 		}
+		m.ServerSeq = m.ID
+		m.MessageKind = "TURN_REPLY"
 		return m, tx.Commit(ctx)
 	} else if errors.Is(err, pgx.ErrNoRows) {
 		err = tx.QueryRow(ctx, `INSERT INTO messages(conversation_id,identity_id,sender_type,driver_type,actor_id,content,request_id,status,created_at) VALUES($1,$2,$5,CASE WHEN $5='identity' THEN 'human' ELSE NULL END,$6,$3,$4,'complete',clock_timestamp()) RETURNING id::text,created_at`, c.ID, c.IdentityID, content, requestID, m.SenderType, actor).Scan(&m.ID, &m.CreatedAt)
@@ -75,6 +80,15 @@ func (r Repository) SendAs(ctx context.Context, c conversation.Conversation, act
 			return m, err
 		}
 	} else {
+		return m, err
+	}
+	if human {
+		_, err = tx.Exec(ctx, `UPDATE conversations SET turn_status='ANSWERED',buffer_started_at=NULL WHERE id=$1`, c.ID)
+	} else {
+		_, err = tx.Exec(ctx, `UPDATE conversations SET turn_id=CASE WHEN turn_status='OPEN' THEN COALESCE(turn_id,$2) ELSE $2 END,
+  buffer_started_at=CASE WHEN turn_status='OPEN' THEN COALESCE(buffer_started_at,now()) ELSE now() END,turn_status='OPEN' WHERE id=$1`, c.ID, database.ID())
+	}
+	if err != nil {
 		return m, err
 	}
 	settings.TurnVersion++
@@ -97,6 +111,8 @@ func (r Repository) SendAs(ctx context.Context, c conversation.Conversation, act
 	if err = tx.QueryRow(ctx, `SELECT CASE WHEN $2='user' THEN (SELECT COALESCE(name,'') FROM users WHERE id=$1) ELSE (SELECT name FROM identities WHERE id=$1) END`, m.Sender.ID, m.SenderType).Scan(&m.Sender.Name); err != nil {
 		return m, err
 	}
+	m.ServerSeq = m.ID
+	m.MessageKind = "TURN_REPLY"
 	return m, tx.Commit(ctx)
 }
 func (r Repository) Claim(ctx context.Context) (Job, error) {
@@ -108,7 +124,7 @@ func (r Repository) Claim(ctx context.Context) (Job, error) {
  ORDER BY due_at FOR UPDATE SKIP LOCKED LIMIT 1
  ) UPDATE reply_jobs j SET status='generating',lease_until=now()+interval '120 seconds',claim_token=$1,attempts=attempts+1,updated_at=now()
  FROM candidate c,conversations v WHERE j.conversation_id=c.conversation_id AND v.id=j.conversation_id
- RETURNING v.id,v.user_id,v.identity_id,j.version,j.trigger_message_id::text,j.attempts,j.requested_at,j.policy_json,j.wait_count`, j.ClaimToken).Scan(&j.Conversation.ID, &j.Conversation.UserID, &j.Conversation.IdentityID, &j.Version, &j.TriggerID, &j.Attempts, &j.RequestedAt, &policy, &j.WaitCount)
+ RETURNING v.id,v.user_id,v.identity_id,j.version,j.trigger_message_id::text,j.attempts,j.requested_at,j.policy_json,j.wait_count,j.kind,j.opportunity_id`, j.ClaimToken).Scan(&j.Conversation.ID, &j.Conversation.UserID, &j.Conversation.IdentityID, &j.Version, &j.TriggerID, &j.Attempts, &j.RequestedAt, &policy, &j.WaitCount, &j.Kind, &j.OpportunityID)
 	if err != nil {
 		return j, err
 	}
@@ -116,9 +132,7 @@ func (r Repository) Claim(ctx context.Context) (Job, error) {
 	return j, err
 }
 func (r Repository) Schedule(ctx context.Context, j Job, content, promptVersion string, due time.Time) error {
-	_, err := r.DB.Exec(ctx, `UPDATE reply_jobs SET status='scheduled',content=$4,prompt_version=$5,due_at=$6,lease_until=NULL,updated_at=now()
- WHERE conversation_id=$1 AND version=$2 AND claim_token=$3 AND status='generating'`, j.Conversation.ID, j.Version, j.ClaimToken, content, promptVersion, due)
-	return err
+	return r.SchedulePlan(ctx, j, provider.Reply{Action: "REPLY", Messages: []provider.PlanItem{{ClientItemKey: "1", Content: content}}, PromptVersion: promptVersion}, due)
 }
 func (r Repository) Failed(ctx context.Context, j Job) error {
 	tx, err := r.DB.Begin(ctx)
@@ -135,66 +149,11 @@ func (r Repository) Failed(ctx context.Context, j Job) error {
 		status = "failed"
 	}
 	_, err = tx.Exec(ctx, `UPDATE reply_jobs SET status=$4,due_at=now()+make_interval(secs=>$5),lease_until=NULL,last_error='generation_failed',updated_at=now()
- WHERE conversation_id=$1 AND version=$2 AND claim_token=$3 AND status='generating'`, j.Conversation.ID, j.Version, j.ClaimToken, status, j.Policy.RetrySeconds*j.Attempts)
+ WHERE conversation_id=$1 AND version=$2 AND claim_token=$3 AND status='generating'`, j.Conversation.ID, j.Version, j.ClaimToken, status, min(300, j.Policy.RetrySeconds*(1<<min(j.Attempts-1, 5))))
 	if err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
-}
-
-// Deliver atomically verifies freshness, persists the complete reply, and marks
-// the job delivered. A crash cannot publish half a reply or publish it twice.
-func (r Repository) Deliver(ctx context.Context) (bool, error) {
-	var id string
-	err := r.DB.QueryRow(ctx, `SELECT conversation_id FROM reply_jobs WHERE status='scheduled' AND due_at<=now() ORDER BY due_at LIMIT 1`).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	tx, err := r.DB.Begin(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback(ctx)
-	settings, err := lockConversation(ctx, tx, id)
-	if err != nil {
-		return false, err
-	}
-	var version, settingsVersion, turnVersion int64
-	var content, trigger string
-	err = tx.QueryRow(ctx, `SELECT version,content,trigger_message_id::text,settings_version,turn_version FROM reply_jobs WHERE conversation_id=$1 AND status='scheduled' AND due_at<=now() FOR UPDATE`, id).Scan(&version, &content, &trigger, &settingsVersion, &turnVersion)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	if settings.Version != settingsVersion || settings.TurnVersion != turnVersion || (settings.OwnerType == "HUMAN" && settings.Mode == "NEVER") {
-		if err = cancelJobs(ctx, tx, id); err != nil {
-			return false, err
-		}
-		return false, tx.Commit(ctx)
-	}
-	_, err = tx.Exec(ctx, `INSERT INTO messages(conversation_id,identity_id,sender_type,driver_type,content,reply_version)
- SELECT id,identity_id,'identity','ai',$2,$3 FROM conversations WHERE id=$1 ON CONFLICT DO NOTHING`, id, content, version)
-	if err != nil {
-		return false, err
-	}
-	if _, err = tx.Exec(ctx, `UPDATE messages SET status='complete' WHERE conversation_id=$1 AND sender_type='user' AND status IN ('pending','failed') AND id<=$2::bigint`, id, trigger); err != nil {
-		return false, err
-	}
-	if _, err = tx.Exec(ctx, `UPDATE reply_jobs SET status='delivered',updated_at=now() WHERE conversation_id=$1`, id); err != nil {
-		return false, err
-	}
-	if _, err = tx.Exec(ctx, `UPDATE conversations SET updated_at=now() WHERE id=$1`, id); err != nil {
-		return false, err
-	}
-	if _, err = tx.Exec(ctx, `UPDATE matches SET status='talking',updated_at=now() WHERE id=(SELECT match_id FROM conversations WHERE id=$1) AND status='matched'`, id); err != nil {
-		return false, err
-	}
-	return true, tx.Commit(ctx)
 }
 
 // Wait is an agent action, not a generation failure. Persist it without consuming

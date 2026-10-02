@@ -15,6 +15,8 @@ export class ChatConnection {
   private socket?: WebSocket;
   private retry?: ReturnType<typeof setTimeout>;
   private stopped = false;
+  private cursor = "0";
+  private lastTyping = 0;
   private attempts = 0;
   private pending = new Map<string, Pending>();
   constructor(
@@ -31,6 +33,7 @@ export class ChatConnection {
       `/ws/conversations/${encodeURIComponent(this.id)}`,
       window.location.href,
     );
+    if (this.cursor !== "0") url.searchParams.set("after", this.cursor);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const socket = (this.socket = new WebSocket(url));
     socket.onopen = () => {
@@ -49,7 +52,15 @@ export class ChatConnection {
           return;
         }
         if (data.type === "history") {
+          for (const m of data.page.items as Message[])
+            if (BigInt(m.id) > BigInt(this.cursor)) this.cursor = m.id;
           this.onHistory(data.page);
+          return;
+        }
+        if (data.type === "message.created") {
+          const m = data.message as Message;
+          if (BigInt(m.id) > BigInt(this.cursor)) this.cursor = m.id;
+          this.onHistory({ items: [m] });
           return;
         }
         const pending = this.pending.get(data.requestId);
@@ -74,6 +85,15 @@ export class ChatConnection {
       );
     };
     socket.onerror = () => socket.close();
+  }
+  typing() {
+    if (
+      this.socket?.readyState === WebSocket.OPEN &&
+      Date.now() - this.lastTyping > 2000
+    ) {
+      this.lastTyping = Date.now();
+      this.socket.send(JSON.stringify({ type: "typing" }));
+    }
   }
   send(content: string, requestId: string): Promise<{ message: Message }> {
     const socket = this.socket;
@@ -103,8 +123,21 @@ export class ChatConnection {
   }
 }
 
-export const autoReply = (id: string, signal?: AbortSignal) => api<AutoReply>(`/conversations/${encodeURIComponent(id)}/auto-reply`, { signal });
-export const configureAutoReply = (id: string, mode: AutoReply['mode'], delaySeconds: number) =>
- api<AutoReply>(`/conversations/${encodeURIComponent(id)}/auto-reply`, { method: 'PATCH', body: JSON.stringify({mode,delaySeconds}) });
-export const takeover = (id: string, ownerType: AutoReply['ownerType']) =>
- api<AutoReply>(`/conversations/${encodeURIComponent(id)}/takeover`, { method: 'POST', body: JSON.stringify({ownerType}) });
+export const autoReply = (id: string, signal?: AbortSignal) =>
+  api<AutoReply>(`/conversations/${encodeURIComponent(id)}/auto-reply`, {
+    signal,
+  });
+export const configureAutoReply = (
+  id: string,
+  mode: AutoReply["mode"],
+  delaySeconds: number,
+) =>
+  api<AutoReply>(`/conversations/${encodeURIComponent(id)}/auto-reply`, {
+    method: "PATCH",
+    body: JSON.stringify({ mode, delaySeconds }),
+  });
+export const takeover = (id: string, ownerType: AutoReply["ownerType"]) =>
+  api<AutoReply>(`/conversations/${encodeURIComponent(id)}/takeover`, {
+    method: "POST",
+    body: JSON.stringify({ ownerType }),
+  });

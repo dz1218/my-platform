@@ -1,4 +1,4 @@
-import { webEnv } from '@/lib/env';
+import { serverFetch } from '@/services/api/server';
 
 export type ApiRoomItem = {
   id: string;
@@ -9,7 +9,7 @@ export type ApiRoomItem = {
 
 export async function fetchRooms() {
   try {
-    const response = await fetch(`${webEnv.NEXT_PUBLIC_API_BASE_URL}/rooms`, {
+    const response = await serverFetch("/rooms", {
       cache: 'no-store'
     });
 

@@ -1,6 +1,5 @@
 import { PageHeading } from "@/components/page-heading";
 import { fetchRooms } from "@/lib/api";
-import { webEnv } from "@/lib/env";
 import { isAuthenticated, getHostNickname } from "@/lib/auth";
 import { LiveLobbyClient } from "@/components/live/live-lobby-client";
 
@@ -24,7 +23,7 @@ export default async function LiveLobbyPage() {
       />
 
       <LiveLobbyClient
-        apiBaseUrl={webEnv.NEXT_PUBLIC_API_BASE_URL}
+        apiBaseUrl="/api/v1"
         initialRooms={rooms}
         isLoggedIn={loggedIn}
       />

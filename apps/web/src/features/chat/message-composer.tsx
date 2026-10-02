@@ -7,11 +7,13 @@ export function MessageComposer({
   sending,
   disabled,
   onSend,
+  onTyping,
 }: {
   matchId: string;
   name: string;
   sending: boolean;
   disabled: boolean;
+  onTyping?: () => void;
   onSend: (content: string) => Promise<unknown>;
 }) {
   const draft = useChatUI((state) => state.drafts[matchId] ?? "");
@@ -48,7 +50,10 @@ export function MessageComposer({
           maxLength={2000}
           disabled={disabled}
           value={draft}
-          onChange={(event) => setDraft(matchId, event.target.value)}
+          onChange={(event) => {
+            setDraft(matchId, event.target.value);
+            onTyping?.();
+          }}
           onKeyDown={(event) => {
             if (
               event.key === "Enter" &&

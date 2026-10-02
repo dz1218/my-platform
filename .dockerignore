@@ -1,0 +1,9 @@
+.git
+**/node_modules
+**/.env
+**/.env.*
+**/dist
+**/.next*
+**/*.tsbuildinfo
+.pnpm-store
+.turbo

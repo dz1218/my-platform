@@ -98,7 +98,8 @@ function normalizeError(message: string) {
 
 async function readApiError(response: Response) {
   try {
-    const data = (await response.json()) as { message?: string | string[] };
+    const data = (await response.json()) as { message?: string | string[]; error?: { message?: string } };
+    if (typeof data.error?.message === 'string') return data.error.message;
     if (Array.isArray(data.message)) return data.message.join('; ');
     if (typeof data.message === 'string' && data.message.trim()) return data.message;
   } catch {
@@ -121,18 +122,12 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
 
   const hasJoinedRef = useRef(false);
   const localIdentityRef = useRef('');
-  const sessionSuffixRef = useRef(Math.random().toString(36).slice(2, 8));
   const roomRef = useRef<Room | null>(null);
   const localVideoRef = useRef<HTMLDivElement>(null);
   const remoteMediaRef = useRef<HTMLDivElement>(null);
 
   const isConnected = connectionState === ConnectionState.Connected;
   const hasAgent = participants.some((p) => p.role === 'AI助手');
-  const identityPrefix = role === '主播' ? 'host' : 'viewer';
-  const rawIdentityName = nickname.trim().replace(/\s+/g, '_') || 'user';
-  const maxIdentityNameLen = Math.max(1, 80 - identityPrefix.length - sessionSuffixRef.current.length - 2);
-  const normalizedIdentityName = rawIdentityName.slice(0, maxIdentityNameLen);
-  const computedIdentity = `${identityPrefix}_${normalizedIdentityName}_${sessionSuffixRef.current}`;
 
   function refreshParticipants(room: Room) {
     setParticipants(buildParticipantList(room, localIdentityRef.current));
@@ -178,13 +173,12 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
     setError(null);
     setIsJoining(true);
     try {
-      const identity = computedIdentity;
-      const name = nickname.trim() || identity;
+      const name = nickname.trim() || undefined;
 
       const joinResponse = await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identity, name }),
+        body: JSON.stringify({ name }),
       });
       if (!joinResponse.ok) throw new Error(await readApiError(joinResponse));
 

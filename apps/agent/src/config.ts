@@ -9,6 +9,9 @@ export const env = z
     LLM_BASE_URL: z.string().url().default("https://api.deepseek.com"),
     LLM_API_KEY: z.string().default(""),
     LLM_MODEL: z.string().default("deepseek-flash"),
-    PROMPT_VERSION: z.string().default("conversation-v2"),
+    LLM_STRUCTURED_OUTPUT: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
   })
   .parse(process.env);

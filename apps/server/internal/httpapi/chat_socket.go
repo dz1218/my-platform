@@ -97,7 +97,16 @@ func socketHandler(chat socketBackend, origin string, allow func(context.Context
 				// Send a fresh snapshot on reconnect and whenever persisted state changes.
 				previous := ""
 				lastMessageID := int64(0)
+				if raw := c.Query("after"); raw != "" {
+					var e error
+					lastMessageID, e = conversation.Cursor(raw)
+					if e != nil {
+						return
+					}
+				}
+				resume := lastMessageID > 0
 				previousSettings := ""
+				lastTyping := time.Time{}
 				syncHistory := func() error {
 					queryCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 					defer stop()
@@ -134,7 +143,7 @@ func socketHandler(chat socketBackend, origin string, allow func(context.Context
 						}
 					}
 					events := page.Items
-					if backend, ok := chat.(durableSocketBackend); ok && previous != "" {
+					if backend, ok := chat.(durableSocketBackend); ok && (previous != "" || resume) {
 						// A bounded batch is resumed on the next tick even if the snapshot is unchanged.
 						events, err = backend.Messages.After(queryCtx, conv, lastMessageID, 200)
 						if err != nil {
@@ -146,7 +155,7 @@ func socketHandler(chat socketBackend, origin string, allow func(context.Context
 						if err != nil {
 							return err
 						}
-						if previous != "" && id > lastMessageID {
+						if (previous != "" || resume) && id > lastMessageID {
 							if err = write(gin.H{"type": "message.created", "message": message}); err != nil {
 								return err
 							}
@@ -179,6 +188,22 @@ func socketHandler(chat socketBackend, origin string, allow func(context.Context
 						}
 					case command := <-commands:
 						if command.Type == "pong" {
+							continue
+						}
+						if command.Type == "typing" {
+							if time.Since(lastTyping) < 2*time.Second {
+								continue
+							}
+							lastTyping = time.Now()
+							if backend, ok := chat.(durableSocketBackend); ok {
+								if _, e := backend.Accessible(ctx, userID, conv.ID); e != nil {
+									return
+								}
+								_, e := backend.Repo.DB.Exec(ctx, `INSERT INTO conversation_presence(conversation_id,actor_id,expires_at) VALUES($1,$2,now()+interval '5 seconds') ON CONFLICT(conversation_id,actor_id) DO UPDATE SET expires_at=EXCLUDED.expires_at`, conv.ID, userID)
+								if e != nil {
+									return
+								}
+							}
 							continue
 						}
 						if command.Type != "send" {

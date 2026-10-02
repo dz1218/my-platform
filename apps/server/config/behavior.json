@@ -2,6 +2,7 @@
   "version": "agent-actions-v3",
   "default": {
     "debounceSeconds": 1,
+    "maxBufferSeconds": 8,
     "maxAttempts": 3,
     "retrySeconds": 15,
     "maxWaitSeconds": 10

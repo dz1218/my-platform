@@ -71,6 +71,9 @@ func (r Repository) AssignOperator(ctx context.Context, id, operatorID, actor st
 	if err != nil {
 		return err
 	}
+	if _, err = tx.Exec(ctx, `UPDATE proactive_preferences SET allow_proactive_ai=false,version=version+1 WHERE conversation_id=$1`, id); err != nil {
+		return err
+	}
 	s.OwnerType = "AI"
 	s.Mode = "NEVER"
 	s.Version++

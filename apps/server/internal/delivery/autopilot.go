@@ -10,17 +10,18 @@ import (
 )
 
 type AutoReply struct {
-	OwnerType    string `json:"ownerType"`
-	Mode         string `json:"mode"`
-	DelaySeconds int    `json:"delaySeconds"`
-	Version      int64  `json:"version"`
-	TurnVersion  int64  `json:"-"`
-	CanManage    bool   `json:"canManage"`
+	OwnerType         string `json:"ownerType"`
+	Mode              string `json:"mode"`
+	DelaySeconds      int    `json:"delaySeconds"`
+	Version           int64  `json:"version"`
+	TurnVersion       int64  `json:"-"`
+	AutomationEnabled bool   `json:"-"`
+	CanManage         bool   `json:"canManage"`
 }
 
 func lockConversation(ctx context.Context, tx pgx.Tx, id string) (AutoReply, error) {
 	var s AutoReply
-	err := tx.QueryRow(ctx, `SELECT owner_type,auto_reply_mode,reply_delay_seconds,settings_version,turn_version FROM conversations WHERE id=$1 FOR UPDATE`, id).Scan(&s.OwnerType, &s.Mode, &s.DelaySeconds, &s.Version, &s.TurnVersion)
+	err := tx.QueryRow(ctx, `SELECT owner_type,auto_reply_mode,reply_delay_seconds,settings_version,turn_version,automation_enabled FROM conversations WHERE id=$1 FOR UPDATE`, id).Scan(&s.OwnerType, &s.Mode, &s.DelaySeconds, &s.Version, &s.TurnVersion, &s.AutomationEnabled)
 	return s, err
 }
 func operator(ctx context.Context, tx pgx.Tx, id, actor string) (bool, error) {
@@ -43,7 +44,7 @@ func validSettings(mode string, delay int) bool {
 		return false
 	}
 	switch delay {
-	case 15, 30, 60, 180, 300, 600:
+	case 15, 30, 60, 120, 180, 300, 600:
 		return true
 	}
 	return false
@@ -95,7 +96,7 @@ func (r Repository) Configure(ctx context.Context, id, actor string, mode string
 	// The latest message decides whether there is an unanswered turn. AI/human
 	// replies share the same history and never create a new automatic reply.
 	var trigger string
-	err = tx.QueryRow(ctx, `SELECT id::text FROM messages WHERE conversation_id=$1 AND sender_type='user' AND id=(SELECT max(id) FROM messages WHERE conversation_id=$1)`, id).Scan(&trigger)
+	err = tx.QueryRow(ctx, `SELECT id::text FROM messages WHERE conversation_id=$1 AND sender_type='user' AND (SELECT turn_status FROM conversations WHERE id=$1)='OPEN' AND id=(SELECT max(id) FROM messages WHERE conversation_id=$1)`, id).Scan(&trigger)
 	if err != nil && err != pgx.ErrNoRows {
 		return s, err
 	}
@@ -112,26 +113,36 @@ func (r Repository) Configure(ctx context.Context, id, actor string, mode string
 	return s, tx.Commit(ctx)
 }
 func cancelJobs(ctx context.Context, tx pgx.Tx, id string) error {
-	_, err := tx.Exec(ctx, `UPDATE reply_jobs SET status='cancelled',version=version+1,content=NULL,claim_token=NULL,lease_until=NULL,updated_at=now() WHERE conversation_id=$1 AND status IN ('queued','generating','scheduled','failed')`, id)
+	if _, err := tx.Exec(ctx, `UPDATE proactive_opportunities SET status='CANCELED' WHERE conversation_id=$1 AND status='QUEUED'`, id); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `UPDATE reply_items SET status='CANCELED' WHERE batch_id IN (SELECT id FROM reply_batches WHERE conversation_id=$1 AND status='PENDING') AND status='PENDING'`, id)
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE reply_batches SET status='CANCELED' WHERE conversation_id=$1 AND status='PENDING'`, id); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `UPDATE reply_jobs SET status='cancelled',version=version+1,content=NULL,claim_token=NULL,lease_until=NULL,updated_at=now() WHERE conversation_id=$1 AND status IN ('queued','generating','scheduled','failed')`, id)
 	return err
 }
 func dispatch(ctx context.Context, tx pgx.Tx, id, trigger string, s AutoReply, p behavior.Policy) error {
-	if s.OwnerType == "HUMAN" && s.Mode == "NEVER" {
+	if !s.AutomationEnabled || (s.OwnerType == "HUMAN" && s.Mode == "NEVER") {
 		return nil
 	}
 	delay := p.DebounceSeconds
 	if s.OwnerType == "HUMAN" && s.Mode == "TIMEOUT" {
-		delay = s.DelaySeconds
+		delay = max(delay, s.DelaySeconds)
 	}
 	policy, err := json.Marshal(p)
 	if err != nil {
 		return err
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO reply_jobs(conversation_id,trigger_message_id,status,due_at,policy_json,settings_version,turn_version)
- VALUES($1,$2::bigint,'queued',(SELECT created_at FROM messages WHERE id=$2::bigint)+make_interval(secs=>$3),$4,$5,$6)
+ VALUES($1,$2::bigint,'queued',(SELECT CASE WHEN $7 THEN m.created_at+make_interval(secs=>$3) ELSE LEAST(m.created_at+make_interval(secs=>$3), COALESCE(c.buffer_started_at,m.created_at)+make_interval(secs=>$8)) END FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=$2::bigint),$4,$5,$6)
  ON CONFLICT(conversation_id) DO UPDATE SET version=reply_jobs.version+1,trigger_message_id=EXCLUDED.trigger_message_id,
  status='queued',due_at=EXCLUDED.due_at,requested_at=now(),policy_json=EXCLUDED.policy_json,settings_version=EXCLUDED.settings_version,turn_version=EXCLUDED.turn_version,
- attempts=0,wait_count=0,content=NULL,prompt_version=NULL,lease_until=NULL,claim_token=NULL,last_error=NULL,updated_at=now()`, id, trigger, delay, policy, s.Version, s.TurnVersion)
+ kind='TURN_REPLY',opportunity_id=NULL,attempts=0,wait_count=0,content=NULL,prompt_version=NULL,lease_until=NULL,claim_token=NULL,last_error=NULL,updated_at=now()`, id, trigger, delay, policy, s.Version, s.TurnVersion, s.OwnerType == "HUMAN" && s.Mode == "TIMEOUT", p.BufferSeconds())
 	return err
 }
 
@@ -141,7 +152,7 @@ func (r Repository) Current(ctx context.Context, j Job) (bool, error) {
 	var ok bool
 	err := r.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM reply_jobs j JOIN conversations c ON c.id=j.conversation_id
  WHERE j.conversation_id=$1 AND j.version=$2 AND j.claim_token=$3 AND j.status='generating'
- AND j.settings_version=c.settings_version AND j.turn_version=c.turn_version AND (c.owner_type='AI' OR c.auto_reply_mode<>'NEVER'))`, j.Conversation.ID, j.Version, j.ClaimToken).Scan(&ok)
+ AND c.automation_enabled AND j.settings_version=c.settings_version AND j.turn_version=c.turn_version AND (c.owner_type='AI' OR c.auto_reply_mode<>'NEVER'))`, j.Conversation.ID, j.Version, j.ClaimToken).Scan(&ok)
 	return ok, err
 }
 
@@ -174,4 +185,33 @@ func (r Repository) deferBusy(ctx context.Context, j Job) error {
 func (r Repository) CancelClaim(ctx context.Context, j Job) error {
 	_, err := r.DB.Exec(ctx, `UPDATE reply_jobs SET status='cancelled',content=NULL,claim_token=NULL,lease_until=NULL,updated_at=now() WHERE conversation_id=$1 AND version=$2 AND claim_token=$3 AND status='generating'`, j.Conversation.ID, j.Version, j.ClaimToken)
 	return err
+}
+
+// Re-evaluate an unanswered turn after consent/context changes. Old candidates
+// are already canceled; this creates a fresh snapshot under the new policy.
+func refreshPendingOpen(ctx context.Context, tx pgx.Tx, id string) error {
+	s, err := lockConversation(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	var trigger string
+	err = tx.QueryRow(ctx, `SELECT m.id::text FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.id=$1 AND c.turn_status='OPEN' AND m.sender_type='user' ORDER BY m.id DESC LIMIT 1`, id).Scan(&trigger)
+	if err == pgx.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	p := behavior.Policy{Version: "context-refresh-v2", DebounceSeconds: 1, MaxBufferSeconds: 8, MaxAttempts: 3, RetrySeconds: 15, MaxWaitSeconds: 10}
+	var raw []byte
+	err = tx.QueryRow(ctx, `SELECT policy_json FROM reply_jobs WHERE conversation_id=$1`, id).Scan(&raw)
+	if err != nil && err != pgx.ErrNoRows {
+		return err
+	}
+	if err == nil {
+		if err = json.Unmarshal(raw, &p); err != nil {
+			return err
+		}
+	}
+	return dispatch(ctx, tx, id, trigger, s, p)
 }

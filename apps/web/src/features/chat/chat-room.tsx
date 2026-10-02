@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMatch } from "@/services/companion";
 import { useConversation } from "./hooks/use-conversation";
+import { CompanionPreferences } from "./companion-preferences";
 import { AutoReplyPanel } from "./auto-reply-panel";
 import { MessageBubble } from "./message-bubble";
 import { MessageComposer } from "./message-composer";
@@ -35,7 +36,15 @@ export function ChatRoom({ matchId }: { matchId: string }) {
     );
   return <Conversation key={match.data.conversationId} match={match.data} />;
 }
-export function Conversation({ match, operator = false, participantName }: { match: Match; operator?: boolean; participantName?: string }) {
+export function Conversation({
+  match,
+  operator = false,
+  participantName,
+}: {
+  match: Match;
+  operator?: boolean;
+  participantName?: string;
+}) {
   const chat = useConversation(match.conversationId);
   const bottom = useRef<HTMLDivElement | null>(null);
   const scroll = useRef<HTMLDivElement | null>(null);
@@ -64,7 +73,11 @@ export function Conversation({ match, operator = false, participantName }: { mat
       id="main-content"
       tabIndex={-1}
       className="chat-layout"
-      aria-label={operator ? `与${participantName ?? "用户"}的对话` : `和${match.identity.name}的聊天`}
+      aria-label={
+        operator
+          ? `与${participantName ?? "用户"}的对话`
+          : `和${match.identity.name}的聊天`
+      }
     >
       <header className="flex items-center gap-2.5 border-b border-line bg-panel px-3.5 py-3 sm:py-2.5">
         <Link
@@ -81,10 +94,17 @@ export function Conversation({ match, operator = false, participantName }: { mat
           {match.identity.name.slice(-1)}
         </div>
         <div>
-          <h1 className="text-base font-semibold">{operator ? `与${participantName ?? "用户"}的对话` : match.identity.name}</h1>
-          <p className="mt-1 text-xs text-muted">{operator ? `以${match.identity.name}的身份回复` : "对话可能由 AI 与真人共同参与"}</p>
+          <h1 className="text-base font-semibold">
+            {operator
+              ? `与${participantName ?? "用户"}的对话`
+              : match.identity.name}
+          </h1>
+          <p className="mt-1 text-xs text-muted">
+            {operator
+              ? `以${match.identity.name}的身份回复`
+              : "对话可能由 AI 与真人共同参与"}
+          </p>
         </div>
-        <span className="ml-auto hidden text-xs text-muted sm:block">今晚</span>
       </header>
       <div
         ref={scroll}
@@ -137,7 +157,11 @@ export function Conversation({ match, operator = false, participantName }: { mat
         )}
         <div role="log" aria-label="聊天记录" className="flex flex-col gap-3.5">
           {chat.messages.map((message) => (
-            <MessageBubble key={message.id} message={message} operator={operator} />
+            <MessageBubble
+              key={message.id}
+              message={message}
+              operator={operator}
+            />
           ))}
           {chat.outgoing && (
             <MessageBubble
@@ -148,7 +172,10 @@ export function Conversation({ match, operator = false, participantName }: { mat
                 content: chat.outgoing.content,
                 senderType: operator ? "identity" : "user",
                 source: operator ? "HUMAN" : "USER",
-                sender: { id: "self", name: operator ? match.identity.name : "我" },
+                sender: {
+                  id: "self",
+                  name: operator ? match.identity.name : "我",
+                },
                 status: "pending",
                 createdAt: "",
               }}
@@ -163,13 +190,32 @@ export function Conversation({ match, operator = false, participantName }: { mat
             {chat.error.message}
           </p>
         )}
-        {chat.settings.data?.canManage && <AutoReplyPanel id={match.conversationId} settings={chat.settings.data} />}
-        {chat.settings.error && <p role="alert">{chat.settings.error.message}</p>}
+        {chat.settings.data?.canManage && (
+          <AutoReplyPanel
+            id={match.conversationId}
+            settings={chat.settings.data}
+          />
+        )}
+        {chat.settings.error && (
+          <p role="alert">{chat.settings.error.message}</p>
+        )}
+        <CompanionPreferences
+          id={match.conversationId}
+          operator={operator}
+          messages={chat.messages}
+        />
         <MessageComposer
+          onTyping={chat.typing}
           matchId={operator ? `operator:${match.conversationId}` : match.id}
           name={operator ? (participantName ?? "用户") : match.identity.name}
           sending={chat.sending}
-          disabled={chat.latest.isPending || (operator && (chat.settings.isError || !chat.settings.data?.canManage || chat.settings.data.ownerType !== "HUMAN"))}
+          disabled={
+            chat.latest.isPending ||
+            (operator &&
+              (chat.settings.isError ||
+                !chat.settings.data?.canManage ||
+                chat.settings.data.ownerType !== "HUMAN"))
+          }
           onSend={(content) => {
             nearBottom.current = true;
             return chat.send(content);

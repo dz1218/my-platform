@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import type { ApiRoomItem } from '@/lib/api';
+import { check } from '@/services/api/client';
 
 type Props = {
   apiBaseUrl: string;
@@ -18,7 +19,7 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
 
   async function refreshRooms() {
     const response = await fetch(`${apiBaseUrl}/rooms`);
-    if (!response.ok) throw new Error(`拉取房间失败: ${response.status}`);
+    await check(response);
     const data = (await response.json()) as { items: ApiRoomItem[] };
     setRooms(data.items);
   }
@@ -32,7 +33,7 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: title.trim() || undefined }),
       });
-      if (!response.ok) throw new Error(`创建房间失败: ${response.status}`);
+      await check(response);
       setTitle('');
       await refreshRooms();
     } catch (err) {
@@ -46,8 +47,8 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
     if (!window.confirm("确定关闭这个直播间吗？")) return;
     setError(null);
     try {
-      const response = await fetch(`${apiBaseUrl}/rooms/${roomId}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error(`关闭房间失败: ${response.status}`);
+      const response = await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}`, { method: 'DELETE' });
+      await check(response);
       await refreshRooms();
     } catch (err) {
       setError(err instanceof Error ? err.message : '关闭房间失败');
