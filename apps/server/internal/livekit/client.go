@@ -112,6 +112,8 @@ type room struct {
 	Metadata             string `json:"metadata"`
 	NumParticipants      int    `json:"numParticipants"`
 	NumParticipantsProto int    `json:"num_participants"`
+	NumPublishers        int    `json:"numPublishers"`
+	NumPublishersProto   int    `json:"num_publishers"`
 }
 type RoomItem struct {
 	ID      string `json:"id"`
@@ -133,7 +135,7 @@ func (r room) item() RoomItem {
 		viewers = r.NumParticipantsProto
 	}
 	status := "准备中"
-	if viewers > 0 {
+	if r.NumPublishers > 0 || r.NumPublishersProto > 0 {
 		status = "直播中"
 	}
 	return RoomItem{r.Name, title, status, viewers}

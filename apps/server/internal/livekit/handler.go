@@ -26,6 +26,7 @@ func Register(r gin.IRouter, cfg Config, authentication auth.Handler) {
 	h := Handler{Client: NewClient(cfg), Auth: authentication}
 	rooms := r.Group("/rooms")
 	rooms.Use(func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
 		if !cfg.Enabled() {
 			fail(c, http.StatusServiceUnavailable, "LiveKit is not configured")
 			c.Abort()
@@ -107,7 +108,7 @@ func (h Handler) create(c *gin.Context) {
 		id = "room-" + database.ID()[:12]
 	}
 	if !hasTitle {
-		title = id
+		title = "未命名直播间"
 	}
 	item, err := h.Client.CreateRoom(c.Request.Context(), id, title)
 	if !upstreamFailed(c, err) {

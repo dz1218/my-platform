@@ -67,3 +67,26 @@ func TestDispatchCamelCase(t *testing.T) {
 		t.Fatalf("decode: %+v %v", item, err)
 	}
 }
+
+func TestRoomStatusRequiresPublisher(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, status string
+		participants       int
+	}{
+		{"empty", `{"name":"room-test"}`, "准备中", 0},
+		{"viewers only", `{"name":"room-test","num_participants":3}`, "准备中", 3},
+		{"publisher snake case", `{"name":"room-test","num_participants":2,"num_publishers":1}`, "直播中", 2},
+		{"publisher camel case", `{"name":"room-test","numParticipants":2,"numPublishers":1}`, "直播中", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var value room
+			if err := json.Unmarshal([]byte(tc.body), &value); err != nil {
+				t.Fatal(err)
+			}
+			item := value.item()
+			if item.Status != tc.status || item.Viewers != tc.participants {
+				t.Fatalf("unexpected room: %+v", item)
+			}
+		})
+	}
+}

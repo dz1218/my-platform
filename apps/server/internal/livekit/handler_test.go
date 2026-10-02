@@ -82,7 +82,7 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 		switch method {
 		case "ListRooms":
 			result = map[string]any{"rooms": []any{
-				map[string]any{"name": "room-test", "metadata": `{"title":"直播测试"}`, "num_participants": 2},
+				map[string]any{"name": "room-test", "metadata": `{"title":"直播测试"}`, "num_participants": 2, "num_publishers": 1},
 				map[string]any{"name": "room-empty", "metadata": "invalid"},
 				map[string]any{"name": "room-camel", "numParticipants": 3},
 			}}
@@ -127,7 +127,7 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 		t.Fatal(created)
 	}
 	generated := request(t, router, "POST", "/rooms", `{}`, 201)["item"].(map[string]any)
-	if !roomID.MatchString(generated["id"].(string)) || generated["title"] != generated["id"] {
+	if !roomID.MatchString(generated["id"].(string)) || generated["title"] != "未命名直播间" {
 		t.Fatal(generated)
 	}
 	for _, body := range []string{`{"identity":" user-1 ","name":" 测试 "}`, `{"identity":"user-1"}`} {

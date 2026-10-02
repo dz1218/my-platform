@@ -8,6 +8,7 @@
     "dev": "next dev --port 3011",
     "build": "next build",
     "start": "next start --port 3011",
+    "test:live": "playwright test",
     "lint": "tsc --noEmit",
     "typecheck": "next typegen && tsc --noEmit"
   },
@@ -22,6 +23,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^24.3.0",
     "@types/react": "^19.1.10",

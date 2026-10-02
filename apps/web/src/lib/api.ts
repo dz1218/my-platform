@@ -1,4 +1,5 @@
 import { serverFetch } from '@/services/api/server';
+import { check } from '@/services/api/client';
 
 export type ApiRoomItem = {
   id: string;
@@ -13,13 +14,13 @@ export async function fetchRooms() {
       cache: 'no-store'
     });
 
-    if (!response.ok) {
-      return [];
-    }
+    await check(response);
 
     const data = (await response.json()) as { items: ApiRoomItem[] };
     return data.items;
   } catch {
-    return [];
+    // Leave the client query pending so it can retry and show an error, rather
+    // than presenting an unavailable service as an empty lobby.
+    return undefined;
   }
 }

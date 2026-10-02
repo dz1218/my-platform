@@ -17,7 +17,10 @@ export default async function LiveLobbyPage() {
         description="看看正在发生的故事，也可以开启自己的直播。"
         actions={
           loggedIn ? (
-            <span className="badge-muted">主播 · {hostNickname}</span>
+            <span className="badge-muted min-w-0 max-w-full">
+              <span className="shrink-0">主播 ·</span>
+              <span className="truncate" title={hostNickname}>{hostNickname}</span>
+            </span>
           ) : undefined
         }
       />

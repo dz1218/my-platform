@@ -112,21 +112,30 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
   const role: Role = isLoggedIn ? '主播' : '观众';
 
   const [nickname, setNickname] = useState(() =>
-    isLoggedIn ? hostNickname : Math.random().toString(36).slice(2, 7)
+    isLoggedIn ? hostNickname : ''
   );
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
   const [participants, setParticipants] = useState<ParticipantItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [isJoining, setIsJoining] = useState(false);
+  const [isJoining, setIsJoining] = useState(true);
   const [isDispatchingAgent, setIsDispatchingAgent] = useState(false);
+  const [agentRequested, setAgentRequested] = useState(false);
+  const [mediaBusy, setMediaBusy] = useState<'camera' | 'microphone' | null>(null);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false);
 
-  const hasJoinedRef = useRef(false);
+  const joinRequestRef = useRef<AbortController | null>(null);
+  const mediaBusyRef = useRef(false);
+  const dispatchBusyRef = useRef(false);
   const localIdentityRef = useRef('');
   const roomRef = useRef<Room | null>(null);
   const localVideoRef = useRef<HTMLDivElement>(null);
   const remoteMediaRef = useRef<HTMLDivElement>(null);
 
   const isConnected = connectionState === ConnectionState.Connected;
+  const isReconnecting = connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting;
+  const isInRoom = isConnected || isReconnecting;
   const hasAgent = participants.some((p) => p.role === 'AI助手');
 
   function refreshParticipants(room: Room) {
@@ -155,13 +164,17 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
     }
   }
 
-  async function attachLocalVideoPreview() {
+  function attachLocalVideoPreview() {
     const room = roomRef.current;
     if (!room || !localVideoRef.current) return;
     const pub = Array.from(room.localParticipant.videoTrackPublications.values()).find(
       (p) => p.track?.kind === Track.Kind.Video
     );
-    if (!pub?.track) return;
+    if (!pub?.track || pub.isMuted) {
+      clearContainer(localVideoRef);
+      return;
+    }
+    if (localVideoRef.current.firstChild) return;
     clearContainer(localVideoRef);
     const element = pub.track.attach();
     element.muted = true;
@@ -170,66 +183,120 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
   }
 
   async function joinRoom() {
+    if (joinRequestRef.current || roomRef.current) return;
+    const controller = new AbortController();
+    joinRequestRef.current = controller;
     setError(null);
     setIsJoining(true);
+    let room: Room | null = null;
     try {
-      const name = nickname.trim() || undefined;
+      const name = nickname.trim() || '观众';
 
       const joinResponse = await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
+        signal: controller.signal,
       });
       if (!joinResponse.ok) throw new Error(await readApiError(joinResponse));
 
       const data = (await joinResponse.json()) as JoinResponse;
+      if (controller.signal.aborted) return;
       localIdentityRef.current = data.identity;
+      setNickname(name);
 
-      const room = new Room();
-      room
+      const activeRoom = new Room();
+      room = activeRoom;
+      roomRef.current = activeRoom;
+      activeRoom
         .on(RoomEvent.ConnectionStateChanged, (state) => {
+          if (roomRef.current !== activeRoom) return;
           setConnectionState(state);
-          if (state === ConnectionState.Connected) hasJoinedRef.current = true;
-          if (state === ConnectionState.Disconnected && hasJoinedRef.current) {
-            setError('连接已断开');
-          }
         })
-        .on(RoomEvent.ParticipantConnected, () => refreshParticipants(room))
-        .on(RoomEvent.ParticipantDisconnected, () => refreshParticipants(room))
+        .on(RoomEvent.ParticipantConnected, () => refreshParticipants(activeRoom))
+        .on(RoomEvent.ParticipantDisconnected, () => refreshParticipants(activeRoom))
+        .on(RoomEvent.ParticipantNameChanged, () => refreshParticipants(activeRoom))
         .on(RoomEvent.TrackSubscribed, (track) => attachRemoteTrack(track))
         .on(RoomEvent.TrackUnsubscribed, (track) => detachTrack(track))
+        .on(RoomEvent.LocalTrackPublished, syncLocalMedia)
+        .on(RoomEvent.LocalTrackUnpublished, syncLocalMedia)
+        .on(RoomEvent.TrackMuted, syncLocalMedia)
+        .on(RoomEvent.TrackUnmuted, syncLocalMedia)
+        .on(RoomEvent.Reconnected, () => {
+          refreshParticipants(activeRoom);
+          syncLocalMedia();
+        })
+        .on(RoomEvent.AudioPlaybackStatusChanged, () => setAudioBlocked(!activeRoom.canPlaybackAudio))
         .on(RoomEvent.Disconnected, () => {
-          setConnectionState(ConnectionState.Disconnected);
-          setParticipants([]);
-          if (hasJoinedRef.current) setError('房间连接已关闭');
+          if (roomRef.current !== activeRoom) return;
+          activeRoom.removeAllListeners();
+          roomRef.current = null;
+          resetSession();
+          setError('房间连接已关闭，可重新加入；如果房间已关闭，请返回直播大厅。');
         });
 
-      await room.connect(data.livekitUrl, data.token);
-      roomRef.current = room;
-      hasJoinedRef.current = true;
-      refreshParticipants(room);
-      attachExistingRemoteTracks(room);
+      await activeRoom.connect(data.livekitUrl, data.token);
+      if (controller.signal.aborted || roomRef.current !== activeRoom) {
+        await activeRoom.disconnect();
+        return;
+      }
+      refreshParticipants(activeRoom);
+      attachExistingRemoteTracks(activeRoom);
+      setAudioBlocked(!activeRoom.canPlaybackAudio);
     } catch (err) {
+      if (room) {
+        room.removeAllListeners();
+        await room.disconnect();
+      }
+      if (controller.signal.aborted) return;
+      roomRef.current = null;
+      resetSession();
       setError(err instanceof Error ? normalizeError(err.message) : '加入房间失败');
     } finally {
-      setIsJoining(false);
+      if (joinRequestRef.current === controller) {
+        joinRequestRef.current = null;
+        setIsJoining(false);
+      }
     }
   }
 
-  async function enableLocalMedia() {
+  function syncLocalMedia() {
+    const room = roomRef.current;
+    if (!room) return;
+    setCameraEnabled(room.localParticipant.isCameraEnabled);
+    setMicrophoneEnabled(room.localParticipant.isMicrophoneEnabled);
+    attachLocalVideoPreview();
+  }
+
+  async function toggleLocalMedia(device: 'camera' | 'microphone') {
+    const room = roomRef.current;
+    if (!room || !isConnected || mediaBusyRef.current) return;
+    mediaBusyRef.current = true;
+    setMediaBusy(device);
     setError(null);
     try {
-      const room = roomRef.current;
-      if (!room) throw new Error('尚未连接房间');
-      await room.localParticipant.setCameraEnabled(true);
-      await room.localParticipant.setMicrophoneEnabled(true);
-      await attachLocalVideoPreview();
+      if (device === 'camera') {
+        await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled);
+      } else {
+        await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled);
+      }
+      if (roomRef.current !== room) {
+        for (const publication of room.localParticipant.trackPublications.values()) publication.track?.stop();
+        return;
+      }
+      syncLocalMedia();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '开启音视频失败');
+      if (roomRef.current === room) setError(err instanceof Error ? err.message : '开启音视频失败');
+    } finally {
+      mediaBusyRef.current = false;
+      if (roomRef.current === room) setMediaBusy(null);
     }
   }
 
   async function dispatchAgent() {
+    const room = roomRef.current;
+    if (!room || !isConnected || !isLoggedIn || dispatchBusyRef.current || agentRequested || hasAgent) return;
+    dispatchBusyRef.current = true;
     setError(null);
     setIsDispatchingAgent(true);
     try {
@@ -239,46 +306,83 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
         body: '{}',
       });
       if (!response.ok) throw new Error(await readApiError(response));
+      if (roomRef.current === room) setAgentRequested(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '派发 AI 助手失败');
+      if (roomRef.current === room) setError(err instanceof Error ? err.message : '派发 AI 助手失败');
     } finally {
-      setIsDispatchingAgent(false);
+      dispatchBusyRef.current = false;
+      if (roomRef.current === room) setIsDispatchingAgent(false);
     }
   }
 
-  async function leaveRoom() {
-    const room = roomRef.current;
-    if (!room) return;
-    room.disconnect();
-    roomRef.current = null;
-    hasJoinedRef.current = false;
+  function resetSession() {
     localIdentityRef.current = '';
     setParticipants([]);
     setConnectionState(ConnectionState.Disconnected);
+    setCameraEnabled(false);
+    setMicrophoneEnabled(false);
+    setAudioBlocked(false);
+    setMediaBusy(null);
+    setIsDispatchingAgent(false);
+    setAgentRequested(false);
     clearContainer(localVideoRef);
     clearContainer(remoteMediaRef);
   }
 
+  async function leaveRoom() {
+    const room = roomRef.current;
+    joinRequestRef.current?.abort();
+    joinRequestRef.current = null;
+    roomRef.current = null;
+    room?.removeAllListeners();
+    setIsJoining(false);
+    setError(null);
+    resetSession();
+    await room?.disconnect();
+  }
+
+  async function enableAudio() {
+    const room = roomRef.current;
+    if (!room) return;
+    try {
+      await room.startAudio();
+      if (roomRef.current === room) setAudioBlocked(!room.canPlaybackAudio);
+    } catch {
+      if (roomRef.current === room) setError('声音播放失败，请再点击一次“播放声音”。');
+    }
+  }
+
   useEffect(() => {
+    // Entering this page is the join action. Defer one task so Strict Mode's
+    // setup/cleanup replay cannot issue two join requests or open two rooms.
+    const autoJoin = window.setTimeout(() => void joinRoom(), 0);
     return () => {
-      void leaveRoom();
+      window.clearTimeout(autoJoin);
+      joinRequestRef.current?.abort();
+      joinRequestRef.current = null;
+      const room = roomRef.current;
+      roomRef.current = null;
+      room?.removeAllListeners();
+      void room?.disconnect();
     };
   }, []);
 
   useEffect(() => {
     if (!isConnected || !roomRef.current || !remoteMediaRef.current) return;
     attachExistingRemoteTracks(roomRef.current);
+    attachLocalVideoPreview();
   }, [isConnected, participants.length]);
 
   return (
-    <div className="grid gap-3.5">
-      <section className="surface p-4 sm:p-5">
-        {!isConnected ? (
+    <div className="grid min-w-0 gap-3.5">
+      <section className="surface min-w-0 p-4 sm:p-5">
+        {!isInRoom ? (
           <>
-            <div className="mb-5 inline-flex items-center gap-2 rounded-[10px] px-3.5 py-2">
+            <div className="mb-5 inline-flex min-w-0 max-w-full items-center gap-2 rounded-[10px] px-3.5 py-2">
               {isLoggedIn ? (
-                <div className="badge-success">
+                <div className="badge-success min-w-0 max-w-full">
                   <svg aria-hidden="true"
+                    className="shrink-0"
                     width="14"
                     height="14"
                     viewBox="0 0 24 24"
@@ -291,7 +395,7 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                     <polygon points="23 7 16 12 23 17 23 7" />
                     <rect x="1" y="5" width="15" height="14" rx="2" />
                   </svg>
-                  <span>以主播身份加入 · {hostNickname}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">以主播身份加入 · {hostNickname}</span>
                 </div>
               ) : (
                 <div className="badge-muted">
@@ -313,12 +417,13 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
               )}
             </div>
 
-            {!isLoggedIn && (
+            {!isLoggedIn && !isJoining && (
               <div className="mb-5">
                 <label className="grid gap-[7px]">
                   <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">昵称</span>
                   <input
                     name="nickname" autoComplete="nickname"
+                    maxLength={80}
                     value={nickname}
                     onChange={(e) => setNickname(e.target.value)}
                     disabled={isJoining}
@@ -349,7 +454,7 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                   >
                     <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                   </svg>
-                  连接中...
+                  正在进入直播间…
                 </>
               ) : (
                 <>
@@ -381,23 +486,25 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                       <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
                     </svg>
                   )}
-                  {isLoggedIn ? '开始直播' : '进入观看'}
+                  重新加入
                 </>
               )}
             </button>
+            {isJoining && <button type="button" className="btn-secondary ml-3" onClick={() => void leaveRoom()}>取消连接</button>}
           </>
         ) : (
           <>
             <div className="mb-[18px] flex flex-wrap items-center gap-2.5 rounded-[10px] border border-emerald-400/20 bg-emerald-400/[0.08] px-3.5 py-2.5">
               <span className="online-dot" />
-              <span className="text-[13px] font-semibold text-emerald-700">已连接</span>
+              <span role="status" className="text-[13px] font-semibold text-emerald-700">{isReconnecting ? '连接中断，正在重连…' : '已连接'}</span>
               <RoleBadge role={role} />
-              <span className="text-[13px] text-slate-600">{nickname}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere] text-[13px] text-slate-600">{nickname}</span>
             </div>
 
             <div className="flex flex-wrap gap-2.5">
               {role === '主播' && (
-                <button type="button" onClick={() => void enableLocalMedia()} className="btn-secondary">
+                <>
+                <button type="button" disabled={!isConnected || mediaBusy !== null} aria-pressed={cameraEnabled} onClick={() => void toggleLocalMedia('camera')} className="btn-secondary">
                   <svg aria-hidden="true"
                     width="14"
                     height="14"
@@ -411,14 +518,19 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                     <polygon points="23 7 16 12 23 17 23 7" />
                     <rect x="1" y="5" width="15" height="14" rx="2" />
                   </svg>
-                  开启摄像头/麦克风
+                  {mediaBusy === 'camera' ? '处理中…' : cameraEnabled ? '关闭摄像头' : '开启摄像头'}
                 </button>
+                <button type="button" disabled={!isConnected || mediaBusy !== null} aria-pressed={microphoneEnabled} onClick={() => void toggleLocalMedia('microphone')} className="btn-secondary">
+                  {mediaBusy === 'microphone' ? '处理中…' : microphoneEnabled ? '关闭麦克风' : '开启麦克风'}
+                </button>
+                </>
               )}
 
+              {role === '主播' && <>
               <button
                 type="button"
                 onClick={() => void dispatchAgent()}
-                disabled={isDispatchingAgent || hasAgent}
+                disabled={!isConnected || isDispatchingAgent || hasAgent || agentRequested}
                 className={`inline-flex items-center gap-1.5 rounded-[10px] border px-4 py-2.5 text-[13px] font-medium transition-colors ${
                   hasAgent
                     ? 'cursor-not-allowed border-brand-400/20 bg-brand-500/[0.08] text-brand-600/70'
@@ -438,8 +550,11 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                   <rect x="3" y="11" width="18" height="11" rx="2" />
                   <path d="M7 11V7a5 5 0 0110 0v4M12 15v2" />
                 </svg>
-                {isDispatchingAgent ? '呼叫中...' : hasAgent ? 'AI 助手已在线' : '呼叫 AI 助手'}
+                {isDispatchingAgent ? '呼叫中...' : hasAgent ? 'AI 助手已在线' : agentRequested ? '已呼叫，等待助手加入' : '呼叫 AI 助手'}
               </button>
+              </>}
+
+              {audioBlocked && <button type="button" disabled={!isConnected} onClick={() => void enableAudio()} className="btn-primary">播放声音</button>}
 
               <button type="button" onClick={() => void leaveRoom()} className="btn-danger-ghost">
                 <svg aria-hidden="true"
@@ -454,14 +569,15 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                 >
                   <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
                 </svg>
-                {role === '主播' ? '结束直播' : '离开房间'}
+                离开房间
               </button>
             </div>
+            {agentRequested && !hasAgent && <p role="status" className="mt-3 text-sm text-muted">正在等待 AI 助手加入，暂时还没有响应。</p>}
           </>
         )}
 
         {error && (
-          <div className="mt-3.5 flex items-start gap-2 rounded-[10px] border border-rose-500/20 bg-rose-500/10 px-3.5 py-3">
+          <div role="alert" className="mt-3.5 flex items-start gap-2 rounded-[10px] border border-rose-500/20 bg-rose-500/10 px-3.5 py-3">
             <svg aria-hidden="true"
               width="15"
               height="15"
@@ -481,7 +597,7 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
         )}
       </section>
 
-      {isConnected && participants.length > 0 && (
+      {isInRoom && participants.length > 0 && (
         <section className="surface-soft px-[22px] py-5">
           <div className="mb-4 flex items-center gap-2">
             <svg aria-hidden="true"
@@ -520,7 +636,7 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                   >
                     {initial}
                   </div>
-                  <span className="flex-1 text-sm font-medium text-slate-800">
+                  <span className="min-w-0 flex-1 [overflow-wrap:anywhere] text-sm font-medium text-slate-800">
                     {p.displayName}
                     {p.isLocal && <span className="ml-1.5 text-xs font-normal text-slate-500">（我）</span>}
                   </span>
@@ -532,10 +648,10 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
         </section>
       )}
 
-      {isConnected && (
+      {isInRoom && (
         <section className="surface-soft px-[22px] py-5">
           <div className="grid gap-5 lg:grid-cols-2">
-            <div>
+            {role === '主播' && <div>
               <div className="mb-3 flex items-center gap-1.5">
                 <svg aria-hidden="true"
                   width="13"
@@ -557,7 +673,7 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
                 ref={localVideoRef}
                 className="min-h-11 rounded-[10px] border border-dashed border-slate-200 bg-white"
               />
-            </div>
+            </div>}
 
             <div>
               <div className="mb-3 flex items-center gap-1.5">

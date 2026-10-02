@@ -1,30 +1,45 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ApiRoomItem } from '@/lib/api';
 import { check } from '@/services/api/client';
 
 type Props = {
   apiBaseUrl: string;
-  initialRooms: ApiRoomItem[];
+  initialRooms: ApiRoomItem[] | undefined;
   isLoggedIn: boolean;
 };
 
 export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props) {
-  const [rooms, setRooms] = useState(initialRooms);
+  const queryClient = useQueryClient();
+  const queryKey = ['live-rooms', apiBaseUrl];
+  const roomsQuery = useQuery({
+    queryKey,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`${apiBaseUrl}/rooms`, { cache: 'no-store', signal });
+      await check(response);
+      return ((await response.json()) as { items: ApiRoomItem[] }).items;
+    },
+    initialData: initialRooms,
+    initialDataUpdatedAt: 0,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 5_000,
+  });
+  const rooms = roomsQuery.data ?? [];
   const [title, setTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [closingRoomId, setClosingRoomId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  async function refreshRooms() {
-    const response = await fetch(`${apiBaseUrl}/rooms`);
-    await check(response);
-    const data = (await response.json()) as { items: ApiRoomItem[] };
-    setRooms(data.items);
-  }
+  const mutationPending = useRef(false);
+  const isMutating = isCreating || closingRoomId !== null;
 
   async function createRoom() {
+    if (mutationPending.current) return;
+    mutationPending.current = true;
     setError(null);
     setIsCreating(true);
     try {
@@ -34,24 +49,39 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
         body: JSON.stringify({ title: title.trim() || undefined }),
       });
       await check(response);
+      const { item } = (await response.json()) as { item: ApiRoomItem };
+      // Ignore any list request that started before the mutation completed.
+      await queryClient.cancelQueries({ queryKey });
+      queryClient.setQueryData<ApiRoomItem[]>(queryKey, (current = []) => [
+        item, ...current.filter((room) => room.id !== item.id),
+      ]);
       setTitle('');
-      await refreshRooms();
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建房间失败');
     } finally {
+      mutationPending.current = false;
       setIsCreating(false);
     }
   }
 
   async function closeRoom(roomId: string) {
+    if (mutationPending.current) return;
     if (!window.confirm("确定关闭这个直播间吗？")) return;
+    mutationPending.current = true;
+    setClosingRoomId(roomId);
     setError(null);
     try {
       const response = await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}`, { method: 'DELETE' });
       await check(response);
-      await refreshRooms();
+      await queryClient.cancelQueries({ queryKey });
+      queryClient.setQueryData<ApiRoomItem[]>(queryKey, (current = []) =>
+        current.filter((room) => room.id !== roomId),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : '关闭房间失败');
+    } finally {
+      mutationPending.current = false;
+      setClosingRoomId(null);
     }
   }
 
@@ -61,28 +91,35 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
     <>
       {isLoggedIn ? (
         <section className="surface mb-4 p-4 sm:p-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="w-full text-sm font-semibold sm:w-auto sm:pr-3">创建直播间</h2>
+          <form className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center" onSubmit={(event) => {
+            event.preventDefault();
+            void createRoom();
+          }}>
+            <label htmlFor="room-title" className="text-sm font-semibold sm:pr-3">创建直播间</label>
             <input
+              id="room-title"
               name="roomTitle" aria-label="直播间标题" autoComplete="off"
+              maxLength={100}
+              disabled={isMutating}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isCreating && void createRoom()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault();
+              }}
               placeholder="输入直播间标题（可选）"
               className="input-field min-w-0 flex-1"
             />
             <button
-              type="button"
-              onClick={() => void createRoom()}
-              disabled={isCreating}
+              type="submit"
+              disabled={isMutating}
               className="btn-primary min-w-[80px] px-5"
             >
               {isCreating ? '创建中…' : '创建'}
             </button>
-          </div>
+          </form>
 
           {error && (
-            <div className="mt-3.5 flex items-start gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3.5 py-2.5">
+            <div role="alert" className="mt-3.5 flex items-start gap-2 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3.5 py-2.5">
               <svg aria-hidden="true"
                 width="15"
                 height="15"
@@ -133,12 +170,22 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
 
       <div>
         <div className="mb-3 flex items-center justify-between px-1">
-          <span className="text-[13px] font-medium text-slate-500">
+          <span aria-live="polite" className="text-[13px] font-medium text-slate-500">
             {`直播间 · ${rooms.length}`}
           </span>
+          <button type="button" className="btn-link" disabled={roomsQuery.isFetching || isMutating} onClick={() => void roomsQuery.refetch()}>
+            {roomsQuery.isFetching ? '更新中…' : '刷新列表'}
+          </button>
         </div>
 
-        {rooms.length === 0 ? (
+        {roomsQuery.isError && (
+          <p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            直播间列表更新失败，{roomsQuery.error.message}。可点击“刷新列表”重试。
+          </p>
+        )}
+        {roomsQuery.isPending ? (
+          <div role="status" className="empty-state">正在加载直播间…</div>
+        ) : rooms.length === 0 && !roomsQuery.isError ? (
           <div className="empty-state">
             <p className="mb-1.5 text-[15px] font-semibold text-slate-600">暂无直播间</p>
             <p className="m-0 text-[13px] leading-6 text-slate-500">
@@ -150,14 +197,14 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
             {rooms.map((room) => {
               const live = isLive(room);
               const roomIconTone = live
-                ? 'border-live-500/30   '
+                ? 'border-live-500/30 bg-rose-50'
                 : 'border-slate-200 bg-white';
               const statusTone = live
                 ? 'border-live-500/30 bg-live-500/[0.15] text-live-300'
                 : 'border-slate-200 bg-white text-slate-500';
 
               return (
-                <div key={room.id} className="surface-soft room-card flex flex-wrap items-center gap-3.5 px-[18px] py-4">
+                <article key={room.id} aria-label={room.title} className="surface-soft room-card grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3.5 p-4">
                   <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${roomIconTone}`}>
                     {live ? (
                       <span className="live-dot h-2.5 w-2.5" />
@@ -178,9 +225,9 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
                     )}
                   </div>
 
-                  <Link href={`/live/${room.id}`} className="min-w-0 flex-1 basis-[140px] no-underline text-inherit">
+                  <Link href={`/live/${encodeURIComponent(room.id)}`} className="min-w-0 no-underline text-inherit">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate text-[15px] font-bold text-slate-900">{room.title}</span>
+                      <span title={room.title} className="w-full truncate text-[15px] font-bold text-slate-900">{room.title}</span>
                       <span className={`shrink-0 rounded-lg border px-2 py-0.5 text-[11px] font-bold ${statusTone}`}>
                         {room.status}
                       </span>
@@ -200,16 +247,17 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
                         <circle cx="9" cy="7" r="4" />
                         <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
                       </svg>
-                      <span className="text-xs text-slate-500">{room.viewers} 人观看</span>
+                      <span className="text-xs text-slate-500">{room.viewers} 人在房间</span>
                     </div>
                   </Link>
 
+                  <div className="col-span-2 flex items-center justify-between gap-3 border-t border-line pt-3">
                   <Link
-                    href={`/live/${room.id}`}
-                    className="shrink-0 rounded-lg border border-brand-400/[0.35] bg-brand-500/[0.15] px-3.5 py-2 text-[13px] font-semibold text-brand-600 no-underline transition-colors hover:bg-brand-500/25"
+                    href={`/live/${encodeURIComponent(room.id)}`}
+                    className="btn-secondary min-w-0 text-brand-600 no-underline"
                   >
                     <span className="inline-flex items-center gap-1.5">
-                      {isLoggedIn ? '进入（主播）' : '观看'}
+                      {isLoggedIn ? '进入直播间' : '观看'}
                       <svg aria-hidden="true"
                         width="12"
                         height="12"
@@ -229,7 +277,9 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
                     <button
                       type="button"
                       onClick={() => void closeRoom(room.id)}
-                      className="btn-danger-ghost rounded-lg px-3 py-2"
+                      disabled={isMutating}
+                      aria-label={`关闭直播间：${room.title}`}
+                      className="btn-danger-ghost shrink-0 rounded-lg px-3 py-2"
                     >
                       <svg aria-hidden="true"
                         width="13"
@@ -243,10 +293,11 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn }: Props)
                       >
                         <path d="M18 6 6 18M6 6l12 12" />
                       </svg>
-                      关闭
+                      {closingRoomId === room.id ? '关闭中…' : '关闭'}
                     </button>
                   )}
-                </div>
+                  </div>
+                </article>
               );
             })}
           </div>

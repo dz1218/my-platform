@@ -46,6 +46,7 @@ pnpm dev          # Next.js :3011
 - Current Agent instructions: `apps/agent/src/agents/companion.ts`
 - `pnpm server:test`, `pnpm agent:test`, `pnpm typecheck`
 - `pnpm build` (Go API/worker, web and Agent), `pnpm server:build`
+- Live-room browser regressions: `pnpm --filter web exec playwright install chromium`, then `pnpm --filter web test:live`. To use an installed Chrome, set `PLAYWRIGHT_CHANNEL=chrome`. Add `LIVEKIT_INTEGRATION=1` to exercise real media against local LiveKit; only temporary test rooms are created and removed.
 
 LiveKit rooms, join tokens and agent dispatches are served by the Go API.
 Set the optional `LIVEKIT_*` settings in `apps/server/.env`, then run `pnpm livekit:up`.
