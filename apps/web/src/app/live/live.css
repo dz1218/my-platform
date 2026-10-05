@@ -91,6 +91,7 @@
 .live-created { padding: 12px; margin-top: 16px; background: var(--live-soft); border-radius: 6px; font-size: 12px; color: var(--live-accent); }
 .live-created span, .live-created a { display: flex; align-items: center; gap: 6px; }
 .live-created a { margin-top: 8px; font-weight: 600; }
+.live-created strong { display: block; margin-top: 9px; overflow-wrap: anywhere; font-size: 14px; font-weight: 500; color: var(--live-ink); }
 .live-empty { display: flex; align-items: center; justify-content: center; flex-direction: column; min-height: 350px; padding: 40px 24px; border: 1px dashed #d4ded8; border-radius: 9px; text-align: center; }
 .live-empty-icon { display: grid; place-items: center; width: 72px; height: 72px; background: #eeedfc; border-radius: 50%; color: #627f70; margin-bottom: 20px; }
 .live-empty h3 { font-size: 16px; font-weight: 550; margin-bottom: 9px; }
@@ -146,12 +147,26 @@
 .live-stage :focus-visible { outline-color: #c9c3ff; }
 .live-guest-name { display: grid; grid-template-columns: auto minmax(0, 180px); align-items: center; gap: 10px; margin-top: 18px; color: #b5bbd3; font-size: 11px; }
 .live-guest-name .live-input { height: 36px; background: #2c3047; color: white; border-color: #7266df; }
-.live-stage-media { position: absolute; inset: 49px 0 48px; display: flex; gap: 6px; align-items: stretch; justify-content: center; }
-.live-local-tracks, .live-remote-tracks { flex: 1; min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; overflow: hidden; }
-.live-stage-media .is-hidden { display: none; }
+.live-stage-media { position: relative; flex: 1; min-height: 0; }
+.live-stage-swap { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; min-height: 32px; margin-block: -9px; padding: 0 9px; border: 1px solid #656b85; border-radius: 6px; color: #f3f6f4; font-size: 11px; }
+.live-stage-swap:hover { background: #414660; }
+.live-camera-pane { position: absolute; overflow: hidden; background: #191c2c; }
+.live-camera-pane.is-main { inset: 0; }
+.live-camera-pane.is-small { z-index: 1; right: 16px; bottom: 16px; width: clamp(120px, 28%, 240px); aspect-ratio: 16 / 10; border: 1px solid #9197ad; border-radius: 9px; box-shadow: 0 3px 16px #0006; }
+.live-camera-video { position: absolute; inset: 0; }
 .live-stage .live-media-track { display: block; width: 100%; height: 100%; max-width: none; min-height: 0; object-fit: contain; border-radius: 0; background: #191c2c; }
-.live-stage .live-local-tracks video { transform: scaleX(-1); }
-.live-stage .live-remote-tracks:has(video:nth-of-type(2)) video { width: calc(50% - 3px); height: auto; max-height: 100%; }
+.live-stage .live-camera-video.is-local video { transform: scaleX(-1); }
+.live-camera-label { position: absolute; bottom: 10px; left: 10px; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 7px; border-radius: 4px; background: #111522b8; color: #fff; font-size: 11px; pointer-events: none; }
+.live-camera-swap { position: absolute; inset: 0; width: 100%; height: 100%; display: flex; justify-content: flex-end; align-items: flex-start; padding: 8px; color: #fff; cursor: pointer; }
+.live-camera-swap > svg { box-sizing: content-box; padding: 5px; background: #111522b8; border-radius: 4px; }
+.live-camera-swap:hover { background: #ffffff0c; }
+.live-camera-swap:focus-visible { outline-offset: -4px; }
+.live-camera-pane .live-stage-empty { inset: 12px 16px 36px; }
+.live-camera-pane.is-small .live-stage-empty { inset: 8px 8px 26px; gap: 6px; }
+.live-camera-pane.is-small .live-stage-symbol { width: auto; height: auto; margin: 0; border: 0; background: none; }
+.live-camera-pane.is-small .live-stage-symbol svg { width: 22px; height: 22px; }
+.live-camera-pane.is-small .live-stage-empty h2 { font-size: 11px; letter-spacing: 0; }
+.live-camera-pane.is-small .live-camera-label { bottom: 6px; left: 6px; max-width: calc(100% - 12px); padding: 2px 5px; font-size: 10px; }
 .live-stage audio, .live-stage video[hidden] { display: none; }
 .live-control-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fff; border: 1px solid var(--live-line); border-top: 0; border-radius: 0 0 16px 16px; min-height: 76px; padding: 12px 18px; }
 .live-device-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -167,13 +182,61 @@
 .live-studio-footer svg { flex-shrink: 0; }
 .live-agent-button { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; font-size: 11px; color: #625b91; }
 .live-sidebar { display: flex; flex-direction: column; min-width: 0; height: 100%; min-height: 440px; max-height: 700px; background: #fff; border: 1px solid var(--live-line); border-radius: 16px; overflow: hidden; }
-.live-sidebar-tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--live-line); padding-inline: 20px; flex-shrink: 0; }
+.live-sidebar-tabs { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--live-line); padding-inline: 16px; flex-shrink: 0; }
 .live-sidebar-tabs button { display: flex; align-items: center; gap: 7px; position: relative; min-height: 56px; color: var(--live-muted); font-size: 13px; }
 .live-sidebar-tabs button[aria-pressed=true] { color: var(--live-accent); font-weight: 600; }
 .live-sidebar-tabs button[aria-pressed=true]::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--live-accent); }
 .live-sidebar-tabs button span { color: var(--live-muted); font-size: 11px; }
 .live-chat-panel { flex: 1; min-height: 0; }
 .live-chat-panel[hidden], .live-people-panel[hidden] { display: none; }
+.live-voice-container { flex: 1; min-height: 0; overflow-y: auto; }
+.live-voice-container[hidden] { display: none; }
+.live-voice-panel { padding: 22px 16px; }
+.live-voice-heading { display: flex; align-items: center; gap: 9px; color: var(--live-accent); }
+.live-voice-heading h2 { font-size: 15px; font-weight: 600; color: var(--live-ink); }
+.live-voice-heading > span { margin-left: auto; font-size: 12px; color: var(--live-muted); }
+.live-voice-hint { margin-top: 12px !important; color: var(--live-muted); font-size: 12px; line-height: 1.9; }
+.live-voice-card { display: grid; justify-items: center; gap: 13px; margin-top: 24px; padding: 28px 14px; background: var(--live-soft); border-radius: 12px; text-align: center; color: var(--live-accent); }
+.live-voice-card strong { max-width: 100%; overflow-wrap: anywhere; font-size: 14px; font-weight: 500; color: var(--live-ink); }
+.live-voice-card p { font-size: 12px; line-height: 1.9; color: var(--live-muted); }
+.live-voice-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.live-sidebar-tabs .live-voice-badge { padding: 1px 5px; border-radius: 8px; background: var(--live-soft); color: var(--live-accent); }
+.live-role.is-speaker { background: var(--live-soft); color: var(--live-accent); }
+.live-viewer-note.is-on-call { color: var(--live-accent); }
+.live-viewer-request { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.live-viewer-request > span { color: var(--live-muted); font-size: 12px; }
+.live-viewer-call { margin-top: 16px; padding: 20px; background: #fff; border: 1px solid var(--live-line); border-left: 3px solid var(--live-accent); border-radius: 12px; }
+.live-viewer-call-heading, .live-viewer-call-heading > div { display: flex; align-items: center; gap: 9px; }
+.live-viewer-call-heading { justify-content: space-between; flex-wrap: wrap; }
+.live-viewer-call-heading h2 { font-size: 15px; font-weight: 600; }
+.live-call-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--live-accent); }
+.live-call-mode { color: var(--live-muted); font-size: 11px; }
+.live-call-end { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; color: #a45448; font-size: 12px; }
+.live-call-end:hover { color: #84382e; }
+.live-viewer-call-intro { margin-top: 5px !important; color: var(--live-muted); font-size: 12px; line-height: 1.8; }
+.live-viewer-call-body { margin-top: 12px; }
+.live-call-devices { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.live-call-device { display: flex; align-items: center; gap: 12px; min-height: 62px; color: var(--live-muted); }
+.live-call-device + .live-call-device { border-top: 1px solid var(--live-line); }
+.live-call-device > svg { flex-shrink: 0; }
+.live-call-device > div { flex: 1; min-width: 0; display: grid; gap: 5px; }
+.live-call-device strong { color: var(--live-ink); font-size: 12px; font-weight: 500; }
+.live-call-device div span { font-size: 11px; line-height: 1.4; }
+.live-call-switch { display: inline-flex; align-items: center; flex-shrink: 0; width: 44px; height: 26px; padding: 3px; border: 1px solid #bcc0d0; border-radius: 20px; background: #dce0eb; }
+.live-call-switch span { width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #20243930; transition: transform .15s; }
+.live-call-switch[aria-checked=true] { border-color: var(--live-accent); background: var(--live-accent); }
+.live-call-switch[aria-checked=true] span { transform: translateX(18px); }
+.live-viewer-call-footnote { display: flex; align-items: flex-start; gap: 6px; margin-top: 16px !important; font-size: 11px; line-height: 1.8; color: var(--live-muted); }
+.live-viewer-call-footnote svg { flex-shrink: 0; margin-top: 3px; }
+@media (max-width: 599px) {
+  .live-viewer-call { padding: 15px; }
+  .live-camera-pane.is-small { right: 10px; bottom: 10px; width: 120px; }
+  .live-stage-media.has-call .live-camera-pane.is-main .live-stage-empty { bottom: 96px; }
+  .live-stage-media.has-call .live-camera-pane.is-main .live-stage-symbol { width: 48px; height: 48px; margin-bottom: 12px; flex-shrink: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-call-switch span { transition: none; }
+}
 .live-chat { display: flex; flex-direction: column; position: relative; height: 100%; }
 .live-chat-log { flex: 1; min-height: 0; height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 16px; scrollbar-width: thin; scrollbar-color: #d5dfd9 transparent; }
 .live-chat-intro { padding: 11px 12px; font-size: 11px; line-height: 1.9; color: #77877e; background: #f4f7f5; border-radius: 5px; }

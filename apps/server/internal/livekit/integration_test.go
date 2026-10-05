@@ -29,7 +29,7 @@ func TestLiveKitIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	id := "migration-test-" + database.ID()
-	room, err := client.CreateRoom(ctx, id, "迁移联调")
+	room, err := client.CreateRoom(ctx, id, "迁移联调", "integration-owner")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestLiveKitIntegration(t *testing.T) {
 	if room.ID != id || room.Title != "迁移联调" {
 		t.Fatalf("wrong room: %+v", room)
 	}
-	rooms, err := client.ListRooms(ctx)
+	rooms, err := client.ListRooms(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}

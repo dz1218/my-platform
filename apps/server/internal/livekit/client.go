@@ -65,7 +65,7 @@ func (c *Client) token(identity, name string, grant map[string]any, ttl time.Dur
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(c.config.APISecret))
 }
 
-// All room participants can chat; audio/video publishing remains host-only.
+// Viewers start without publishing rights; approval grants camera and microphone.
 func (c *Client) JoinToken(room, identity, name string, canPublish bool) (string, error) {
 	return c.token(identity, name, map[string]any{"roomJoin": true, "room": room, "canPublish": canPublish, "canSubscribe": true, "canPublishData": true}, 2*time.Hour)
 }
@@ -117,16 +117,19 @@ type room struct {
 	NumPublishersProto   int    `json:"num_publishers"`
 }
 type RoomItem struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	Status  string `json:"status"`
-	Viewers int    `json:"viewers"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Status    string `json:"status"`
+	Viewers   int    `json:"viewers"`
+	OwnerID   string `json:"-"`
+	CanManage bool   `json:"canManage"`
 }
 
 func (r room) item() RoomItem {
 	title := r.Name
 	var metadata struct {
-		Title string `json:"title"`
+		Title   string `json:"title"`
+		OwnerID string `json:"ownerId"`
 	}
 	if json.Unmarshal([]byte(r.Metadata), &metadata) == nil && metadata.Title != "" {
 		title = metadata.Title
@@ -139,21 +142,24 @@ func (r room) item() RoomItem {
 	if r.NumPublishers > 0 || r.NumPublishersProto > 0 {
 		status = "直播中"
 	}
-	return RoomItem{r.Name, title, status, viewers}
+	return RoomItem{ID: r.Name, Title: title, Status: status, Viewers: viewers, OwnerID: metadata.OwnerID}
 }
-func (c *Client) ListRooms(ctx context.Context) ([]RoomItem, error) {
+func (c *Client) ListRooms(ctx context.Context, names ...string) ([]RoomItem, error) {
 	var result struct {
 		Rooms []room `json:"rooms"`
 	}
-	err := c.call(ctx, "RoomService", "ListRooms", map[string]any{"roomList": true}, struct{}{}, &result)
+	input := struct {
+		Names []string `json:"names,omitempty"`
+	}{Names: names}
+	err := c.call(ctx, "RoomService", "ListRooms", map[string]any{"roomList": true}, input, &result)
 	items := make([]RoomItem, 0, len(result.Rooms))
 	for _, r := range result.Rooms {
 		items = append(items, r.item())
 	}
 	return items, err
 }
-func (c *Client) CreateRoom(ctx context.Context, id, title string) (RoomItem, error) {
-	metadata, _ := json.Marshal(map[string]string{"title": title})
+func (c *Client) CreateRoom(ctx context.Context, id, title, ownerID string) (RoomItem, error) {
+	metadata, _ := json.Marshal(map[string]string{"title": title, "ownerId": ownerID})
 	var result room
 	err := c.call(ctx, "RoomService", "CreateRoom", map[string]any{"roomCreate": true}, map[string]any{"name": id, "metadata": string(metadata), "maxParticipants": 50, "emptyTimeout": 600}, &result)
 	return result.item(), err

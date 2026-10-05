@@ -33,6 +33,10 @@ async function proxy(
   const cookie = request.cookies.get(sessionCookie)?.value;
   if (cookie) headers.set("Cookie", `${sessionCookie}=${cookie}`);
   headers.set("Content-Type", "application/json");
+  if (path[0] === "rooms" && path[2] === "voice") {
+    const voiceToken = request.headers.get("x-live-voice-token");
+    if (voiceToken) headers.set("X-Live-Voice-Token", voiceToken);
+  }
   try {
     const body = request.method === "GET" ? undefined : await request.text();
     if (body && new TextEncoder().encode(body).length > 32 * 1024) {

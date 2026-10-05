@@ -29,7 +29,7 @@ async function join(page: Page, roomId: string, host: boolean) {
   await page.route(`**/api/v1/rooms/${roomId}/join`, (route) => {
     const identity = `${host ? 'host' : 'viewer'}_e2e_${++attempt}`;
     return route.fulfill({ status: 201, json: {
-      roomId, identity, livekitUrl: livekitUrl.replace(/^http/, 'ws'),
+      roomId, identity, role: host ? 'host' : 'viewer', livekitUrl: livekitUrl.replace(/^http/, 'ws'),
       token: token({ roomJoin: true, room: roomId, canPublish: host, canSubscribe: true, canPublishData: true }, identity),
     } });
   });
@@ -121,7 +121,7 @@ test('real host/viewer media, permissions, rejoin and navigation cleanup', async
     expect(participants.participants).toHaveLength(1);
     // Returning through the lobby must also connect without a second button.
     await page.route('**/api/v1/rooms', (route) => route.fulfill({ json: { items: [
-      { id: roomId, title: '正在直播的房间', status: '直播中', viewers: 1 },
+      { id: roomId, title: '正在直播的房间', status: '直播中', viewers: 1, canManage: true },
     ] } }));
     await page.getByRole('button', { name: '刷新列表' }).click();
     await page.getByRole('link', { name: '进入直播间', exact: true }).click();

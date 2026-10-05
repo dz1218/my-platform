@@ -19,6 +19,24 @@ createServer(async (request, response) => {
   response.setHeader('Content-Type', 'application/json');
   response.setHeader('Cache-Control', 'no-store');
   if (request.url === '/health') return response.end('{}');
+  // Voice browser tests exercise the real Go handlers against temporary LiveKit
+  // rooms. Existing regressions keep their isolated fixtures and mocked joins.
+  if (process.env.LIVEKIT_INTEGRATION === '1' && /^\/api\/v1\/rooms\/voice-e2e-[a-zA-Z0-9-]+\//.test(request.url ?? '')) {
+    let body = '';
+    for await (const part of request) body += part;
+    try {
+      const upstream = await fetch(`http://127.0.0.1:18182${request.url}`, {
+        method: request.method,
+        headers: { 'Content-Type': 'application/json', Cookie: request.headers.cookie || '', 'X-Live-Voice-Token': request.headers['x-live-voice-token'] || '' },
+        body: request.method === 'GET' ? undefined : body,
+      });
+      response.statusCode = upstream.status;
+      return response.end(await upstream.text());
+    } catch {
+      response.statusCode = 502;
+      return response.end(JSON.stringify({ error: { message: '语音测试 API 未启动' } }));
+    }
+  }
   const session = request.headers.cookie?.match(/(?:^|;\s*)companion_session=([^;]+)/)?.[1];
   if (request.url === '/api/v1/me' && /^inheritance-test-(female|male|legacy|completed|inherited|second)$/.test(session ?? '')) {
     return response.end(JSON.stringify({ user: inheritanceUser(session) }));
@@ -53,6 +71,9 @@ createServer(async (request, response) => {
   }
   if (request.url === '/api/v1/me' && request.headers.cookie?.includes('companion_session=live-test-host')) {
     return response.end(JSON.stringify({ user: { id: 'live-test-host', name: '测试主播', email: 'live-test@example.invalid' } }));
+  }
+  if (request.url === '/api/v1/me' && session === 'live-test-viewer') {
+    return response.end(JSON.stringify({ user: { id: 'live-test-viewer', name: '登录观众', email: 'viewer@example.invalid' } }));
   }
   if (request.url === '/api/v1/rooms') {
     return response.end(JSON.stringify({ items: [] }));

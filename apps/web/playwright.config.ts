@@ -12,6 +12,10 @@ export default defineConfig({
     launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
   },
   webServer: [
+    ...(process.env.LIVEKIT_INTEGRATION === '1' ? [{
+      command: 'go run ./tests/livevoice', cwd: '../server', url: 'http://127.0.0.1:18182/health', timeout: 120_000,
+      env: { GOCACHE: process.env.GOCACHE || '/tmp/my-platform-go-cache' },
+    }] : []),
     { command: 'node tests/fixtures/api.mjs', url: 'http://127.0.0.1:18181/health' },
     {
       command: 'pnpm exec next dev --hostname 127.0.0.1 --port 3012',

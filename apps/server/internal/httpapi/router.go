@@ -36,7 +36,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 			c.Header("Access-Control-Allow-Origin", cfg.WebOrigin)
 			c.Header("Vary", "Origin")
 			c.Header("Access-Control-Allow-Credentials", "true")
-			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Live-Voice-Token")
 			c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		}
 		if c.Request.Method == "OPTIONS" {
@@ -60,13 +60,13 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 		c.JSON(200, gin.H{"ok": true, "service": "companion"})
 	})
 	ah := auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: cfg.JWTSecret}, SecureCookie: cfg.SecureCookie}
-	livekit.Register(r, cfg.LiveKit, ah)
+	livekit.Register(r, cfg.LiveKit, ah, cache)
 	ids := identity.Repository{DB: db}
 	messages := conversation.Repository{DB: db}
 	mh := matching.Handler{Service: matching.Service{Repo: matching.Repository{DB: db}, Identities: ids}}
 	chat := delivery.Service{Repo: delivery.Repository{DB: db}, Messages: messages, Policies: policies}
 	api := r.Group("/api/v1")
-	livekit.Register(api, cfg.LiveKit, ah)
+	livekit.Register(api, cfg.LiveKit, ah, cache)
 	api.POST("/auth/register", rateLimit(cache, "auth", 60, false), ah.Register)
 	api.POST("/auth/login", rateLimit(cache, "auth", 60, false), ah.Login)
 	api.POST("/auth/logout", ah.Logout)

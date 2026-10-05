@@ -34,6 +34,8 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn, hostNick
     refetchInterval: 5_000,
   });
   const rooms = roomsQuery.data ?? [];
+  const ownedRooms = isLoggedIn ? rooms.filter((room) => room.canManage) : [];
+  const ownedRoom = ownedRooms[0];
   const [title, setTitle] = useState('');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('全部');
@@ -56,7 +58,11 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn, hostNick
   }, [roomToClose]);
 
   async function createRoom() {
-    if (mutationPending.current) return;
+    if (mutationPending.current || roomsQuery.isPending || roomsQuery.isError) return;
+    if (ownedRoom) {
+      setError('你已有一个直播间，请先关闭后再创建');
+      return;
+    }
     const name = title.trim();
     if (!name || name.length > 100) {
       setError('请输入 1–100 个字符的房间名称');
@@ -76,6 +82,16 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn, hostNick
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: name }),
       });
+      if (response.status === 409) {
+        const conflict = await response.clone().json().catch(() => null) as { error?: { code?: string; message?: string }; item?: ApiRoomItem } | null;
+        if (conflict?.error?.code === 'room_already_exists' && conflict.item?.canManage) {
+          const item = conflict.item;
+          await queryClient.cancelQueries({ queryKey });
+          queryClient.setQueryData<ApiRoomItem[]>(queryKey, (current = []) => [item, ...current.filter((room) => room.id !== item.id)]);
+          setError(conflict.error.message || '你已有一个直播间，请先关闭后再创建');
+          return;
+        }
+      }
       await check(response);
       const { item } = (await response.json()) as { item: ApiRoomItem };
       await queryClient.cancelQueries({ queryKey });
@@ -104,6 +120,7 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn, hostNick
       await queryClient.cancelQueries({ queryKey });
       queryClient.setQueryData<ApiRoomItem[]>(queryKey, (current = []) => current.filter((room) => room.id !== roomId));
       if (createdRoom?.id === roomId) setCreatedRoom(null);
+      setError(null);
       setRoomToClose(null);
     } catch (err) {
       setCloseError(err instanceof Error ? err.message : '关闭房间失败，请重试');
@@ -116,7 +133,7 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn, hostNick
   return <>
     <header className="live-heading">
       <div><h1>直播大厅<span className="live-heading-dot" /></h1><p>找个感兴趣的房间，让交流现在发生。</p></div>
-      <div className="live-profile"><span className="live-avatar">{isLoggedIn ? hostNickname.slice(0, 1) : <LiveIcon name="users" />}</span><div><strong>{isLoggedIn ? hostNickname : '访客'}</strong><span>{isLoggedIn ? '主播账号' : '随时进入，参与聊天'}</span></div></div>
+      <div className="live-profile"><span className="live-avatar">{isLoggedIn ? hostNickname.slice(0, 1) : <LiveIcon name="users" />}</span><div><strong>{isLoggedIn ? hostNickname : '访客'}</strong><span>{isLoggedIn ? '看直播，也可以自己开播' : '随时进入，参与聊天'}</span></div></div>
     </header>
 
     <section className="live-welcome" aria-label="直播广场">
@@ -141,7 +158,7 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn, hostNick
               <span className="live-cover-viewers"><LiveIcon name="users" size={13} />{room.viewers}</span>
             </Link>
             <div className="live-room-card-body"><h3 title={room.title}><Link href={`/live/${encodeURIComponent(room.id)}`}>{room.title}</Link></h3><p>{room.viewers} 人在房间</p>
-              <div className="live-room-card-actions"><Link href={`/live/${encodeURIComponent(room.id)}`} className="live-enter-link">{isLoggedIn ? '进入直播间' : '观看'}<LiveIcon name="arrow" size={16} /></Link>{isLoggedIn && <button type="button" className="live-close-room" disabled={isMutating} aria-label={`关闭直播间：${room.title}`} onClick={() => { setCloseError(null); setRoomToClose(room); }}>关闭</button>}</div>
+              <div className="live-room-card-actions"><Link href={`/live/${encodeURIComponent(room.id)}`} className="live-enter-link">{isLoggedIn && room.canManage ? '进入直播间' : '观看'}<LiveIcon name="arrow" size={16} /></Link>{isLoggedIn && room.canManage && <button type="button" className="live-close-room" disabled={isMutating} aria-label={`关闭直播间：${room.title}`} onClick={() => { setCloseError(null); setRoomToClose(room); }}>关闭</button>}</div>
             </div>
           </article>)}
         </div> : !roomsQuery.isError && <div className="live-empty">
@@ -155,15 +172,19 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn, hostNick
 
       <aside className="live-create-panel">
         <div className="live-create-icon"><LiveIcon name="video" size={24} /></div>
-        <h2>创建直播间</h2><p>给房间起个名字，邀请大家来聊聊。</p>
-        {isLoggedIn ? <form onSubmit={(event) => { event.preventDefault(); void createRoom(); }}>
+        <h2>{ownedRoom ? '我的直播间' : '创建直播间'}</h2><p>{ownedRoom ? '每个账号同时只能保留一个直播间。' : '给房间起个名字，邀请大家来聊聊。'}</p>
+        {ownedRoom ? <>
+          <div className="live-created" role="status"><span><LiveIcon name="check" size={16} />{createdRoom?.id === ownedRoom.id ? '直播间已创建' : '你已有直播间'}</span><strong>{ownedRoom.title}</strong></div>
+          <Link href={`/live/${encodeURIComponent(ownedRoom.id)}`} className="live-button live-button-primary live-create-button">进入我的直播间<LiveIcon name="arrow" size={16} /></Link>
+          <p className="live-create-hint">{ownedRooms.length > 1 ? `你已有 ${ownedRooms.length} 个旧房间，请在列表中关闭多余房间。` : '关闭当前直播间后，才能创建新的房间。'}</p>
+          {error && <p role="alert" className="live-form-error">{error}</p>}
+        </> : isLoggedIn ? <form onSubmit={(event) => { event.preventDefault(); void createRoom(); }}>
           <label htmlFor="room-title">房间名称 <span>必填</span></label>
-          <input id="room-title" aria-label="房间名称" required aria-invalid={!!error} aria-describedby={error ? "room-name-error" : "room-name-hint"} ref={titleRef} name="roomTitle" autoComplete="off" maxLength={100} disabled={isMutating} value={title} onChange={(event) => { setTitle(event.target.value); setError(null); }} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} placeholder="例如：下班后，聊点有趣的" className="live-input" />
+          <input id="room-title" aria-label="房间名称" required aria-invalid={!!error} aria-describedby={error ? "room-name-error" : "room-name-hint"} ref={titleRef} name="roomTitle" autoComplete="off" maxLength={100} disabled={isMutating || roomsQuery.isPending || roomsQuery.isError} value={title} onChange={(event) => { setTitle(event.target.value); setError(null); }} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} placeholder="例如：下班后，聊点有趣的" className="live-input" />
           <p id="room-name-hint" className="live-name-hint">1–100 个字符，不能与已有房间重名</p>
-          <button type="submit" disabled={isMutating} className="live-button live-button-primary live-create-button"><LiveIcon name="plus" size={17} />{isCreating ? '创建中…' : '创建直播间'}</button>
+          <button type="submit" disabled={isMutating || roomsQuery.isPending || roomsQuery.isError} className="live-button live-button-primary live-create-button"><LiveIcon name="plus" size={17} />{isCreating ? '创建中…' : roomsQuery.isPending ? '正在确认房间…' : '创建直播间'}</button>
           <p className="live-create-hint">进入房间后，自行开启摄像头和麦克风。</p>
           {error && <p id="room-name-error" role="alert" className="live-form-error">{error}</p>}
-          {createdRoom && <div className="live-created" role="status"><span><LiveIcon name="check" size={16} />直播间已创建</span><Link href={`/live/${encodeURIComponent(createdRoom.id)}`}>去准备直播<LiveIcon name="arrow" size={15} /></Link></div>}
         </form> : <><Link href="/login" className="live-button live-button-primary live-create-button">登录后创建<LiveIcon name="arrow" size={16} /></Link><p className="live-create-hint">观看直播和发送消息无需登录。</p></>}
         <div className="live-create-footer"><LiveIcon name="chat" size={17} /><p>进入直播间，就能和大家实时聊天。</p></div>
       </aside>

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"companion/server/internal/auth"
 	"companion/server/internal/behavior"
 	"companion/server/internal/config"
 	"companion/server/internal/httpapi"
+	"companion/server/internal/livekit"
 	"companion/server/migrations"
 	"companion/server/pkg/database"
 	"context"
@@ -59,6 +61,13 @@ func run() error {
 		return err
 	}
 	router := httpapi.New(cfg, db, cache, policies)
+	voiceCtx, stopVoice := context.WithCancel(context.Background())
+	voiceDone := make(chan struct{})
+	go func() {
+		defer close(voiceDone)
+		livekit.RunVoiceCleanup(voiceCtx, cfg.LiveKit, auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: cfg.JWTSecret}})
+	}()
+	defer func() { stopVoice(); <-voiceDone }()
 	server := &http.Server{Addr: cfg.Address, Handler: router, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)

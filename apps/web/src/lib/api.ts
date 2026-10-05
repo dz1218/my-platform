@@ -6,6 +6,7 @@ export type ApiRoomItem = {
   title: string;
   status: '直播中' | '准备中';
   viewers: number;
+  canManage: boolean;
 };
 
 export async function fetchRooms() {

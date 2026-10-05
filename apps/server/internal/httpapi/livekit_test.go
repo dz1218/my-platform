@@ -18,7 +18,7 @@ func TestLiveKitRoutesAndCORS(t *testing.T) {
 		req.Header.Set("Access-Control-Request-Method", "DELETE")
 		res := httptest.NewRecorder()
 		router.ServeHTTP(res, req)
-		if res.Code != 204 || !strings.Contains(res.Header().Get("Access-Control-Allow-Methods"), "DELETE") {
+		if res.Code != 204 || !strings.Contains(res.Header().Get("Access-Control-Allow-Methods"), "DELETE") || !strings.Contains(res.Header().Get("Access-Control-Allow-Headers"), "X-Live-Voice-Token") {
 			t.Fatalf("DELETE preflight failed: %d", res.Code)
 		}
 		req = httptest.NewRequest("DELETE", prefix+"/rooms/room-test", nil)
