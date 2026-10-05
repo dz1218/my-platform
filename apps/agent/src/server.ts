@@ -6,6 +6,9 @@ import {
 } from "node:http";
 import { replyInput, type ReplyInput } from "./schemas/plan.js";
 import { replyErrorCode } from "./reply-error.js";
+import { assistantInput, parseAssistantReply, type AssistantInput, type AssistantReply } from "./schemas/assistant.js";
+
+export type AssistantRunner = (input: AssistantInput, signal: AbortSignal) => Promise<AssistantReply>;
 
 export type ReplyRunner = (
   input: ReplyInput,
@@ -21,6 +24,7 @@ export function createAgentServer(
   token: string,
   run: ReplyRunner,
   ready = true,
+  ask?: AssistantRunner,
 ) {
   let active = 0;
   const respond = (res: ServerResponse, status: number, body: unknown) => {
@@ -49,14 +53,15 @@ export function createAgentServer(
       }
       if (
         req.method !== "POST" ||
-        !["/internal/reply", "/internal/agent/generate-plan"].includes(
+        !["/internal/reply", "/internal/agent/generate-plan", "/internal/assistant/chat"].includes(
           req.url ?? "",
         )
       ) {
         respond(res, 404, { error: "not_found" });
         return;
       }
-      if (!ready) {
+      const isAssistant = req.url === "/internal/assistant/chat";
+      if (!ready || (isAssistant && !ask)) {
         respond(res, 503, { error: "model_not_configured" });
         return;
       }
@@ -79,23 +84,38 @@ export function createAgentServer(
         for await (const chunk of req) {
           const buffer = Buffer.from(chunk);
           size += buffer.length;
-          if (size > 65536) {
+          if (size > (isAssistant ? 32768 : 65536)) {
             respond(res, 413, { error: "body_too_large" });
             return;
           }
           chunks.push(buffer);
         }
-        let input: ReplyInput;
+        let raw: unknown;
         try {
-          input = replyInput.parse(
-            JSON.parse(Buffer.concat(chunks).toString("utf8")),
-          );
+          raw = JSON.parse(Buffer.concat(chunks).toString("utf8"));
         } catch {
           respond(res, 400, { error: "invalid_request" });
           return;
         }
+        if (isAssistant && ask) {
+          const parsed = assistantInput.safeParse(raw);
+          if (!parsed.success) {
+            respond(res, 400, { error: "invalid_request" });
+            return;
+          }
+          const reply = await ask(parsed.data, abort.signal);
+          respond(res, 200, parseAssistantReply(reply.content));
+          return;
+        }
+        const parsed = replyInput.safeParse(raw);
+        if (!parsed.success) {
+          respond(res, 400, { error: "invalid_request" });
+          return;
+        }
+        const input: ReplyInput = parsed.data;
         if (req.url === "/internal/agent/generate-plan") {
           const reply = await run(input, abort.signal);
+          logReply(requestId, reply, Date.now() - started);
           respond(res, 200, reply);
           return;
         }
@@ -110,6 +130,7 @@ export function createAgentServer(
           if (!res.destroyed) res.write(": heartbeat\n\n");
         }, 15_000);
         const reply = await run(input, abort.signal);
+        logReply(requestId, reply, Date.now() - started);
         if (!res.destroyed)
           res.end(`event: reply\ndata: ${JSON.stringify(reply)}\n\n`);
       } catch (error) {
@@ -121,7 +142,9 @@ export function createAgentServer(
             res.end(
               `event: error\ndata: ${JSON.stringify({ error: code })}\n\n`,
             );
-        } else respond(res, 502, { error: "generation_failed" });
+        } else respond(res, isAssistant && abort.signal.aborted ? 504 : 502, {
+          error: isAssistant && abort.signal.aborted ? "generation_timeout" : "generation_failed",
+        });
       } finally {
         clearTimeout(timer);
         clearInterval(heartbeat);
@@ -137,4 +160,15 @@ export function createAgentServer(
       }
     },
   );
+}
+
+function logReply(requestId: string, reply: Awaited<ReturnType<ReplyRunner>>, generationMs: number) {
+  console.info(JSON.stringify({
+    event: "agent_plan_generated",
+    requestId,
+    generationMs,
+    promptVersion: reply.promptVersion,
+    bubbleCount: reply.messages?.length ?? 0,
+    characterCount: reply.messages?.reduce((n, m) => n + [...m.content].length, 0) ?? 0,
+  }));
 }

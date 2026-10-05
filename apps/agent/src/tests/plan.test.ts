@@ -2,8 +2,22 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Usage, type Model } from "@openai/agents";
 import { createCompanion } from "../agents/companion.js";
-import { candidatePlan, replyInput } from "../schemas/plan.js";
+import { candidatePlan, replyInput, parseModelPlan } from "../schemas/plan.js";
 const item = { clientItemKey: "1", content: "听到了", delayMs: 0 };
+test("missing advisory timing defaults to zero without repairing invalid content or actions", () => {
+  const raw = { action: "REPLY", intent: "chat", messages: [{ clientItemKey: "1", content: "自然回复" }] };
+  assert.equal(parseModelPlan(JSON.stringify(raw)).messages[0].delayMs, 0);
+  assert.equal("delayMs" in raw.messages[0], false);
+  for (const invalid of [
+    { ...raw, action: "wait" },
+    { ...raw, messages: [] },
+    { ...raw, messages: [{ ...raw.messages[0], content: " " }] },
+    { ...raw, messages: [{ ...raw.messages[0], delayMs: null }] },
+    { ...raw, messages: [{ ...raw.messages[0], delayMs: -1 }] },
+    { ...raw, messages: [raw.messages[0], raw.messages[0]] },
+  ]) assert.throws(() => parseModelPlan(invalid));
+  assert.throws(() => parseModelPlan("   \n"), /Incomplete model response/);
+});
 test("V206/V207: silence, counts, unique keys and budgets", () => {
   for (let n = 0; n <= 3; n++)
     assert.ok(

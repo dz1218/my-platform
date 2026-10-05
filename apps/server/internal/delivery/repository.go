@@ -44,6 +44,14 @@ func (r Repository) SendAs(ctx context.Context, c conversation.Conversation, act
 	if err != nil {
 		return conversation.Message{}, err
 	}
+	// Recheck after locking: inheritance may have changed since Accessible.
+	var accessible bool
+	if err = tx.QueryRow(ctx, `SELECT `+conversation.AccessSQL+` FROM conversations c WHERE c.id=$1`, c.ID, actor).Scan(&accessible); err != nil {
+		return conversation.Message{}, err
+	}
+	if !accessible {
+		return conversation.Message{}, forbidden()
+	}
 	human := actor != c.UserID
 	if human {
 		ok, e := operator(ctx, tx, c.ID, actor)
@@ -80,6 +88,11 @@ func (r Repository) SendAs(ctx context.Context, c conversation.Conversation, act
 			return m, err
 		}
 	} else {
+		return m, err
+	}
+	// Only a newly accepted message consumes its sender's previous typing pulse.
+	// Idempotent send retries returned above must not erase newer input presence.
+	if _, err = tx.Exec(ctx, `DELETE FROM conversation_presence WHERE conversation_id=$1 AND actor_id=$2`, c.ID, actor); err != nil {
 		return m, err
 	}
 	if human {

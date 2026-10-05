@@ -78,7 +78,7 @@ func TestRepositoryIntegration(t *testing.T) {
 	if _, err = db.Exec(ctx, `ALTER TABLE users ALTER COLUMN updated_at DROP DEFAULT`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = (auth.Repository{DB: db}).Create(ctx, "legacy@example.test", "兼容账号", "unused"); err != nil {
+	if _, err = (auth.Repository{DB: db}).Create(ctx, "legacy@example.test", "兼容账号", "unused", "FEMALE"); err != nil {
 		t.Fatalf("legacy registration: %v", err)
 	}
 	r := Repository{DB: db}

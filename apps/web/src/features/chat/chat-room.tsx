@@ -6,11 +6,13 @@ import { getMatch } from "@/services/companion";
 import { useConversation } from "./hooks/use-conversation";
 import { CompanionPreferences } from "./companion-preferences";
 import { AutoReplyPanel } from "./auto-reply-panel";
+import { ChatSettings } from "./chat-settings";
 import { MessageBubble } from "./message-bubble";
 import { MessageComposer } from "./message-composer";
 import type { Match } from "@/types/companion";
+import "./chat-room.css";
 
-export function ChatRoom({ matchId }: { matchId: string }) {
+export function ChatRoom({ matchId, inheritedIdentityId }: { matchId: string; inheritedIdentityId?: string }) {
   const match = useQuery({
     queryKey: ["match", matchId],
     queryFn: () => getMatch(matchId),
@@ -34,6 +36,14 @@ export function ChatRoom({ matchId }: { matchId: string }) {
         </Link>
       </main>
     );
+  if (match.data.identity.id === inheritedIdentityId)
+    return <main id="main-content" tabIndex={-1} className="page-shell page-content">
+      <section className="surface mx-auto max-w-lg p-6">
+        <h1 className="text-xl font-semibold">这是你继承的 AI 身份</h1>
+        <p className="mt-3 text-sm leading-7 text-muted">你已继承{match.data.identity.name}，不能再以本账户和这个身份聊天。你可以以{match.data.identity.name}的身份回复其他用户，或用本账户认识其他 AI 朋友。</p>
+        <div className="mt-5 flex flex-wrap gap-3"><Link href="/operator" className="btn-primary">以{match.data.identity.name}的身份回复</Link><Link href="/companion" className="btn-secondary">以本账户聊天</Link></div>
+      </section>
+    </main>;
   return <Conversation key={match.data.conversationId} match={match.data} />;
 }
 export function Conversation({
@@ -46,6 +56,8 @@ export function Conversation({
   participantName?: string;
 }) {
   const chat = useConversation(match.conversationId);
+  const settingsDialog = useRef<HTMLDialogElement | null>(null);
+  const canManage = !chat.settings.isError && !!chat.settings.data?.canManage;
   const bottom = useRef<HTMLDivElement | null>(null);
   const scroll = useRef<HTMLDivElement | null>(null);
   const nearBottom = useRef(true);
@@ -72,7 +84,7 @@ export function Conversation({
     <main
       id="main-content"
       tabIndex={-1}
-      className="chat-layout"
+      className={`chat-layout${canManage ? " chat-layout-with-settings" : ""}`}
       aria-label={
         operator
           ? `与${participantName ?? "用户"}的对话`
@@ -82,7 +94,7 @@ export function Conversation({
       <header className="flex items-center gap-2.5 border-b border-line bg-panel px-3.5 py-3 sm:py-2.5">
         <Link
           href={operator ? "/operator" : "/companion"}
-          aria-label={operator ? "返回接管列表" : "返回陪伴"}
+          aria-label={operator ? "返回我的 AI 身份" : "返回陪伴"}
           className="grid h-10 w-9 place-items-center rounded-lg text-2xl text-muted hover:bg-brand-50 hover:text-ink"
         >
           ←
@@ -93,7 +105,7 @@ export function Conversation({
         >
           {match.identity.name.slice(-1)}
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-base font-semibold">
             {operator
               ? `与${participantName ?? "用户"}的对话`
@@ -102,9 +114,24 @@ export function Conversation({
           <p className="mt-1 text-xs text-muted">
             {operator
               ? `以${match.identity.name}的身份回复`
-              : "对话可能由 AI 与真人共同参与"}
+              : "当前使用本账户 · 对话可能由 AI 与真人共同参与"}
           </p>
         </div>
+        {canManage && (
+          <button
+            type="button"
+            className="chat-settings-trigger"
+            aria-haspopup="dialog"
+            aria-controls="conversation-settings"
+            onClick={() => settingsDialog.current?.showModal()}
+          >
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M4 7h9m4 0h3M4 17h3m4 0h9" />
+              <circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" />
+            </svg>
+            <span>会话设置</span>
+          </button>
+        )}
       </header>
       <div
         ref={scroll}
@@ -140,7 +167,7 @@ export function Conversation({
         ) : (
           !chat.messages.length && (
             <p className="my-12 text-center text-sm text-slate-500">
-              还没有消息，和{match.identity.name}打个招呼吧。
+              还没有消息，和{operator ? (participantName ?? '对方') : match.identity.name}打个招呼吧。
             </p>
           )
         )}
@@ -190,20 +217,9 @@ export function Conversation({
             {chat.error.message}
           </p>
         )}
-        {chat.settings.data?.canManage && (
-          <AutoReplyPanel
-            id={match.conversationId}
-            settings={chat.settings.data}
-          />
-        )}
         {chat.settings.error && (
           <p role="alert">{chat.settings.error.message}</p>
         )}
-        <CompanionPreferences
-          id={match.conversationId}
-          operator={operator}
-          messages={chat.messages}
-        />
         <MessageComposer
           onTyping={chat.typing}
           matchId={operator ? `operator:${match.conversationId}` : match.id}
@@ -222,6 +238,12 @@ export function Conversation({
           }}
         />
       </footer>
+      {canManage && chat.settings.data && (
+        <ChatSettings dialogRef={settingsDialog} identityName={match.identity.name}>
+          <AutoReplyPanel id={match.conversationId} settings={chat.settings.data} />
+          <CompanionPreferences id={match.conversationId} />
+        </ChatSettings>
+      )}
     </main>
   );
 }

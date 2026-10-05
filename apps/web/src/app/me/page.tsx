@@ -3,6 +3,7 @@ import { PageHeading } from "@/components/page-heading";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions";
+import { Avatar } from '@/features/identity/avatar';
 export default async function MePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
@@ -10,12 +11,12 @@ export default async function MePage() {
     <main id="main-content" tabIndex={-1} className="page-shell page-content">
       <PageHeading
         title="我的"
-        description="管理你的账号，了解这里的互动方式。"
+        description="管理本账户与 AI 身份，选择你想使用的聊天方式。"
       />
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
       <section className="content-panel" aria-labelledby="profile-heading">
         <h2 id="profile-heading" className="panel-heading">
-          个人资料
+          本账户
         </h2>
         <div className="flex items-center gap-4 px-5 py-6">
           <span
@@ -32,6 +33,18 @@ export default async function MePage() {
               {user.email}
             </p>
           </div>
+        </div>
+        <div className="border-t border-line px-5 py-4"><Link href="/companion" className="btn-secondary w-full">以本账户聊天</Link></div>
+        <div className="border-t border-line px-5 py-5">
+          <h2 className="text-sm font-semibold">我的 AI 身份</h2>
+          {user.inheritedIdentity ? <>
+            <div className="mt-4 flex items-center gap-3"><Avatar identity={user.inheritedIdentity} /><p className="font-medium">{user.inheritedIdentity.name}</p></div>
+            <p className="mt-3 text-xs leading-6 text-muted">以这个身份和其他真实用户聊天，设置 AI 托管与主动联系。</p>
+            <Link href="/operator" className="btn-primary mt-4 w-full">以{user.inheritedIdentity.name}的身份回复</Link>
+          </> : <>
+            <p className="mt-3 text-sm leading-6 text-muted">你还没有继承 AI 身份。继承后，仍然可以用本账户与其他 AI 朋友聊天。</p>
+            <Link href="/choose-identity" className="btn-secondary mt-4 w-full">选择 AI 身份</Link>
+          </>}
         </div>
       </section>
       <section className="content-panel" aria-labelledby="account-heading">
@@ -51,10 +64,6 @@ export default async function MePage() {
           <span aria-hidden="true" className="text-slate-400">
             ›
           </span>
-        </Link>
-        <Link href="/operator" className="settings-row border-t border-line hover:bg-brand-50">
-          <div><h3 className="text-sm font-medium">真人接管</h3><p className="mt-1 text-xs text-muted">回复分配给你的会话，管理 AI 托管</p></div>
-          <span aria-hidden="true">›</span>
         </Link>
         <div className="settings-row border-t border-slate-200">
           <p className="text-sm text-slate-600">退出当前账号</p>

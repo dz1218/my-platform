@@ -75,6 +75,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 	api.GET("/novels/:id", nh.Get)
 	api.GET("/novels/:id/chapters/:chapterId", nh.Chapter)
 	api.Use(ah.Require)
+	inheritanceRoutes(api, ids, chat)
 	autopilotRoutes(api, chat)
 	companionV2Routes(api, chat)
 	api.POST("/novels", nh.Write("create"))

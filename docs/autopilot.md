@@ -1,14 +1,21 @@
-# 真人接管与 AI 托管
+# 身份继承与 AI 托管
 
-> 本文记录旧版设计；当前 V2 实现与升级要求见 [Companion V2](companion-v2.md)。
+> 本文说明身份继承与双身份聊天；消息队列、记忆和逐条投递见 [Companion V2](companion-v2.md)。
 
 ## 使用
 
-聊天用户仍在原会话发送消息。获得会话授权的真人通过「我的 → 真人接管」或 `/operator` 打开管理端，点击「接管会话」后可用陪伴身份回复。双方共用消息历史，聊天端统一显示身份名字；管理端显示 AI / 真人来源，服务端保留真实来源与审计。
+注册时选择账户性别，注册成功后进入 `/choose-identity`，可以继承一个可用的 AI 身份，也可以跳过，之后再从「我的」进入选择页。现有账号在继承前补充性别。女性账户只能继承女性 AI，男性账户只能继承男性 AI；当前种子身份均为女性，没有符合条件的身份时可以继续使用本账户。
+
+每个 AI 身份只能被继承一次，每个账户最多继承一个身份。继承记录在数据库中唯一且不可转让；并发选择同一身份时只允许一个请求成功。继承不会创建第二个登录账户，用户可以通过界面在以下两种聊天入口之间切换：
+
+- 本账户 `/companion`：继续与其他 AI 身份聊天，消息来源为 USER。
+- 我的 AI 身份 `/operator`：查看其他用户与继承身份的会话，以该身份回复，消息来源为 HUMAN；账户 ID 只保留在服务端审计中。
+
+继承覆盖这个 AI 身份的现有及未来会话，无需逐个分配。不能用本账户和自己继承的身份聊天；已有的此类历史仍保留，不再作为可发送的普通会话展示。其他用户可以继续与已被继承的 AI 身份聊天。身份继承和当前会话交给 AI 托管是两个状态：结束真人接管只改变回复方式，不释放继承名额。
 
 - AI 运营：默认自动回复，接管后的托管策略暂不生效。
 - 真人接管 + NEVER：不自动回复。
-- 真人接管 + TIMEOUT：最后一条用户消息后等待 15 / 30 / 60 / 180 / 300 / 600 秒。
+- 真人接管 + TIMEOUT：最后一条用户消息后等待 15 / 30 / 60 / 120 / 180 / 300 / 600 秒。
 - 真人接管 + ALWAYS：按服务端 debounce 窗口合并新消息后自动回复，真人仍可插入回复。
 
 真人回复取消当前尚未提交的 AI 任务。已经提交的 AI 消息保留在历史中。
@@ -18,17 +25,9 @@
 
 部署新版 API、worker、Agent 和 web，并执行 `pnpm db:migrate`（API/worker 启动时也会执行迁移）。迁移 `004_autopilot.sql` 为已有会话设置 AI 运营，不改变已有消息或账号；历史来源从既有 sender_type / driver_type 读取。滚动升级前停止旧 worker，避免旧代码绕过新的提交校验。
 
-V1 没有公开的自助授权接口。运维人员通过具有数据库权限的服务器终端分配会话；actor 为执行操作的管理员账号 ID，operator 为已注册的接管账号 ID。此命令本身以服务器访问权限作为管理权限，不对外提供 HTTP 调用。
+新增 `008_identity_inheritance.sql` 为账户和 AI 增加性别、引导完成状态及身份继承关系。现有账户不会被自动认定为某个身份的继承者。`009_retire_conversation_assignments.sql` 将尚未被继承、仍处于旧版真人接管状态的会话恢复为 AI 运营，取消旧候选，并重新安排允许自动互动的未回答轮次；保留既有消息、记忆授权和用户关闭自动互动的选择。新版前端、API 和 worker 应一起发布；本地验证只对独立测试数据库应用迁移。
 
-```bash
-cd apps/server
-# 分配或更换真人；不能将聊天用户设为对方身份的接管人。
-go run ./cmd/takeover -conversation CONVERSATION_ID -operator OPERATOR_USER_ID -actor ADMIN_USER_ID
-# 撤销授权。
-go run ./cmd/takeover -conversation CONVERSATION_ID -revoke -actor ADMIN_USER_ID
-```
-
-命令读取 server/root `.env` 的 DATABASE_URL、BEHAVIOR_CONFIG；不会调用模型。分配/撤销与会话版本推进、任务失效、审计在同一事务完成。关系改变时恢复 AI 运营、接管后的策略重置为 NEVER，并按 AI 策略重新安排尚未回复的用户消息。新接管人需主动接管；旧接管人立即失去发送/设置权限，已建立的 WebSocket 在下次同步时关闭。不要直接修改接管表，避免绕过版本和审计。
+旧版 `conversation_takeovers` 数据可以保留，但不再授予聊天或设置权限，也不会被自动转换成身份继承。原 `cmd/takeover` 不能用于将一个身份分配给他人、转让或撤销继承；用户通过选择页完成继承，通过聊天设置切换当前会话由真人还是 AI 回复。身份归属始终以 `identity_inheritances` 为准。
 
 ## 接口
 
@@ -36,14 +35,18 @@ go run ./cmd/takeover -conversation CONVERSATION_ID -revoke -actor ADMIN_USER_ID
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| GET | /operator/conversations | 当前真人被分配的会话 |
+| GET | /identity-inheritance | 当前性别、引导状态、已继承身份和候选身份可用性 |
+| POST | /identity-inheritance | `{ "identityId": "..." }`，确认继承；唯一性和性别由服务端校验 |
+| POST | /identity-inheritance/skip | 完成引导，保留以后选择的机会 |
+| POST | /identity-inheritance/gender | `{ "gender": "FEMALE" }` 或 `MALE`，仅继承前可设置 |
+| GET | /operator/conversations | 继承身份与其他用户的会话 |
 | GET | /conversations/:id/auto-reply | 当前设置、版本及 canManage |
 | PATCH | /conversations/:id/auto-reply | `{ "mode": "TIMEOUT", "delaySeconds": 60 }` |
 | POST | /conversations/:id/takeover | `{ "ownerType": "HUMAN" }` 接管，`AI` 结束接管 |
 | POST | /conversations/:id/messages | `{ "content": "...", "requestId": "..." }`，来源由服务端确定 |
 | GET | /conversations/:id/messages | 双方共用的历史与 source |
 
-设置/接管只允许被分配的真人修改。已分配但尚未接管时可以查看历史和预设策略，不能以真人身份发送。普通聊天用户不能给自己授予接管权限。
+设置/接管权限由服务端依据身份继承关系确认，不能依据页面路径、客户端传入身份或会话 ownerType 判断。普通聊天用户不能修改对方的身份设置。继承者将某个会话交还 AI 后仍保留身份，可以再次接管；处于 AI 运营状态时不能直接以真人身份发送。
 
 WebSocket 保留 `accepted`、`history` 快照，并增加 `message.created` 和 `auto_reply.settings_updated`。Go 每秒扫描已提交状态，消息表作为可恢复的事件来源；没有在提交前推送。在线事件按消息 ID 分批追赶，不受最新 50 条历史窗口限制。重连初始化最新历史，更早的记录由历史接口翻页恢复。V1 仍为数据库扫描推送，未引入 Redis 发布订阅。
 

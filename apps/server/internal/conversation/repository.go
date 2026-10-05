@@ -32,9 +32,15 @@ type Page struct {
 }
 type Repository struct{ DB *pgxpool.Pool }
 
+// ManageSQL and AccessSQL expect a conversations alias c and actor parameter $2.
+// Only permanent identity inheritance grants management access. Legacy
+// conversation_takeovers rows remain historical data and confer no permission.
+const ManageSQL = `(c.user_id<>$2 AND EXISTS(SELECT 1 FROM identity_inheritances h WHERE h.identity_id=c.identity_id AND h.user_id=$2))`
+const AccessSQL = `((c.user_id=$2 AND NOT EXISTS(SELECT 1 FROM identity_inheritances h WHERE h.identity_id=c.identity_id AND h.user_id=$2)) OR ` + ManageSQL + `)`
+
 func (r Repository) Accessible(ctx context.Context, userID, id string) (Conversation, error) {
 	var c Conversation
-	err := r.DB.QueryRow(ctx, `SELECT id,user_id,identity_id FROM conversations WHERE id=$1 AND (user_id=$2 OR EXISTS(SELECT 1 FROM conversation_takeovers t WHERE t.conversation_id=conversations.id AND t.operator_id=$2))`, id, userID).Scan(&c.ID, &c.UserID, &c.IdentityID)
+	err := r.DB.QueryRow(ctx, `SELECT c.id,c.user_id,c.identity_id FROM conversations c WHERE c.id=$1 AND `+AccessSQL, id, userID).Scan(&c.ID, &c.UserID, &c.IdentityID)
 	return c, err
 }
 

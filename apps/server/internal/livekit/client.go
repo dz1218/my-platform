@@ -65,8 +65,9 @@ func (c *Client) token(identity, name string, grant map[string]any, ttl time.Dur
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(c.config.APISecret))
 }
 
+// All room participants can chat; audio/video publishing remains host-only.
 func (c *Client) JoinToken(room, identity, name string, canPublish bool) (string, error) {
-	return c.token(identity, name, map[string]any{"roomJoin": true, "room": room, "canPublish": canPublish, "canSubscribe": true, "canPublishData": canPublish}, 2*time.Hour)
+	return c.token(identity, name, map[string]any{"roomJoin": true, "room": room, "canPublish": canPublish, "canSubscribe": true, "canPublishData": true}, 2*time.Hour)
 }
 
 func (c *Client) call(ctx context.Context, service, method string, grant map[string]any, input, output any) error {

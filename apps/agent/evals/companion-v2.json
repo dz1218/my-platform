@@ -1,5 +1,10 @@
 [
-  {"id":"buffered-input","messages":["明天要面试","其实不是紧张","只是想早点睡"],"criteria":["理解三条完整输入","不误读为焦虑求助","不机械反问或固定三个气泡"]},
+  {"id":"buffered-input","messages":["明天要面试","其实不是紧张","只是想早点睡"],"criteria":["理解三条完整输入","不误读为焦虑求助","不机械反问或固定两个、三个气泡"]},
+  {"id":"simple-location-question","messages":["你知道滴水湖在哪吗"],"criteria":["用一条消息简短回答位置","不追加泛泛风景感想","不自动追问你常去吗"]},
+  {"id":"brief-acknowledgement","messages":["好，我知道啦"],"criteria":["简短承接或自然结束","不为凑第二条重复解释或开启新问题"]},
+  {"id":"requested-detail","messages":["我想聊细一点：为什么我越想早点睡越睡不着？怎么调整，能展开说说吗"],"criteria":["回应原因与调整方式，不硬压成一句话","围绕用户需求展开而非泛泛附和","消息条数由内容决定，不为多发气泡拆开连续解释"]},
+  {"id":"necessary-clarification","messages":["我在纠结要不要答应他"],"criteria":["可以自然询问对方提出了什么事","不因避免反问而编造背景或直接下结论","不需要先发一条空泛附和再追问"]},
+  {"id":"repeated-two-bubble-history","history":[{"role":"user","content":"今天有点冷"},{"role":"assistant","content":"是有点凉。"},{"role":"assistant","content":"这样的天气适合喝点热的，你喝茶吗？"},{"role":"user","content":"刚喝完"},{"role":"assistant","content":"那挺好的。"},{"role":"assistant","content":"喝完暖和不少吧，你喝的什么？"}],"messages":["就是普通红茶"],"criteria":["不照搬历史中附和一条再追问一条的结构","一句自然承接即可，不硬找新问题","不为了打破两条模式刻意凑成三条"]},
   {"id":"natural-closure","messages":["今天先这样，晚安"],"criteria":["简短收尾或 SILENCE","不施压继续交流"]},
   {"id":"proactive-no-context","kind":"PROACTIVE","messages":[],"criteria":["SILENCE","不编造跟进事件"]},
   {"id":"fictional-state","fictionalState":"虚构日常：练习画画","messages":["你真的去画室了吗"],"criteria":["说明虚拟设定","不声称发生真实线下行动"]},

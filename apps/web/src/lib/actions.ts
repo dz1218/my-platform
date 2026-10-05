@@ -4,20 +4,28 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { novelRequest } from '@/services/novels';
 import { serverFetch, sessionCookie } from '@/services/api/server';
+import type { User } from '@/types/companion';
 
-async function authenticate(kind: 'register' | 'login', formData: FormData) {
+export type AuthFormState = { error?: string };
+
+async function authenticate(kind: 'register' | 'login', formData: FormData): Promise<AuthFormState> {
   const password = String(formData.get('password') ?? '');
-  if (kind === 'register' && password !== formData.get('confirm')) redirect('/register?error=mismatch');
+  if (kind === 'register' && password !== formData.get('confirm')) return { error: 'mismatch' };
+  const gender = String(formData.get('gender') ?? '');
+  if (kind === 'register' && gender !== 'FEMALE' && gender !== 'MALE') return { error: 'gender_required' };
   let failure = '';
+  let destination = kind === 'register' ? '/choose-identity' : '/companion';
   try {
     const result = await serverFetch(`/auth/${kind}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: String(formData.get('email') ?? ''), name: String(formData.get('name') ?? ''), password, consent: formData.get('consent') === 'on' }),
+      body: JSON.stringify({ email: String(formData.get('email') ?? ''), name: String(formData.get('name') ?? ''), password, consent: formData.get('consent') === 'on', ...(kind === 'register' ? { gender } : {}) }),
     });
     if (!result.ok) {
       const body = await result.json();
       failure = body.error?.code ?? 'invalid';
     } else {
+      const { user } = await result.json() as { user: User };
+      if (user.onboardingCompleted === false) destination = '/choose-identity';
       const cookie = result.headers.get('set-cookie');
       const token = cookie?.match(/companion_session=([^;]+)/)?.[1];
       if (!token) throw new Error('Missing session');
@@ -27,11 +35,11 @@ async function authenticate(kind: 'register' | 'login', formData: FormData) {
       store.delete('mp_nickname');
     }
   } catch { failure = 'unavailable'; }
-  if (failure) redirect(`/${kind}?error=${encodeURIComponent(failure)}`);
-  redirect('/companion');
+  if (failure) return { error: failure };
+  redirect(destination);
 }
-export async function registerAction(formData: FormData) { return authenticate('register', formData); }
-export async function loginAction(formData: FormData) { return authenticate('login', formData); }
+export async function registerAction(_state: AuthFormState, formData: FormData) { return authenticate('register', formData); }
+export async function loginAction(_state: AuthFormState, formData: FormData) { return authenticate('login', formData); }
 export async function logoutAction() {
   const store = await cookies();
   store.delete(sessionCookie); store.delete('mp_auth'); store.delete('mp_nickname');

@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"companion/server/internal/behavior"
+	"companion/server/internal/conversation"
 	"companion/server/pkg/database"
 	"companion/server/pkg/response"
 	"context"
@@ -46,7 +47,10 @@ func QuietHours(now time.Time, zone string, start, end int) bool {
 }
 func (r Repository) Preferences(ctx context.Context, id, actor string) (Preferences, error) {
 	p := defaultPreferences()
-	err := r.DB.QueryRow(ctx, `SELECT automation_enabled,memory_opt_in FROM conversations WHERE id=$1 AND (user_id=$2 OR EXISTS(SELECT 1 FROM conversation_takeovers WHERE conversation_id=$1 AND operator_id=$2))`, id, actor).Scan(&p.AutomationEnabled, &p.MemoryOptIn)
+	err := r.DB.QueryRow(ctx, `SELECT automation_enabled,memory_opt_in FROM conversations c WHERE id=$1 AND `+conversation.ManageSQL, id, actor).Scan(&p.AutomationEnabled, &p.MemoryOptIn)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return p, forbidden()
+	}
 	if err != nil {
 		return p, err
 	}
@@ -68,19 +72,13 @@ func (r Repository) SavePreferences(ctx context.Context, id, actor string, p Pre
 	if _, err = lockConversation(ctx, tx, id); err != nil {
 		return err
 	}
-	var user string
-	if err = tx.QueryRow(ctx, `SELECT user_id FROM conversations WHERE id=$1`, id).Scan(&user); err != nil {
+	// Both settings endpoints require the current assignment, checked while the
+	// conversation is locked so reassignment cannot race a settings write.
+	ok, err := operator(ctx, tx, id, actor)
+	if err != nil {
 		return err
 	}
-	if manager {
-		ok, e := operator(ctx, tx, id, actor)
-		if e != nil {
-			return e
-		}
-		if !ok {
-			return forbidden()
-		}
-	} else if actor != user {
+	if !ok {
 		return forbidden()
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO proactive_preferences(conversation_id) VALUES($1) ON CONFLICT DO NOTHING`, id); err != nil {

@@ -1,6 +1,7 @@
 {
-  "version": "agent-actions-v3",
+  "version": "agent-actions-v4",
   "default": {
+    "replyPacing": "typing",
     "debounceSeconds": 1,
     "maxBufferSeconds": 8,
     "maxAttempts": 3,

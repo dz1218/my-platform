@@ -6,7 +6,9 @@ import (
 	"context"
 	"errors"
 	"github.com/jackc/pgx/v5"
+	"log/slog"
 	"time"
+	"unicode/utf8"
 )
 
 // SchedulePlan persists drafts only after validating the generating lease and snapshot.
@@ -62,6 +64,21 @@ func (r Repository) SchedulePlan(ctx context.Context, j Job, plan provider.Reply
 		}
 		return tx.Commit(ctx)
 	}
+	if j.Policy.ReplyPacing == "typing" {
+		userChars, lastUserAt := 0, due
+		if jobKind(j) == "TURN_REPLY" {
+			// Include only this buffered turn, also excluding turns answered silently.
+			// The final lease check above prevents a superseded turn using this data.
+			err = tx.QueryRow(ctx, `SELECT COALESCE(sum(length(content)),0),max(created_at) FROM messages
+ WHERE conversation_id=$1 AND sender_type='user' AND id<=$2::bigint
+ AND created_at>=COALESCE((SELECT buffer_started_at FROM conversations WHERE id=$1),'-infinity'::timestamptz)
+ AND id>COALESCE((SELECT max(id) FROM messages WHERE conversation_id=$1 AND sender_type='identity' AND id<$2::bigint),0)`, j.Conversation.ID, j.TriggerID).Scan(&userChars, &lastUserAt)
+			if err != nil {
+				return err
+			}
+		}
+		plan.Messages = typingPacedItems(plan.Messages, userChars, lastUserAt, due)
+	}
 	batch := database.ID()
 	_, err = tx.Exec(ctx, `INSERT INTO reply_batches(id,conversation_id,job_version,turn_id,turn_version,settings_version,status,prompt_version,kind,opportunity_id) VALUES($1,$2,$3,$4,$5,$6,'PENDING',$7,$8,$9)`, batch, j.Conversation.ID, j.Version, turnID, turnVersion, version, plan.PromptVersion, jobKind(j), j.OpportunityID)
 	if err != nil {
@@ -78,7 +95,17 @@ func (r Repository) SchedulePlan(ctx context.Context, j Job, plan provider.Reply
 	if err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if err = tx.Commit(ctx); err != nil {
+		return err
+	}
+	chars, delay := 0, 0
+	for _, m := range plan.Messages {
+		chars += utf8.RuneCountInString(m.Content)
+		delay += m.DelayMs
+	}
+	slog.Info("reply planned", "promptVersion", plan.PromptVersion, "policyVersion", j.Policy.Version,
+		"bubbleCount", len(plan.Messages), "characterCount", chars, "pacingDelayMs", delay)
+	return nil
 }
 func cancelAndCommit(ctx context.Context, tx pgx.Tx, id string) error {
 	if err := cancelJobs(ctx, tx, id); err != nil {
@@ -91,7 +118,7 @@ func cancelAndCommit(ctx context.Context, tx pgx.Tx, id string) error {
 // locking orders user/human/configuration changes against this final gate.
 func (r Repository) Deliver(ctx context.Context) (bool, error) {
 	var id string
-	err := r.DB.QueryRow(ctx, `SELECT conversation_id FROM reply_jobs WHERE status='scheduled' AND due_at<=now() ORDER BY due_at LIMIT 1`).Scan(&id)
+	err := r.DB.QueryRow(ctx, `SELECT conversation_id FROM reply_jobs WHERE status='scheduled' AND due_at<=clock_timestamp() ORDER BY due_at LIMIT 1`).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -108,7 +135,7 @@ func (r Repository) Deliver(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	var version, sv, tv int64
-	err = tx.QueryRow(ctx, `SELECT version,settings_version,turn_version FROM reply_jobs WHERE conversation_id=$1 AND status='scheduled' AND due_at<=now() FOR UPDATE`, id).Scan(&version, &sv, &tv)
+	err = tx.QueryRow(ctx, `SELECT version,settings_version,turn_version FROM reply_jobs WHERE conversation_id=$1 AND status='scheduled' AND due_at<=clock_timestamp() FOR UPDATE`, id).Scan(&version, &sv, &tv)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -118,11 +145,12 @@ func (r Repository) Deliver(ctx context.Context) (bool, error) {
 	if !s.AutomationEnabled || s.Version != sv || s.TurnVersion != tv || (s.OwnerType == "HUMAN" && s.Mode == "NEVER") {
 		return false, cancelAndCommit(ctx, tx, id)
 	}
-	var batch, item, content, kind string
+	var batch, item, content, kind, promptVersion string
+	var itemDue time.Time
 	var opportunity *string
 	var index int
-	err = tx.QueryRow(ctx, `SELECT b.id,i.id,i.content,i.item_index,b.kind,b.opportunity_id FROM reply_batches b JOIN reply_items i ON i.batch_id=b.id AND i.item_index=b.next_item_index
- WHERE b.conversation_id=$1 AND b.job_version=$2 AND b.status='PENDING' AND i.status='PENDING' FOR UPDATE OF b,i`, id, version).Scan(&batch, &item, &content, &index, &kind, &opportunity)
+	err = tx.QueryRow(ctx, `SELECT b.id,i.id,i.content,i.item_index,b.kind,b.opportunity_id,b.prompt_version,i.due_at FROM reply_batches b JOIN reply_items i ON i.batch_id=b.id AND i.item_index=b.next_item_index
+ WHERE b.conversation_id=$1 AND b.job_version=$2 AND b.status='PENDING' AND i.status='PENDING' FOR UPDATE OF b,i`, id, version).Scan(&batch, &item, &content, &index, &kind, &opportunity, &promptVersion, &itemDue)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -148,6 +176,12 @@ func (r Repository) Deliver(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	if _, err = tx.Exec(ctx, `UPDATE reply_items SET status='COMMITTED',committed_message_id=$2::bigint WHERE id=$1`, item, message); err != nil {
+		return false, err
+	}
+	// Rebase all remaining dates together so their original relative gaps survive
+	// a late worker or restart. clock_timestamp avoids a transaction's stale now().
+	if _, err = tx.Exec(ctx, `WITH timing AS MATERIALIZED (SELECT GREATEST(interval '0',clock_timestamp()-$2::timestamptz) AS lateness)
+ UPDATE reply_items SET due_at=due_at+timing.lateness FROM timing WHERE batch_id=$1 AND status='PENDING'`, batch, itemDue); err != nil {
 		return false, err
 	}
 	if opportunity != nil {
@@ -180,7 +214,12 @@ func (r Repository) Deliver(ctx context.Context) (bool, error) {
 	if _, err = tx.Exec(ctx, `UPDATE matches SET status='talking',updated_at=now() WHERE id=(SELECT match_id FROM conversations WHERE id=$1) AND status='matched'`, id); err != nil {
 		return false, err
 	}
-	return true, tx.Commit(ctx)
+	if err = tx.Commit(ctx); err != nil {
+		return false, err
+	}
+	slog.Info("reply item delivered", "promptVersion", promptVersion, "itemIndex", index,
+		"characterCount", utf8.RuneCountInString(content), "deliveryLagMs", max(int64(0), time.Since(itemDue).Milliseconds()))
+	return true, nil
 }
 
 func jobKind(j Job) string {

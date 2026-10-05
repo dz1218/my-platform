@@ -32,7 +32,7 @@ func autopilotTest(t *testing.T) *autopilotFixture {
 	t.Helper()
 	db := testDB(t)
 	ctx := context.Background()
-	_, err := db.Exec(ctx, `INSERT INTO users(id,email,password_hash,name) VALUES('operator','operator@example.test','unused','Operator'),('stranger','stranger@example.test','unused','Stranger'); INSERT INTO conversation_takeovers(conversation_id,operator_id) VALUES('c','operator')`)
+	_, err := db.Exec(ctx, `INSERT INTO users(id,email,password_hash,name,gender) VALUES('operator','operator@example.test','unused','Operator','FEMALE'),('stranger','stranger@example.test','unused','Stranger','FEMALE'); INSERT INTO identity_inheritances(identity_id,user_id) VALUES('identity_linwan','operator')`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,46 +393,46 @@ func TestWorkerDiscardsReplyWhenHumanSendsDuringModelCall(t *testing.T) {
 	f.noDelivery()
 }
 
-func TestAssignmentChangesRevokeAccessAndInvalidateDrafts(t *testing.T) {
+func TestLegacyAssignmentCannotTransferInheritedIdentity(t *testing.T) {
 	f := autopilotTest(t)
 	f.configure("ALWAYS")
 	f.send("u")
-	old := f.claim()
-	if err := f.repo.AssignOperator(f.ctx, "c", "u", "operator", f.service.Policies); err == nil {
-		t.Fatal("user assigned own counterpart")
+	job := f.claim()
+	for _, operatorID := range []string{"u", "stranger", ""} {
+		if err := f.repo.AssignOperator(f.ctx, "c", operatorID, "operator", f.service.Policies); err == nil {
+			t.Fatal("legacy assignment transferred or revoked inherited identity", operatorID)
+		}
 	}
-	if err := f.repo.AssignOperator(f.ctx, "c", "stranger", "operator", f.service.Policies); err != nil {
+	if _, err := f.db.Exec(f.ctx, `INSERT INTO conversation_takeovers(conversation_id,operator_id) VALUES('c','stranger')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.service.Messages.Accessible(f.ctx, "operator", "c"); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatal("old operator retained read access", err)
+	if _, err := f.service.Messages.Accessible(f.ctx, "stranger", "c"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatal("legacy operator gained read access", err)
 	}
-	if _, err := f.service.Send(f.ctx, "operator", "c", "request-revoked", "hello"); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatal("revoked operator sent", err)
+	if _, err := f.service.Send(f.ctx, "stranger", "c", "request-legacy", "hello"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatal("legacy operator sent as inherited identity", err)
 	}
-	f.schedule(old)
-	f.noDelivery()
 	items, err := f.repo.Assignments(f.ctx, "stranger")
+	if err != nil || len(items) != 0 {
+		t.Fatal("legacy operator received inherited conversations", items, err)
+	}
+	items, err = f.repo.Assignments(f.ctx, "operator")
 	if err != nil || len(items) != 1 || items[0].ParticipantName != "User" {
-		t.Fatal(items, err)
+		t.Fatal("inheritor lost conversation", items, err)
 	}
-	s, err := f.repo.Settings(f.ctx, "c", "stranger")
-	if err != nil || s.OwnerType != "AI" || s.Mode != "NEVER" || !s.CanManage {
-		t.Fatal(s, err)
+	s, err := f.repo.Settings(f.ctx, "c", "operator")
+	if err != nil || s.OwnerType != "HUMAN" || s.Mode != "ALWAYS" || !s.CanManage {
+		t.Fatal("rejected assignment changed ownership or policy", s, err)
 	}
-	// Restored AI ownership recovers the unanswered user turn.
-	f.schedule(f.claim())
+	if current, err := f.repo.Current(f.ctx, job); err != nil || !current {
+		t.Fatal("rejected assignment invalidated the active job", err)
+	}
+	f.schedule(job)
 	if ok, err := f.repo.Deliver(f.ctx); !ok || err != nil {
 		t.Fatal(ok, err)
 	}
-	if err = f.repo.AssignOperator(f.ctx, "c", "", "operator", f.service.Policies); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = f.service.Messages.Accessible(f.ctx, "stranger", "c"); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatal("revocation failed", err)
-	}
-	f.noClaim()
 }
+
 func TestMessageEventsCatchUpBeyondHistoryWindow(t *testing.T) {
 	f := autopilotTest(t)
 	f.configure("NEVER")

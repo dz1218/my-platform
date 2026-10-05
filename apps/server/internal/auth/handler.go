@@ -16,6 +16,7 @@ type credentials struct {
 	Name     string `json:"name"`
 	Password string `json:"password"`
 	Consent  bool   `json:"consent"`
+	Gender   string `json:"gender"`
 }
 
 func (h Handler) Register(c *gin.Context) {
@@ -24,7 +25,7 @@ func (h Handler) Register(c *gin.Context) {
 		response.Fail(c, response.BadRequest("请求格式不正确"))
 		return
 	}
-	u, err := h.Service.Register(c.Request.Context(), b.Email, b.Name, b.Password, b.Consent)
+	u, err := h.Service.Register(c.Request.Context(), b.Email, b.Name, b.Password, b.Consent, b.Gender)
 	h.session(c, u, err, 201)
 }
 func (h Handler) Login(c *gin.Context) {

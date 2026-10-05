@@ -76,3 +76,20 @@ export const candidatePlan = planOutput
       });
   });
 export type CandidatePlan = z.infer<typeof candidatePlan>;
+
+// The server owns timing. JSON-mode providers occasionally omit the advisory
+// delay; fill only this harmless default before the unchanged strict validator.
+// Never repair actions, content, duplicate keys, budgets or explicit bad values.
+export function parseModelPlan(raw: unknown): CandidatePlan {
+  if (typeof raw === "string") {
+    if (!raw.trim()) throw new Error("Incomplete model response");
+    raw = JSON.parse(raw);
+  }
+  if (raw && typeof raw === "object" && "messages" in raw && Array.isArray(raw.messages)) {
+    raw = { ...raw, messages: raw.messages.map((item: unknown) => {
+      if (item && typeof item === "object" && !("delayMs" in item)) return { ...item, delayMs: 0 };
+      return item;
+    }) };
+  }
+  return candidatePlan.parse(raw);
+}

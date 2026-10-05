@@ -97,7 +97,14 @@
   .surface { @apply border; border-radius: var(--radius-panel); border-color: var(--color-line); background: var(--color-surface); }
   .surface-soft { @apply rounded-lg border border-slate-200 bg-white; }
   .link-muted { @apply text-sm text-slate-600 underline-offset-4 hover:text-brand-600 hover:underline; }
-  .input-field { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base sm:text-sm text-ink placeholder:text-slate-500 focus:border-brand-500 focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-brand-500; }
+  .input-field { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base sm:text-sm text-ink placeholder:text-slate-500 transition-colors focus:border-brand-500 focus:outline-none; }
+  .select-trigger { @apply flex items-center justify-between gap-3 text-left; }
+  .select-trigger[aria-expanded="true"] { @apply border-brand-500; }
+  .select-trigger[aria-invalid="true"] { @apply border-rose-600; }
+  .select-menu { @apply absolute inset-x-0 z-30 rounded-lg border border-line bg-white p-1 text-base text-ink sm:text-sm; box-shadow: 0 6px 18px rgb(36 52 59 / 10%); }
+  .select-option { @apply flex min-h-10 cursor-pointer items-center justify-between rounded-md px-2 py-2; }
+  .select-option[data-active="true"] { @apply bg-brand-50; }
+  .select-option[aria-selected="true"] { @apply font-medium text-brand-600; }
   .btn-primary { @apply btn-solid border border-brand-500 bg-brand-500 text-white hover:border-brand-600 hover:bg-brand-600; }
   .btn-success { @apply btn-solid bg-success-500 text-white hover:bg-emerald-800; }
   .btn-secondary { @apply btn-solid border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50; }

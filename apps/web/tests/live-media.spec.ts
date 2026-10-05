@@ -30,7 +30,7 @@ async function join(page: Page, roomId: string, host: boolean) {
     const identity = `${host ? 'host' : 'viewer'}_e2e_${++attempt}`;
     return route.fulfill({ status: 201, json: {
       roomId, identity, livekitUrl: livekitUrl.replace(/^http/, 'ws'),
-      token: token({ roomJoin: true, room: roomId, canPublish: host, canSubscribe: true, canPublishData: host }, identity),
+      token: token({ roomJoin: true, room: roomId, canPublish: host, canSubscribe: true, canPublishData: true }, identity),
     } });
   });
   await page.goto(`/live/${roomId}`);
@@ -41,7 +41,7 @@ async function join(page: Page, roomId: string, host: boolean) {
 
 test('real host/viewer media, permissions, rejoin and navigation cleanup', async ({ page, context, browser }) => {
   test.skip(process.env.LIVEKIT_INTEGRATION !== '1', 'Requires local LiveKit');
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   const roomId = `live-e2e-${randomUUID()}`;
   await rpc('CreateRoom', { name: roomId, emptyTimeout: 30 }, { roomCreate: true });
   const guestContext = await browser.newContext({ baseURL: 'http://127.0.0.1:3012' });
@@ -52,7 +52,40 @@ test('real host/viewer media, permissions, rejoin and navigation cleanup', async
     await join(guest, roomId, false);
     await expect(guest.getByRole('button', { name: '呼叫 AI 助手' })).toHaveCount(0);
     await expect(guest.getByText('本地预览', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '在线 2' })).toBeVisible();
+
+    // Both roles may send data, while the viewer remains unable to publish media.
+    const guestInput = guest.getByRole('textbox', { name: '发送消息' });
+    await expect(guest.getByRole('button', { name: '发送', exact: true })).toBeDisabled();
+    await guestInput.fill('大家晚上好 <script>这只是文字</script>');
+    await guestInput.dispatchEvent('keydown', { key: 'Enter', isComposing: true, keyCode: 229 });
+    await expect(page.getByRole('log')).not.toContainText('大家晚上好');
+    await guestInput.press('Enter');
+    await expect(page.getByRole('log')).toContainText('大家晚上好 <script>这只是文字</script>');
+    await expect(guest.getByRole('log')).toContainText('大家晚上好');
+    await expect(guestInput).toHaveValue('');
+    await page.getByRole('textbox', { name: '发送消息' }).fill('欢迎来到直播间');
+    await page.getByRole('button', { name: '发送', exact: true }).click();
+    await expect(guest.getByRole('log')).toContainText('欢迎来到直播间');
+    await guestInput.fill('   ');
+    await expect(guest.getByRole('button', { name: '发送', exact: true })).toBeDisabled();
+    await guestInput.fill('');
+    await page.getByRole('button', { name: '在线 2' }).click();
     await expect(page.getByRole('heading', { name: '参与者 · 2' })).toBeVisible();
+    await page.getByRole('button', { name: '聊天', exact: true }).click();
+    await expect(page.getByRole('log')).toContainText('大家晚上好');
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 980 });
+      await page.screenshot({ path: test.info().outputPath(`room-${width}.png`), fullPage: width > 500 });
+      const overflow = await page.evaluate(() => Array.from(document.querySelectorAll('main *')).filter((element) => element.getBoundingClientRect().right > window.innerWidth + 1).map((element) => element.className));
+      expect(overflow).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      if (width < 500) {
+        await page.getByRole('textbox', { name: '发送消息' }).scrollIntoViewIfNeeded();
+        await page.screenshot({ path: test.info().outputPath('room-mobile-chat.png') });
+        await page.evaluate(() => window.scrollTo(0, 0));
+      }
+    }
 
     await page.getByRole('button', { name: '开启摄像头' }).click();
     await expect(page.locator('video')).toHaveCount(1);
@@ -78,12 +111,12 @@ test('real host/viewer media, permissions, rejoin and navigation cleanup', async
 
     await page.getByRole('button', { name: '离开房间' }).click();
     await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
-    await expect(guest.getByRole('heading', { name: '参与者 · 1' })).toBeVisible();
+    await expect(guest.getByRole('button', { name: '在线 1' })).toBeVisible();
     await page.getByRole('button', { name: '重新加入', exact: true }).click();
     await expect(page.getByText('已连接', { exact: true })).toBeVisible();
-    await expect(guest.getByRole('heading', { name: '参与者 · 2' })).toBeVisible();
+    await expect(guest.getByRole('button', { name: '在线 2' })).toBeVisible();
     await page.getByRole('link', { name: '直播大厅' }).click();
-    await expect(guest.getByRole('heading', { name: '参与者 · 1' })).toBeVisible();
+    await expect(guest.getByRole('button', { name: '在线 1' })).toBeVisible();
     const participants = await rpc('ListParticipants', { room: roomId }, { roomAdmin: true, room: roomId });
     expect(participants.participants).toHaveLength(1);
     // Returning through the lobby must also connect without a second button.
@@ -93,14 +126,14 @@ test('real host/viewer media, permissions, rejoin and navigation cleanup', async
     await page.getByRole('button', { name: '刷新列表' }).click();
     await page.getByRole('link', { name: '进入直播间', exact: true }).click();
     await expect(page.getByText('已连接', { exact: true })).toBeVisible();
-    await expect(guest.getByRole('heading', { name: '参与者 · 2' })).toBeVisible();
+    await expect(guest.getByRole('button', { name: '在线 2' })).toBeVisible();
     expect(hostJoinAttempts()).toBe(3);
 
     // Refreshing an active room must restore the connected view automatically.
     await page.reload();
     await expect(page.getByText('已连接', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /^(开始直播|开启直播|重新加入)$/ })).toHaveCount(0);
-    await expect(guest.getByRole('heading', { name: '参与者 · 2' })).toBeVisible();
+    await expect(guest.getByRole('button', { name: '在线 2' })).toBeVisible();
     expect(hostJoinAttempts()).toBe(4);
     const afterReload = await rpc('ListParticipants', { room: roomId }, { roomAdmin: true, room: roomId });
     expect(afterReload.participants).toHaveLength(2);

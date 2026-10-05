@@ -5,6 +5,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+function matchesRequestOrigin(request: NextRequest, origin: string) {
+  // NextURL normalizes loopback addresses to localhost. Use the actual Host
+  // header so same-origin requests work without allowing different hosts.
+  const host = request.headers.get("host") ?? request.nextUrl.host;
+  try {
+    return origin === new URL(`${request.nextUrl.protocol}//${host}`).origin;
+  } catch {
+    return false;
+  }
+}
+
 async function proxy(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
@@ -12,7 +23,7 @@ async function proxy(
   const { path } = await context.params;
   // Only same-origin browser mutations; do not forward arbitrary incoming headers.
   const origin = request.headers.get("origin");
-  if (request.method !== "GET" && origin && origin !== request.nextUrl.origin) {
+  if (request.method !== "GET" && origin && !matchesRequestOrigin(request, origin)) {
     return Response.json(
       { error: { message: "请求来源不允许" } },
       { status: 403 },

@@ -8,6 +8,7 @@ import (
 )
 
 type Policy struct {
+	ReplyPacing      string `json:"replyPacing,omitempty"`
 	MaxBufferSeconds int    `json:"maxBufferSeconds"`
 	Version          string `json:"version"`
 	DebounceSeconds  int    `json:"debounceSeconds"`
@@ -51,6 +52,9 @@ func Load(path string) (Catalog, error) {
 	return c, nil
 }
 func (p Policy) Validate() error {
+	if p.ReplyPacing != "" && p.ReplyPacing != "typing" {
+		return fmt.Errorf("invalid reply pacing")
+	}
 	if p.BufferSeconds() < p.DebounceSeconds || p.BufferSeconds() > 60 || p.Version == "" || p.DebounceSeconds < 1 || p.DebounceSeconds > 60 || p.MaxWaitSeconds < 1 || p.MaxWaitSeconds > 30 || p.MaxAttempts < 1 || p.MaxAttempts > 5 || p.RetrySeconds < 1 || p.RetrySeconds > 300 {
 		return fmt.Errorf("invalid behavior policy")
 	}

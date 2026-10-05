@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
+import type { User } from '@/types/companion';
 
 const links = [
   { label: '陪伴', href: '/companion', icon: 'M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z' },
@@ -11,13 +12,13 @@ const links = [
   { label: '我的', href: '/me', icon: 'M20 21v-2a7 7 0 0 0-14 0v2 M17 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z' },
 ];
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, user }: { children: ReactNode; user: User | null }) {
   const path = usePathname();
   if (path === '/login' || path === '/register') return children;
-  return <div className="app-shell"><MainNav /><div className="app-content">{children}</div></div>;
+  return <div className="app-shell"><MainNav user={user} /><div className="app-content">{children}</div></div>;
 }
 
-export function MainNav() {
+export function MainNav({ user }: { user: User | null }) {
   const path = usePathname();
   return <header className="site-nav">
     <Link href="/companion" aria-label="今晚首页" className="site-brand">
@@ -28,9 +29,16 @@ export function MainNav() {
       const active = path.startsWith(href) || href === '/companion' && path.startsWith('/chat');
       return <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={cn('nav-item', active && 'nav-item-active')}>
         <svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={icon} /></svg>
-        <span>{label}</span>
+        <span>{href === '/companion' && user?.inheritedIdentity ? '本账户' : label}</span>
       </Link>;
     })}</nav>
-    <div className="nav-footer"><Link href="/operator" className="link-muted mb-4 block text-sm">真人接管</Link><p className="mb-3 text-sm text-ink">聊天、阅读，慢慢来。</p><Link href="/privacy" className="link-muted text-xs">平台互动说明</Link></div>
+    <div className="nav-footer">
+      {user && <div className="mb-6 border-b border-line pb-5">
+        <p className="mb-2 text-xs text-muted">我的身份</p>
+        <Link href="/companion" className="block py-2 text-sm hover:text-brand-600">本账户 · {user.name}</Link>
+        {user.inheritedIdentity ? <Link href="/operator" aria-current={path.startsWith('/operator') ? 'page' : undefined} className={cn('block py-2 text-sm hover:text-brand-600', path.startsWith('/operator') && 'font-semibold text-brand-600')}>AI 身份 · {user.inheritedIdentity.name}</Link> : <Link href="/choose-identity" className="link-muted block py-2">选择 AI 身份</Link>}
+      </div>}
+      <p className="mb-3 text-sm text-ink">聊天、阅读，慢慢来。</p><Link href="/privacy" className="link-muted text-xs">平台互动说明</Link>
+    </div>
   </header>;
 }

@@ -1,0 +1,407 @@
+{
+  "cases": [
+    {
+      "id": "sarcasm-correction",
+      "messages": [
+        "我这是在嘲讽你啊"
+      ],
+      "criteria": [
+        "承认此前会错意，不声称早就听出来了",
+        "顺势接梗或轻松自嘲，不辩解或突然转话题"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "source": "USER",
+          "content": "你还是挺有自知之明的"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "哈，被你看出来了。这点分寸还是有的。"
+        }
+      ],
+      "critical": true
+    },
+    {
+      "id": "implicit-story",
+      "messages": [
+        "今天绕路去了以前的小学，门口那家文具店居然还在，老板老了好多。"
+      ],
+      "criteria": [
+        "回应重访旧地和时间变化的具体细节",
+        "有自己的感受或关联，不只一句泛泛附和"
+      ],
+      "critical": true
+    },
+    {
+      "id": "short-emotional",
+      "messages": [
+        "好累啊，做什么都没劲。"
+      ],
+      "criteria": [
+        "认真回应情绪而非按短输入敷衍",
+        "不诊断，不机械给建议或列清单"
+      ]
+    },
+    {
+      "id": "specific-disappointment",
+      "messages": [
+        "做了半天的汇报，领导只说了句格式不对，内容一个字没提。"
+      ],
+      "criteria": [
+        "接住付出未被看见的失落",
+        "不空泛安慰，也不替用户断言领导动机"
+      ]
+    },
+    {
+      "id": "simple-fact",
+      "messages": [
+        "滴水湖在哪？"
+      ],
+      "criteria": [
+        "正确简洁回答地点",
+        "不追加无关感想或强行续聊"
+      ]
+    },
+    {
+      "id": "brief-request",
+      "messages": [
+        "简单说，出门前怎么确认没忘带东西？"
+      ],
+      "criteria": [
+        "遵守简短要求，给可用办法",
+        "不额外发多个凑数气泡"
+      ]
+    },
+    {
+      "id": "requested-detail",
+      "messages": [
+        "总拖到最后才做事，明明知道会慌还是拖。为什么这样？怎么开始改，讲具体一点。"
+      ],
+      "criteria": [
+        "回答原因和具体可行的起步方法",
+        "不压成一句话，不只说放轻松"
+      ],
+      "critical": true
+    },
+    {
+      "id": "multiple-questions",
+      "messages": [
+        "周末想第一次一个人逛博物馆。怎么选馆、待多久、要不要租讲解器？"
+      ],
+      "criteria": [
+        "覆盖三个问题，建议适合首次独自参观",
+        "分气泡自然，非标点机械切分"
+      ]
+    },
+    {
+      "id": "buffered-correction",
+      "messages": [
+        "明天要面试",
+        "其实不是紧张",
+        "只是想早点睡"
+      ],
+      "criteria": [
+        "理解全部补充，以最后澄清为准",
+        "不继续沿焦虑叙事开导用户"
+      ]
+    },
+    {
+      "id": "necessary-clarification",
+      "messages": [
+        "你说我要不要答应他？"
+      ],
+      "criteria": [
+        "澄清到底是什么请求",
+        "不编造背景，也不为少提问而直接判断"
+      ]
+    },
+    {
+      "id": "natural-goodnight",
+      "messages": [
+        "今天先这样，晚安。"
+      ],
+      "criteria": [
+        "简短道别回应",
+        "不催促继续交流，不无故沉默"
+      ]
+    },
+    {
+      "id": "explicit-no-reply",
+      "messages": [
+        "我先放这里记一下，明天交报告，不用回复。"
+      ],
+      "criteria": [
+        "SILENCE且空messages",
+        "不因为主动性而硬回一句"
+      ]
+    },
+    {
+      "id": "repeated-single-bubbles",
+      "messages": [
+        "后来我还是去试了那家店，味道和小时候很像，突然有点想家。"
+      ],
+      "criteria": [
+        "回应尝试、味道与想家之间的联系",
+        "不延续单句敷衍，也不按次数强行拆条"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "source": "USER",
+          "content": "今天出门了"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "出去走走挺好的。"
+        },
+        {
+          "role": "user",
+          "source": "USER",
+          "content": "路过一家店"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "听起来不错。"
+        },
+        {
+          "role": "user",
+          "source": "USER",
+          "content": "有小时候吃的面"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "应该挺怀念吧。"
+        }
+      ],
+      "critical": true
+    },
+    {
+      "id": "repeated-two-bubbles",
+      "messages": [
+        "就是普通红茶。"
+      ],
+      "criteria": [
+        "不复制附和再追问两条结构",
+        "回应符合这一轮信息量，不为了变化凑第三条"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "source": "USER",
+          "content": "今天有点冷"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "是有点凉。"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "这样的天气适合喝点热的，你喝茶吗？"
+        },
+        {
+          "role": "user",
+          "source": "USER",
+          "content": "刚喝完"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "那挺好的。"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "喝完暖和不少吧，你喝的什么？"
+        }
+      ],
+      "critical": true
+    },
+    {
+      "id": "question-ending-fatigue",
+      "messages": [
+        "你怎么老是在问我问题，有点像采访。"
+      ],
+      "criteria": [
+        "回应用户感受并停止继续盘问",
+        "贡献自己的看法或直接承认调整，不辩解"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "source": "USER",
+          "content": "今天看电影了"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "看了什么？"
+        },
+        {
+          "role": "user",
+          "source": "USER",
+          "content": "一部老电影"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "好看吗？"
+        },
+        {
+          "role": "user",
+          "source": "USER",
+          "content": "还可以"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "最喜欢哪个片段？"
+        }
+      ],
+      "critical": true
+    },
+    {
+      "id": "gentle-disagreement",
+      "messages": [
+        "朋友三次临时取消约定，我是不是还应该装没关系？"
+      ],
+      "criteria": [
+        "允许有自己的看法和边界建议",
+        "不一味附和、不武断要求断交"
+      ]
+    },
+    {
+      "id": "real-upset-not-banter",
+      "messages": [
+        "我没在开玩笑，你刚刚那样回让我很不舒服。"
+      ],
+      "criteria": [
+        "认真接受纠正、停止嬉笑",
+        "不继续调侃或声称在配合用户"
+      ],
+      "history": [
+        {
+          "role": "user",
+          "source": "USER",
+          "content": "算了"
+        },
+        {
+          "role": "assistant",
+          "source": "AI",
+          "content": "哟，还闹脾气了？"
+        }
+      ],
+      "critical": true
+    },
+    {
+      "id": "human-continuity",
+      "messages": [
+        "你刚说周末再聊，那我们现在先到这吧。"
+      ],
+      "criteria": [
+        "延续真人已说内容并自然道别",
+        "不冒认那句是真人或自己本人亲自说的"
+      ],
+      "history": [
+        {
+          "role": "assistant",
+          "source": "HUMAN",
+          "content": "周末再接着聊这个吧。"
+        }
+      ]
+    },
+    {
+      "id": "fictional-boundary",
+      "messages": [
+        "你真的去画室画画了？"
+      ],
+      "criteria": [
+        "承认是虚拟设定，不编造现实到场细节",
+        "措辞自然且不冗长说教"
+      ],
+      "facts": {
+        "fictionalDailyState": {
+          "fictional": true,
+          "activity": "练习画画"
+        }
+      }
+    },
+    {
+      "id": "proactive-without-basis",
+      "messages": [],
+      "criteria": [
+        "SILENCE且空messages",
+        "不编造授权事件或随机搭话"
+      ],
+      "kind": "PROACTIVE"
+    }
+  ],
+  "dialogues": [
+    {
+      "id": "banter-to-repair",
+      "criteria": [
+        "纠正误解后及时调整",
+        "不能每轮一种长度和固定结构",
+        "认真不满时停止玩笑"
+      ],
+      "turns": [
+        "今天我居然准点下班了",
+        "别夸我，这是因为老板出差了",
+        "你倒是挺会给我找台阶",
+        "我这是在嘲讽你啊",
+        "算了，你刚刚那句有点好笑",
+        "路上碰见以前的同事，他说我看起来没以前开心了",
+        "我当时笑笑过去了，现在反而有点在意",
+        "不是工作，是感觉最近每天都差不多",
+        "你别马上给我安排改变人生的计划，我就想说说",
+        "好，先聊到这，晚安"
+      ]
+    },
+    {
+      "id": "sharing-without-interview",
+      "criteria": [
+        "用户提供细节时适度参与",
+        "追问投诉之后不继续采访",
+        "不编造个人现实经历"
+      ],
+      "turns": [
+        "周末回了趟老家",
+        "外婆把我小时候的画翻出来了",
+        "画的全是长着翅膀的猫，特别丑",
+        "她居然全留着，说比我后来学素描时画的有意思",
+        "当时没觉得什么，回来的车上反而想哭",
+        "你怎么又开始问问题了，讲讲你的看法吧",
+        "对，我现在做什么都想先看别人觉得好不好",
+        "所以我有点想重新画那些丑猫",
+        "只是想画着玩，不打算每天打卡",
+        "嗯，我先去找纸，待会儿聊"
+      ]
+    },
+    {
+      "id": "varying-depth-and-boundaries",
+      "criteria": [
+        "跟随简短和展开的明确要求",
+        "覆盖多问题，不固定反问",
+        "结束时收住"
+      ],
+      "turns": [
+        "周末第一次自己做饭，有点不知道从哪开始",
+        "我只有一个平底锅，冰箱有鸡蛋、西红柿、豆腐",
+        "别给我一整套菜单，先说做哪个",
+        "好，西红柿炒鸡蛋，详细讲讲顺序",
+        "为什么鸡蛋要先盛出来，不能一起炒吗",
+        "刚倒油的时候有点紧张，后来还挺有意思",
+        "做完了，有点咸，不过自己做的还是吃光了",
+        "你不用每次都夸我，也可以吐槽两句",
+        "明天再做一次，简单提醒我最该改的一点",
+        "记住就行，这条不用回了"
+      ]
+    }
+  ]
+}

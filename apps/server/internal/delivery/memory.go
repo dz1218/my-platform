@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"companion/server/internal/conversation"
 	"companion/server/pkg/database"
 	"companion/server/pkg/response"
 	"context"
@@ -113,7 +114,7 @@ type DailyState struct {
 
 func (r Repository) DailyState(ctx context.Context, id, actor string) (DailyState, error) {
 	var d DailyState
-	err := r.DB.QueryRow(ctx, `SELECT s.fictional,s.current_activity,s.mood,s.paused,s.version,s.expires_at FROM identity_daily_state s JOIN conversations c ON c.identity_id=s.identity_id WHERE c.id=$1 AND (c.user_id=$2 OR EXISTS(SELECT 1 FROM conversation_takeovers WHERE conversation_id=$1 AND operator_id=$2))`, id, actor).Scan(&d.Fictional, &d.CurrentActivity, &d.Mood, &d.Paused, &d.Version, &d.ExpiresAt)
+	err := r.DB.QueryRow(ctx, `SELECT s.fictional,s.current_activity,s.mood,s.paused,s.version,s.expires_at FROM identity_daily_state s JOIN conversations c ON c.identity_id=s.identity_id WHERE c.id=$1 AND `+conversation.AccessSQL, id, actor).Scan(&d.Fictional, &d.CurrentActivity, &d.Mood, &d.Paused, &d.Version, &d.ExpiresAt)
 	return d, err
 }
 func (r Repository) SaveDailyState(ctx context.Context, id, actor string, d DailyState) error {

@@ -7,10 +7,31 @@
 - `pnpm --filter agent dev`：内部服务。
 - `pnpm --filter agent test`：SDK Mock、计划校验和本机 HTTP 测试，不调用真实模型。
 - `pnpm --filter agent build`：编译。
+- `pnpm --filter agent eval`：使用已配置模型对比 V2/V3 合成场景；默认 180 次调用，输出位于 `test-results/companion-v3`。
 - `pnpm --filter agent dev:livekit`：保留既有 LiveKit 工具。
 
-`src/agents/companion.ts` 包含当前指令；`src/schemas/plan.ts` 定义 0–3 条候选、总计 500 字、最多 20 秒建议延迟。SDK 负责 Agent loop，最多两轮调用，输出通过应用校验；不提供发送、接管或数据库工具。`CONTEXT_UPDATE` 入口沿用同一主 Agent，为 Go 持久化异步任务产生摘要和待用户确认的记忆候选。SDK tracing 关闭，避免将聊天正文上传到 trace；日志只记录随机请求编号、耗时和固定错误分类。服务端并发上限 4，生成 deadline 90 秒，供应商重试为 0，持久化重试由 Go 决定。
+`src/prompts/companion-v3.ts` 包含当前表达与上下文整理指令，`src/agents/companion.ts` 按任务选择指令，每个请求只做一次模型调用。聊天输入附带最近四段已发送 AI 回复的条数、Unicode 字数和问句结尾摘要；真人或来源不明的消息不参与统计，但完整保留在上下文中。摘要只用于提醒重复，不控制条数。
+
+`src/schemas/plan.ts` 保留 0–3 条候选、总计 500 字和 20 秒延迟上限。当前指令让模型输出 `delayMs=0`，Go 根据任务快照里的 `replyPacing=typing` 计算实际延迟；旧任务缺少配置仍按候选延迟执行。`CONTEXT_UPDATE` 独立选择整理指令，不接受聊天风格摘要，只产生摘要和待用户确认的记忆候选。
+
+JSON mode 偶尔省略建议字段 `delayMs` 时，Agent 仅补为 0，再经过原有严格校验；非法动作、空正文、重复 key、显式无效值和超预算输出仍然拒绝。模型只返回空白时记为 `incomplete_model_response`，由现有 Go 队列重试，不转换成 SILENCE，也不增加单请求模型调用次数。供应商亦说明 JSON 输出存在偶发空内容，见 [DeepSeek JSON 输出文档](https://api-docs.deepseek.com/zh-cn/guides/json_mode/)。
+
+SDK tracing 关闭；普通日志只记录随机请求编号、策略版本、条数、字数、耗时及固定错误分类。服务端并发上限 4，生成 deadline 90 秒，供应商重试为 0，持久化重试由 Go 决定。
 
 `POST /internal/agent/generate-plan` 返回 JSON；Go 当前复用 `/internal/reply` 的内部 SSE 整体候选事件。两者均使用 Bearer 服务鉴权，浏览器统一使用 Go WebSocket，不接收模型 token。`src/prompts/` 保留旧版提示词供回溯，当前服务不加载它们。
 
 SDK 的单 Agent 与 `outputType` 接口参照 [OpenAI 官方 Agent definitions](https://developers.openai.com/api/docs/guides/agents/define-agents)。本仓库以已安装 SDK 类型和离线 SDK 测试验证集成。
+
+
+## 自然回复评测
+
+`evals/companion-v3.json` 包含 20 个单轮场景和 3 组各 10 轮对话；`evals/baseline-v2.txt` 固定保存本次改动前的提示词。默认两种策略各运行 20×3+30=90 次调用，所有输入均为合成数据。
+
+```bash
+pnpm --filter agent eval --case sarcasm-correction --samples 1 --output test-results/smoke
+pnpm --filter agent eval --output test-results/companion-v3
+```
+
+支持 `--variant v2|v3|both`、`--samples 1..10`、`--concurrency 1..4`、`--case ID`。相同配置和提示词的输出目录支持断点续跑；不同实验请使用不同目录。每个模型在连续对话中接收自身已产生的回复，用户台词相同。
+
+`results.jsonl` 和 `report.json` 保存合成文本、场景标准、模型配置及耗时；不保存密钥。`review-template.json` 留空评分，供审阅者按接话准确、回应具体、表达自然各 1–5 分评估，均分目标至少 4，关键场景逐项通过。统计气泡数量不代表质量通过，生成成功也不等于人工验收通过。修改提示词后应使用新输出目录重跑。

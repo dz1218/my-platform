@@ -1,6 +1,10 @@
+"use client";
+
+import { useActionState } from "react";
 import Link from "next/link";
 import { loginAction, registerAction } from "@/lib/actions";
 import { SubmitButton } from "@/components/submit-button";
+import { GenderSelect } from "./gender-select";
 const errors: Record<string, string> = {
   unavailable: "暂时连接不上，请稍后再试。",
   rate_limit: "操作太频繁，请稍后再试。",
@@ -10,14 +14,17 @@ const errors: Record<string, string> = {
   mismatch: "两次输入的密码不一致。",
   weak: "密码至少需要 8 位。",
   exists: "该邮箱已被注册，请直接登录。",
+  gender_required: "请选择性别，以便查看可继承的 AI 身份。",
 };
 export function AuthForm({
   register = false,
-  error,
 }: {
   register?: boolean;
-  error?: string;
 }) {
+  const [{ error }, formAction] = useActionState(
+    register ? registerAction : loginAction,
+    {},
+  );
   return (
     <main
       id="main-content"
@@ -53,7 +60,7 @@ export function AuthForm({
           </p>
         )}
         <form
-          action={register ? registerAction : loginAction}
+          action={formAction}
           className="grid gap-4"
         >
           {register && (
@@ -105,6 +112,11 @@ export function AuthForm({
                   className="input-field"
                 />
               </label>
+              <div className="grid gap-2 text-sm">
+                <label htmlFor="register-gender">性别</label>
+                <GenderSelect />
+                <p id="register-gender-help" className="text-xs leading-5 text-muted">只能继承与自己性别相同的 AI 身份。注册后可以选择继承，也可以跳过。</p>
+              </div>
               <label className="flex items-start gap-3 text-xs leading-6 text-slate-600">
                 <input
                   type="checkbox"

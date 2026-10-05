@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { LiveIcon } from './live-icon';
+import { LiveChat } from './live-chat';
 import { ConnectionState, ParticipantKind, Room, RoomEvent, Track } from 'livekit-client';
 
 type Role = '主播' | '观众';
@@ -22,6 +25,7 @@ type JoinResponse = {
 type Props = {
   apiBaseUrl: string;
   roomId: string;
+  roomTitle: string;
   isLoggedIn: boolean;
   hostNickname: string;
 };
@@ -54,30 +58,8 @@ function buildParticipantList(room: Room, localIdentity: string): ParticipantIte
   return items;
 }
 
-const roleMeta: Record<Role | 'AI助手', { badge: string; avatar: string }> = {
-  主播: {
-    badge: 'border border-emerald-400/30 bg-emerald-400/[0.15] text-emerald-700',
-    avatar: 'border border-emerald-400/30 bg-emerald-400/[0.15] text-emerald-700',
-  },
-  观众: {
-    badge: 'border border-slate-400/25 bg-slate-400/10 text-slate-600',
-    avatar: 'border border-slate-400/25 bg-white text-slate-600',
-  },
-  AI助手: {
-    badge: 'border border-brand-400/[0.35] bg-brand-500/[0.15] text-brand-600',
-    avatar: 'border border-brand-400/[0.35] bg-brand-500/[0.15] text-brand-600',
-  },
-};
-
 function RoleBadge({ role }: { role: Role | 'AI助手' }) {
-  const m = roleMeta[role] ?? roleMeta['观众'];
-  return (
-    <span
-      className={`shrink-0 rounded-lg px-2 py-0.5 text-[11px] font-bold tracking-[0.02em] ${m.badge}`}
-    >
-      {role}
-    </span>
-  );
+  return <span className={`live-role ${role === '主播' ? 'is-host' : ''}`}>{role}</span>;
 }
 
 function styleVideoElement(element: HTMLMediaElement) {
@@ -91,7 +73,7 @@ function clearContainer(ref: React.RefObject<HTMLDivElement | null>) {
 
 function normalizeError(message: string) {
   if (message.toLowerCase().includes('could not establish pc connection')) {
-    return 'WebRTC 建链失败。请检查：① VPN/代理是否关闭 ② 防火墙是否拦截 UDP 7882 ③ LiveKit 是否已启动。';
+    return '暂时无法连接直播，请检查网络后重新加入。';
   }
   return message;
 }
@@ -108,7 +90,7 @@ async function readApiError(response: Response) {
   return `请求失败: ${response.status}`;
 }
 
-export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Props) {
+export function LiveRoomClient({ apiBaseUrl, roomId, roomTitle, isLoggedIn, hostNickname }: Props) {
   const role: Role = isLoggedIn ? '主播' : '观众';
 
   const [nickname, setNickname] = useState(() =>
@@ -124,6 +106,11 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
+  const [remoteVideoCount, setRemoteVideoCount] = useState(0);
+  const [sideTab, setSideTab] = useState<'chat' | 'people'>('chat');
+  const [notice, setNotice] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const stageRef = useRef<HTMLDivElement>(null);
 
   const joinRequestRef = useRef<AbortController | null>(null);
   const mediaBusyRef = useRef(false);
@@ -149,11 +136,30 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
     const element = track.attach();
     element.setAttribute('data-track-sid', sid);
     if (track.kind === Track.Kind.Video) styleVideoElement(element);
+    element.hidden = track.kind === Track.Kind.Video && track.isMuted;
     remoteMediaRef.current.appendChild(element);
+    updateRemoteVideoCount();
   }
 
   function detachTrack(track: Track) {
     track.detach().forEach((el) => el.remove());
+    updateRemoteVideoCount();
+  }
+
+  function updateRemoteVideoCount() {
+    setRemoteVideoCount(remoteMediaRef.current?.querySelectorAll('video:not([hidden])').length ?? 0);
+  }
+
+  function syncRemoteMedia() {
+    const room = roomRef.current;
+    if (!room || !remoteMediaRef.current) return;
+    for (const participant of room.remoteParticipants.values()) {
+      for (const publication of participant.videoTrackPublications.values()) {
+        const element = remoteMediaRef.current.querySelector<HTMLVideoElement>(`[data-track-sid="${publication.trackSid}"]`);
+        if (element) element.hidden = publication.isMuted;
+      }
+    }
+    updateRemoteVideoCount();
   }
 
   function attachExistingRemoteTracks(room: Room) {
@@ -220,8 +226,8 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
         .on(RoomEvent.TrackUnsubscribed, (track) => detachTrack(track))
         .on(RoomEvent.LocalTrackPublished, syncLocalMedia)
         .on(RoomEvent.LocalTrackUnpublished, syncLocalMedia)
-        .on(RoomEvent.TrackMuted, syncLocalMedia)
-        .on(RoomEvent.TrackUnmuted, syncLocalMedia)
+        .on(RoomEvent.TrackMuted, () => { syncLocalMedia(); syncRemoteMedia(); })
+        .on(RoomEvent.TrackUnmuted, () => { syncLocalMedia(); syncRemoteMedia(); })
         .on(RoomEvent.Reconnected, () => {
           refreshParticipants(activeRoom);
           syncLocalMedia();
@@ -286,7 +292,12 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
       }
       syncLocalMedia();
     } catch (err) {
-      if (roomRef.current === room) setError(err instanceof Error ? err.message : '开启音视频失败');
+      if (roomRef.current === room) {
+        const deviceName = device === 'camera' ? '摄像头' : '麦克风';
+        setError(err instanceof Error && err.name === 'NotAllowedError'
+          ? `未获得${deviceName}权限，请在浏览器地址栏的网站设置中允许访问后重试。`
+          : err instanceof Error && err.name === 'NotFoundError' ? `未找到${deviceName}，请连接设备后重试。` : `${deviceName}开启失败，请检查设备是否被其他应用占用。`);
+      }
     } finally {
       mediaBusyRef.current = false;
       if (roomRef.current === room) setMediaBusy(null);
@@ -321,6 +332,7 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
     setConnectionState(ConnectionState.Disconnected);
     setCameraEnabled(false);
     setMicrophoneEnabled(false);
+    setRemoteVideoCount(0);
     setAudioBlocked(false);
     setMediaBusy(null);
     setIsDispatchingAgent(false);
@@ -373,333 +385,80 @@ export function LiveRoomClient({ apiBaseUrl, roomId, isLoggedIn, hostNickname }:
     attachLocalVideoPreview();
   }, [isConnected, participants.length]);
 
-  return (
-    <div className="grid min-w-0 gap-3.5">
-      <section className="surface min-w-0 p-4 sm:p-5">
-        {!isInRoom ? (
-          <>
-            <div className="mb-5 inline-flex min-w-0 max-w-full items-center gap-2 rounded-[10px] px-3.5 py-2">
-              {isLoggedIn ? (
-                <div className="badge-success min-w-0 max-w-full">
-                  <svg aria-hidden="true"
-                    className="shrink-0"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polygon points="23 7 16 12 23 17 23 7" />
-                    <rect x="1" y="5" width="15" height="14" rx="2" />
-                  </svg>
-                  <span className="min-w-0 [overflow-wrap:anywhere]">以主播身份加入 · {hostNickname}</span>
-                </div>
-              ) : (
-                <div className="badge-muted">
-                  <svg aria-hidden="true"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                  <span>以观众身份加入</span>
-                </div>
-              )}
-            </div>
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(''), 4000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
-            {!isLoggedIn && !isJoining && (
-              <div className="mb-5">
-                <label className="grid gap-[7px]">
-                  <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">昵称</span>
-                  <input
-                    name="nickname" autoComplete="nickname"
-                    maxLength={80}
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                    disabled={isJoining}
-                    placeholder="输入你的昵称"
-                    className="input-field max-w-[300px]"
-                  />
-                </label>
-              </div>
-            )}
+  useEffect(() => {
+    const update = () => setIsFullscreen(document.fullscreenElement === stageRef.current);
+    document.addEventListener('fullscreenchange', update);
+    return () => document.removeEventListener('fullscreenchange', update);
+  }, []);
 
-            <button
-              type="button"
-              onClick={() => void joinRoom()}
-              disabled={isJoining}
-              className={`${isLoggedIn ? 'btn-success' : 'btn-primary'} px-7 py-3`}
-            >
-              {isJoining ? (
-                <>
-                  <svg aria-hidden="true"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    className="animate-spin"
-                  >
-                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                  </svg>
-                  正在进入直播间…
-                </>
-              ) : (
-                <>
-                  {isLoggedIn ? (
-                    <svg aria-hidden="true"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polygon points="23 7 16 12 23 17 23 7" />
-                      <rect x="1" y="5" width="15" height="14" rx="2" />
-                    </svg>
-                  ) : (
-                    <svg aria-hidden="true"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
-                    </svg>
-                  )}
-                  重新加入
-                </>
-              )}
-            </button>
-            {isJoining && <button type="button" className="btn-secondary ml-3" onClick={() => void leaveRoom()}>取消连接</button>}
-          </>
-        ) : (
-          <>
-            <div className="mb-[18px] flex flex-wrap items-center gap-2.5 rounded-[10px] border border-emerald-400/20 bg-emerald-400/[0.08] px-3.5 py-2.5">
-              <span className="online-dot" />
-              <span role="status" className="text-[13px] font-semibold text-emerald-700">{isReconnecting ? '连接中断，正在重连…' : '已连接'}</span>
-              <RoleBadge role={role} />
-              <span className="min-w-0 [overflow-wrap:anywhere] text-[13px] text-slate-600">{nickname}</span>
-            </div>
+  async function shareRoom() {
+    try { await navigator.clipboard.writeText(window.location.href); setNotice('直播间链接已复制'); }
+    catch { setNotice('复制失败，请复制浏览器地址栏中的链接。'); }
+  }
 
-            <div className="flex flex-wrap gap-2.5">
-              {role === '主播' && (
-                <>
-                <button type="button" disabled={!isConnected || mediaBusy !== null} aria-pressed={cameraEnabled} onClick={() => void toggleLocalMedia('camera')} className="btn-secondary">
-                  <svg aria-hidden="true"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polygon points="23 7 16 12 23 17 23 7" />
-                    <rect x="1" y="5" width="15" height="14" rx="2" />
-                  </svg>
-                  {mediaBusy === 'camera' ? '处理中…' : cameraEnabled ? '关闭摄像头' : '开启摄像头'}
-                </button>
-                <button type="button" disabled={!isConnected || mediaBusy !== null} aria-pressed={microphoneEnabled} onClick={() => void toggleLocalMedia('microphone')} className="btn-secondary">
-                  {mediaBusy === 'microphone' ? '处理中…' : microphoneEnabled ? '关闭麦克风' : '开启麦克风'}
-                </button>
-                </>
-              )}
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await stageRef.current?.requestFullscreen();
+    } catch { setNotice('当前浏览器暂不支持全屏观看。'); }
+  }
 
-              {role === '主播' && <>
-              <button
-                type="button"
-                onClick={() => void dispatchAgent()}
-                disabled={!isConnected || isDispatchingAgent || hasAgent || agentRequested}
-                className={`inline-flex items-center gap-1.5 rounded-[10px] border px-4 py-2.5 text-[13px] font-medium transition-colors ${
-                  hasAgent
-                    ? 'cursor-not-allowed border-brand-400/20 bg-brand-500/[0.08] text-brand-600/70'
-                    : 'border-brand-400/[0.35] bg-brand-500/[0.15] text-brand-600 hover:bg-brand-500/25'
-                }`}
-              >
-                <svg aria-hidden="true"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="11" width="18" height="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0110 0v4M12 15v2" />
-                </svg>
-                {isDispatchingAgent ? '呼叫中...' : hasAgent ? 'AI 助手已在线' : agentRequested ? '已呼叫，等待助手加入' : '呼叫 AI 助手'}
-              </button>
-              </>}
+  return <>
+    <div className="live-room-nav"><Link href="/live"><LiveIcon name="back" size={17} />直播大厅</Link><span>{isLoggedIn ? '主播工作台' : '直播现场'}</span></div>
+    <header className="live-room-heading">
+      <div className="live-room-title"><h1 title={roomTitle}>{roomTitle}</h1><div className="live-room-meta"><RoleBadge role={role} /><span className={`live-connection ${isConnected ? 'is-connected' : ''}`} role="status"><i />{isReconnecting ? '正在重连…' : isConnected ? '已连接' : isJoining ? '连接中' : '未连接'}</span>{isInRoom && <span><LiveIcon name="users" size={14} />{participants.length} 人在房间</span>}</div></div>
+      <button type="button" className="live-button live-button-secondary" onClick={() => void shareRoom()}><LiveIcon name="link" size={16} />分享直播间</button>
+    </header>
+    {notice && <div role="status" className="live-toast"><LiveIcon name="info" size={16} />{notice}</div>}
 
-              {audioBlocked && <button type="button" disabled={!isConnected} onClick={() => void enableAudio()} className="btn-primary">播放声音</button>}
-
-              <button type="button" onClick={() => void leaveRoom()} className="btn-danger-ghost">
-                <svg aria-hidden="true"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
-                </svg>
-                离开房间
-              </button>
-            </div>
-            {agentRequested && !hasAgent && <p role="status" className="mt-3 text-sm text-muted">正在等待 AI 助手加入，暂时还没有响应。</p>}
-          </>
-        )}
-
-        {error && (
-          <div role="alert" className="mt-3.5 flex items-start gap-2 rounded-[10px] border border-rose-500/20 bg-rose-500/10 px-3.5 py-3">
-            <svg aria-hidden="true"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mt-0.5 shrink-0"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 8v4M12 16h.01" />
-            </svg>
-            <p className="m-0 text-[13px] leading-6 text-rose-700">{error}</p>
+    <div className="live-studio">
+      <div className="live-stage-column">
+        <div className="live-stage" ref={stageRef}>
+          <div className="live-stage-top"><span><LiveIcon name="video" size={15} />{isLoggedIn ? '本地预览' : '直播画面'}</span><span>{isInRoom ? (cameraEnabled || remoteVideoCount ? '实时画面' : '等待画面') : '尚未连接'}</span></div>
+          <div className={`live-stage-media ${cameraEnabled && remoteVideoCount ? 'has-multiple' : ''}`}>
+            {role === '主播' && <div ref={localVideoRef} className={`live-local-tracks ${!cameraEnabled ? 'is-hidden' : ''}`} />}
+            <div ref={remoteMediaRef} className={`live-remote-tracks ${!remoteVideoCount ? 'is-hidden' : ''}`} />
           </div>
-        )}
-      </section>
+          {!isInRoom ? <div className="live-stage-empty">
+            <div className="live-stage-symbol"><LiveIcon name={isJoining ? 'refresh' : error ? 'screen' : 'leave'} size={34} className={isJoining ? 'live-spin' : undefined} /></div>
+            <h2>{isJoining ? '正在连接直播间' : error ? '暂时无法进入直播间' : '你已离开直播间'}</h2>
+            {error ? <p role="alert">{error}</p> : <p>{isJoining ? '马上就好，请稍等片刻。' : '摄像头和麦克风已关闭，随时可以重新加入。'}</p>}
+            {!isLoggedIn && !isJoining && <label className="live-guest-name"><span>观众昵称</span><input className="live-input" autoComplete="nickname" maxLength={80} value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="输入你的昵称" /></label>}
+            <div className="live-stage-actions"><button type="button" className="live-button live-button-light" disabled={isJoining} onClick={() => void joinRoom()}><LiveIcon name="refresh" size={16} />{isJoining ? '正在进入直播间…' : '重新加入'}</button>{isJoining && <button type="button" className="live-button live-button-stage" onClick={() => void leaveRoom()}>取消连接</button>}</div>
+          </div> : !cameraEnabled && remoteVideoCount === 0 && <div className="live-stage-empty">
+            <div className="live-stage-symbol"><LiveIcon name={isLoggedIn ? 'videoOff' : 'screen'} size={36} /></div><h2>{isLoggedIn ? '摄像头尚未开启' : '等主播开启画面'}</h2><p>{isLoggedIn ? '准备好后，开启摄像头与大家见面。' : '先聊聊天，画面准备好后会自动显示。'}</p>
+            {isLoggedIn && <button type="button" className="live-button live-button-stage" disabled={!isConnected || mediaBusy !== null} onClick={() => void toggleLocalMedia('camera')}><LiveIcon name="video" size={16} />打开画面</button>}
+          </div>}
+          <div className="live-stage-bottom"><span>{isInRoom ? isLoggedIn ? nickname : '正在观看' : isLoggedIn ? `主播：${hostNickname}` : '观众模式'}{isInRoom && isLoggedIn && <LiveIcon name={microphoneEnabled ? 'mic' : 'micOff'} size={14} />}</span><button type="button" className="live-icon-button" title={isFullscreen ? '退出全屏' : '全屏观看'} aria-label={isFullscreen ? '退出全屏' : '全屏观看'} onClick={() => void toggleFullscreen()}><LiveIcon name="expand" size={18} /></button></div>
+        </div>
 
-      {isInRoom && participants.length > 0 && (
-        <section className="surface-soft px-[22px] py-5">
-          <div className="mb-4 flex items-center gap-2">
-            <svg aria-hidden="true"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
-            </svg>
-            <h3 className="m-0 text-[13px] font-bold uppercase tracking-[0.04em] text-slate-500">
-              参与者 · {participants.length}
-            </h3>
-          </div>
+        <div className="live-control-bar">
+          <div className="live-device-controls">{isLoggedIn ? <>
+            <button type="button" className={`live-device-button ${cameraEnabled ? 'is-enabled' : ''}`} aria-pressed={cameraEnabled} disabled={!isConnected || mediaBusy !== null} onClick={() => void toggleLocalMedia('camera')}><LiveIcon name={cameraEnabled ? 'video' : 'videoOff'} size={21} /><span>{mediaBusy === 'camera' ? '切换中…' : cameraEnabled ? '关闭摄像头' : '开启摄像头'}</span></button>
+            <button type="button" className={`live-device-button ${microphoneEnabled ? 'is-enabled' : ''}`} aria-pressed={microphoneEnabled} disabled={!isConnected || mediaBusy !== null} onClick={() => void toggleLocalMedia('microphone')}><LiveIcon name={microphoneEnabled ? 'mic' : 'micOff'} size={21} /><span>{mediaBusy === 'microphone' ? '切换中…' : microphoneEnabled ? '关闭麦克风' : '开启麦克风'}</span></button>
+          </> : <span className="live-viewer-note"><LiveIcon name="screen" size={18} />观众模式</span>}
+          {audioBlocked && <button type="button" className="live-button live-button-secondary" disabled={!isConnected} onClick={() => void enableAudio()}><LiveIcon name="volume" size={17} />播放声音</button>}</div>
+          <button type="button" className="live-button live-button-leave" disabled={!isInRoom && !isJoining} onClick={() => void leaveRoom()}><LiveIcon name="leave" size={17} />离开房间</button>
+        </div>
+        {isInRoom && error && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>{error}</p><button type="button" className="live-icon-button" aria-label="关闭提示" onClick={() => setError(null)}><LiveIcon name="close" size={16} /></button></div>}
+        {isReconnecting && <div role="status" className="live-notice"><LiveIcon name="refresh" className="live-spin" /><p>连接暂时中断，正在尝试恢复。恢复后即可继续聊天和控制设备。</p></div>}
+        <div className="live-studio-footer"><div><LiveIcon name="info" size={15} /><span>{isLoggedIn ? '摄像头和麦克风默认关闭，由你决定何时开启。' : '可以观看直播，也可以在聊天区发送消息。'}</span></div>{isLoggedIn && <button type="button" className="live-agent-button" disabled={!isConnected || isDispatchingAgent || agentRequested || hasAgent} onClick={() => void dispatchAgent()}><LiveIcon name="robot" size={16} />{isDispatchingAgent ? '呼叫中…' : hasAgent ? 'AI 助手已在线' : agentRequested ? '已呼叫，等待助手加入' : '呼叫 AI 助手'}</button>}</div>
+      </div>
 
-          <div className="grid gap-2">
-            {participants.map((p) => {
-              const m = roleMeta[p.role] ?? roleMeta['观众'];
-              const initial = (p.displayName[0] ?? '?').toUpperCase();
-
-              return (
-                <div
-                  key={p.identity}
-                  className={`flex items-center gap-3 rounded-[10px] px-2.5 py-2 ${
-                    p.isLocal ? 'border border-slate-200 bg-white' : 'border border-transparent'
-                  }`}
-                >
-                  <div
-                    className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full text-[13px] font-semibold ${m.avatar}`}
-                  >
-                    {initial}
-                  </div>
-                  <span className="min-w-0 flex-1 [overflow-wrap:anywhere] text-sm font-medium text-slate-800">
-                    {p.displayName}
-                    {p.isLocal && <span className="ml-1.5 text-xs font-normal text-slate-500">（我）</span>}
-                  </span>
-                  <RoleBadge role={p.role} />
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {isInRoom && (
-        <section className="surface-soft px-[22px] py-5">
-          <div className="grid gap-5 lg:grid-cols-2">
-            {role === '主播' && <div>
-              <div className="mb-3 flex items-center gap-1.5">
-                <svg aria-hidden="true"
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <circle cx="12" cy="10" r="3" />
-                  <path d="M7 20.662V19a2 2 0 012-2h6a2 2 0 012 2v1.662" />
-                </svg>
-                <h3 className="m-0 text-xs font-bold uppercase tracking-[0.04em] text-slate-500">本地预览</h3>
-              </div>
-              <div
-                ref={localVideoRef}
-                className="min-h-11 rounded-[10px] border border-dashed border-slate-200 bg-white"
-              />
-            </div>}
-
-            <div>
-              <div className="mb-3 flex items-center gap-1.5">
-                <svg aria-hidden="true"
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polygon points="23 7 16 12 23 17 23 7" />
-                  <rect x="1" y="5" width="15" height="14" rx="2" />
-                </svg>
-                <h3 className="m-0 text-xs font-bold uppercase tracking-[0.04em] text-slate-500">远端媒体</h3>
-              </div>
-              <div
-                ref={remoteMediaRef}
-                className="flex min-h-11 flex-wrap gap-2.5 rounded-[10px] border border-dashed border-slate-200 bg-white p-1"
-              />
-            </div>
-          </div>
-        </section>
-      )}
+      <aside className="live-sidebar" aria-label="直播互动">
+        <div className="live-sidebar-tabs"><button type="button" aria-pressed={sideTab === 'chat'} aria-controls="live-chat-panel" onClick={() => setSideTab('chat')}><LiveIcon name="chat" size={17} />聊天</button><button type="button" aria-pressed={sideTab === 'people'} aria-controls="live-people-panel" onClick={() => setSideTab('people')}><LiveIcon name="users" size={17} />在线 <span>{participants.length}</span></button></div>
+        <div id="live-chat-panel" className="live-chat-panel" hidden={sideTab !== 'chat'}><LiveChat room={isInRoom ? roomRef.current : null} connected={isConnected} nickname={nickname} visible={sideTab === 'chat'} /></div>
+        <div id="live-people-panel" className="live-people-panel" hidden={sideTab !== 'people'}>
+          <h2>参与者 · {participants.length}</h2>
+          {participants.length ? <ul>{participants.map((participant) => <li key={participant.identity}><span className={`live-avatar ${participant.role === '主播' ? 'is-host' : ''}`}>{participant.displayName.slice(0, 1)}</span><span className="live-person-name">{participant.displayName}{participant.isLocal && <small>（我）</small>}</span><RoleBadge role={participant.role} /></li>)}</ul> : <div className="live-people-empty"><LiveIcon name="users" size={28} /><p>连接后显示房间成员</p></div>}
+        </div>
+      </aside>
     </div>
-  );
+  </>;
 }

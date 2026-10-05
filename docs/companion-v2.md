@@ -22,7 +22,7 @@
 - 模型调用前检查版本，生成后检查版本；候选写 reply_batches/items，发送时按 conversation → job → batch/item 锁顺序逐条验证。最后一条才将普通轮次标记 ANSWERED，中途为 PARTIALLY_SENT。已提交消息不可撤销，未提交条目可取消。
 - task lease 120 秒，模型总 deadline 100 秒；claim_token 拦截旧 worker。指数退避最多 300 秒，次数受 behavior.json 限制。
 - 事务触发器写 message_outbox，现有数据库扫描 WebSocket 读取已提交消息和 outbox。没有单个全局 delivered 标记：各连接独立使用 bigint 消息 ID 作为 server sequence/cursor，避免一个连接消费掉其他连接的事件。
-- 单主 Agents SDK Agent、REPLY/SILENCE、1–3 动态气泡。Go 与 Zod 双层检查空白、重复 key、长度、延迟。保留内部 SSE 整体候选契约，客户端仍只有 WebSocket。
+- Companion V3 使用单次模型调用生成 REPLY/SILENCE、1–3 动态气泡：按场景、投入程度与细节决定展开程度，允许同一话题的自然反应和补充分开发送。最近四段已发送 AI 回复的表达摘要仅提醒重复，不指定气泡比例。Go 与 Zod 双层检查空白、重复 key、长度、延迟，内部 SSE 和客户端 WebSocket 契约不变。
 - 主动联系默认关闭，每分钟扫描，八小时尝试预算；同会话/topic 和来源去重。用户在聊天设置中授权具体源消息与跟进时间；没有足够上下文可 SILENCE。每个气泡发送前重检 IANA 时区、跨日免打扰、成功批次频率、近期互动、输入 presence 和用户/真人策略。
 - 用户可以关闭所有 AI 自动互动；真人 NEVER 拦截主动联系，其他托管模式仍需独立管理开关。输入 presence 每两秒最多更新一次、五秒过期，不会永久阻塞主动联系。
 - 经用户确认的长期记忆支持来源标记、纠正与软删除。删除清除记忆正文和摘要，并取消旧候选；同来源 tombstone 防止旧内容重新插入。原始聊天历史仍保留，删除记忆不等于删除原始消息。
@@ -31,18 +31,18 @@
 
 ## 用户与管理界面
 
-聊天底部「陪伴设置与记忆」提供自动互动、主动关心、记忆授权、时区与免打扰；可保存/纠正/删除记忆，并授权一次跟进。真人管理端提供独立主动联系开关与虚拟日常编辑。整个身份可能由 AI 与真人共同参与，界面明确说明虚拟活动不代表现实行动。
+普通聊天页不显示陪伴设置、托管策略或虚拟日常编辑，也不请求这些管理面板的数据。只有服务端确认当前用户继承了当前会话的 AI 身份（`canManage=true`）后，才显示托管策略、主动联系开关与虚拟日常编辑；不能根据页面路径或会话由真人接管就授予设置权限。权限撤销或读取权限失败时隐藏面板。旧版「陪伴设置与记忆」入口已移除，preferences 读写接口同样检查身份继承关系；记忆与跟进接口仍保留原有会话用户授权规则。注册选择页、唯一继承关系和双身份入口见 [身份继承与 AI 托管](autopilot.md)。旧版按会话分配不再授予身份管理权限。
 
 所有接口沿用 `/api/v1` 的登录鉴权：
 
 | 方法 | 路径 | 权限 / 用途 |
 | --- | --- | --- |
-| GET / PATCH | `/conversations/:id/preferences` | 会话用户修改自动互动、记忆、主动联系及免打扰；带 version |
-| PATCH | `/conversations/:id/proactive-policy` | 仅已分配真人修改 allowProactiveAI；用户开关不能被覆盖 |
+| GET / PATCH | `/conversations/:id/preferences` | 仅当前身份继承者读取或修改自动互动、记忆、主动联系及免打扰；带 version |
+| PATCH | `/conversations/:id/proactive-policy` | 仅当前身份继承者修改 allowProactiveAI；用户开关不能被覆盖 |
 | POST | `/conversations/:id/followups` | 仅用户；sourceMessageId、topic、dueAt、expiresAt |
 | GET / POST | `/conversations/:id/memories` | 仅用户；新增需来源，纠正需 id/version |
 | POST | `/conversations/:id/memories/:memoryId/delete` | 仅用户，重复删除幂等 |
-| GET / PATCH | `/conversations/:id/daily-state` | 已授权参与者读取，仅分配真人编辑；带 version |
+| GET / PATCH | `/conversations/:id/daily-state` | 已授权参与者读取，仅当前身份继承者编辑；带 version |
 | GET | `/conversations/:id/messages?after=ID` | 授权的断线补发，最多 200 条，按 ID 顺序 |
 
 WebSocket 支持 `typing` 输入 presence，以及 `?after=ID` 重连恢复；前端合并快照与 message.created、按 ID 去重排序。
@@ -68,3 +68,20 @@ NEXT_BUILD_DIR=.next-v2-check pnpm --filter web build
 上线需先停止旧 worker、备份数据库，然后运行现有迁移命令并部署新版 API/worker/Agent/web。本次只交付工作区代码，未修改本地密钥、未部署或重启现有服务。
 
 离线质量场景位于 `apps/agent/evals/companion-v2.json`，全部是合成场景，不含用户数据；用于后续真实模型人工抽样，不能视为已通过模型质量评测。
+
+
+## 自然朋友式回复 V3
+
+V3 不增加数据库迁移或公开 API。`replyPacing: "typing"` 随 `behavior.json` 的 `agent-actions-v4` 策略快照保存；缺少此字段的旧任务沿用模型建议延迟，已排定的条目不重新计算内容节奏。
+
+- 首条目标等待为 `clamp(1000 + 12×未答用户字数 + 90×首条字数, 1800, 8000)` 毫秒，扣除自末条用户消息以来的时间，最少零。用户字数覆盖当前合并轮次内至本次触发消息的连续输入，包含补充消息；已经静默结束的旧轮次不计入。
+- 后续气泡间隔为 `clamp(600 + 90×该条字数, 1200, 5000)` 毫秒，按 Unicode 字符计数。最多三条累计策略延迟不超过 18 秒。主动联系没有新的用户触发时间，以计划完成时作为首条计时起点。
+- 每次实际投递在同一事务内把迟到时间顺延给剩余条目，保持相对间隔，避免 worker 重启或延迟造成连发。仍逐条检查输入版本、设置版本及真人权限。
+- 生成前的有效用户输入状态可以推迟任务，但截止于原轮次的 8 秒合并上限；推迟不消耗模型重试次数，也不提前真人 TIMEOUT。接收新消息只清除该发送者的旧输入状态，幂等重发不清除后来的输入状态。
+- 用户新消息或真人回复取消未发气泡；已经提交的消息作为历史保留。前端继续接收整条消息。
+
+发布顺序：完成测试后，停止旧 worker，更新 Agent、API 的行为配置与 worker，再启动新版服务，避免混跑发送策略。V3 本身无迁移要求；其他版本的迁移仍按原部署流程执行。回退时恢复旧 Agent/worker 和行为配置；旧二进制会忽略新增配置字段，已经保存的内容与到期时间保留。
+
+验证：Agent 类型检查和 Mock/HTTP 测试；专用 PostgreSQL 上的 `go test -race ./...`，覆盖节奏上下限、历史任务、输入状态、真人超时、部分发送后插话、重启与并发。真实模型对比工具及审阅要求见 [Agent README](../apps/agent/README.md)。历史章节中“未调用真实供应商”描述的是 V2 当时的验证，不代表 V3 的评测状态。
+
+V3 本地验证记录（2026-10-03）：Node 22 下 Agent 12 项测试与构建通过；专用 PostgreSQL 15 的 Go 全量竞态测试通过，轮次边界修复后再次通过 delivery 全部测试。最终 deepseek-flash/JSON mode 评测 90 项首试 89 项有效，1 项截断 JSON 单独重试恢复；输出预算 2048 token，正文 500 字限制不变。已完成模型输出审阅，未进行人类盲评，不声称自然度评分已达标。报告位于 `apps/agent/test-results/companion-v3-release/comparison.html`，原始首试与重试均保留在 `results.jsonl`。本次未部署或重启已有业务服务，临时测试数据库已清理。

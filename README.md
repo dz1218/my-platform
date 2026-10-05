@@ -29,6 +29,11 @@ Open http://localhost:3011. API and worker automatically apply versioned SQL mig
 Redis and PostgreSQL must already be running. If you already have PostgreSQL on 5432,
 keep using that instance and start only Redis with `docker compose up -d redis`.
 
+The Go API and worker do not hot-reload. After changing Go routes or migrations,
+restart `pnpm dev:all`; refreshing the Next.js page alone leaves the old API running.
+For schema changes, add a new numbered migration. Editing an already applied SQL
+file does not update existing databases because `schema_migrations` records its filename.
+
 Alternatively run each process in its own terminal:
 
 ```bash
@@ -41,9 +46,10 @@ pnpm dev          # Next.js :3011
 ## Customization and checks
 
 - [V2 实现、接口、迁移与验证](docs/companion-v2.md)
-- [真人接管与 AI 托管：接口、授权分配及验证](docs/autopilot.md)
+- [身份继承、双身份聊天与 AI 托管](docs/autopilot.md)
 - Delivery policy: `apps/server/config/behavior.json`
-- Current Agent instructions: `apps/agent/src/agents/companion.ts`
+- Current Agent instructions: `apps/agent/src/prompts/companion-v3.ts`; reply pacing: `apps/server/config/behavior.json`
+- Synthetic V2/V3 model comparison: `pnpm --filter agent eval` (180 calls; see `apps/agent/README.md`)
 - `pnpm server:test`, `pnpm agent:test`, `pnpm typecheck`
 - `pnpm build` (Go API/worker, web and Agent), `pnpm server:build`
 - Live-room browser regressions: `pnpm --filter web exec playwright install chromium`, then `pnpm --filter web test:live`. To use an installed Chrome, set `PLAYWRIGHT_CHANNEL=chrome`. Add `LIVEKIT_INTEGRATION=1` to exercise real media against local LiveKit; only temporary test rooms are created and removed.

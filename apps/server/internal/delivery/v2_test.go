@@ -178,7 +178,7 @@ func proactiveFixture(t *testing.T) (*autopilotFixture, string) {
 	minute := now.Hour()*60 + now.Minute()
 	p.QuietStart = (minute + 60) % 1440
 	p.QuietEnd = (minute + 120) % 1440
-	if err := f.repo.SavePreferences(f.ctx, "c", "u", p, false); err != nil {
+	if err := f.repo.SavePreferences(f.ctx, "c", "operator", p, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.db.Exec(f.ctx, `UPDATE messages SET created_at=now()-interval '1 day'`); err != nil {
@@ -218,12 +218,12 @@ func TestV208V210V211ProactiveFinalGates(t *testing.T) {
 				t.Fatal(j)
 			}
 			if gate == "optout" {
-				p, err := f.repo.Preferences(f.ctx, "c", "u")
+				p, err := f.repo.Preferences(f.ctx, "c", "operator")
 				if err != nil {
 					t.Fatal(err)
 				}
 				p.UserOptIn = false
-				if err = f.repo.SavePreferences(f.ctx, "c", "u", p, false); err != nil {
+				if err = f.repo.SavePreferences(f.ctx, "c", "operator", p, false); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -276,7 +276,7 @@ func TestV212V214MemoryDeletionAndDailyStateVersions(t *testing.T) {
 	m := f.send("u")
 	p := defaultPreferences()
 	p.MemoryOptIn = true
-	if err := f.repo.SavePreferences(f.ctx, "c", "u", p, false); err != nil {
+	if err := f.repo.SavePreferences(f.ctx, "c", "operator", p, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.repo.SaveMemory(f.ctx, "c", "u", Memory{Kind: "FACT", Content: "明天面试", SourceMessageID: m.ID}, false); err != nil {
@@ -321,7 +321,7 @@ func TestContextEnrichmentConsentSourcesAndDeletionFence(t *testing.T) {
 	m := f.send("u")
 	p := defaultPreferences()
 	p.MemoryOptIn = true
-	if err := f.repo.SavePreferences(f.ctx, "c", "u", p, false); err != nil {
+	if err := f.repo.SavePreferences(f.ctx, "c", "operator", p, false); err != nil {
 		t.Fatal(err)
 	}
 	var version int64
@@ -394,28 +394,54 @@ func TestDailyTemplatesNeverOverwriteHumanEdits(t *testing.T) {
 		t.Fatal("human state overwritten", err)
 	}
 }
-func TestPreferencesCannotEscalatePrivileges(t *testing.T) {
+func TestPreferencesRequireInheritedIdentity(t *testing.T) {
 	f := autopilotTest(t)
 	p := defaultPreferences()
 	p.UserOptIn = true
 	p.MemoryOptIn = true
 	p.AllowProactiveAI = true
-	if err := f.repo.SavePreferences(f.ctx, "c", "stranger", p, false); err == nil {
-		t.Fatal("stranger changed preferences")
+	assertDenied := func(actor string) {
+		t.Helper()
+		if _, err := f.repo.Preferences(f.ctx, "c", actor); err == nil {
+			t.Fatalf("%s read settings without inheriting the identity", actor)
+		}
+		for _, manager := range []bool{false, true} {
+			if err := f.repo.SavePreferences(f.ctx, "c", actor, p, manager); err == nil {
+				t.Fatalf("%s changed settings without inheriting the identity (policy=%v)", actor, manager)
+			}
+		}
 	}
-	if err := f.repo.SavePreferences(f.ctx, "c", "u", p, true); err == nil {
-		t.Fatal("user changed manager policy")
-	}
-	if err := f.repo.SavePreferences(f.ctx, "c", "operator", p, false); err == nil {
-		t.Fatal("operator changed user consent")
-	}
-	if err := f.repo.SavePreferences(f.ctx, "c", "u", p, false); err != nil {
+	assertDenied("u")
+	assertDenied("stranger")
+	if err := f.repo.SavePreferences(f.ctx, "c", "operator", p, false); err != nil {
 		t.Fatal(err)
 	}
-	saved, err := f.repo.Preferences(f.ctx, "c", "u")
-	if err != nil || saved.AllowProactiveAI {
-		t.Fatal("user granted manager permission", err)
+	saved, err := f.repo.Preferences(f.ctx, "c", "operator")
+	if err != nil || !saved.MemoryOptIn || !saved.UserOptIn || saved.AllowProactiveAI {
+		t.Fatal("settings endpoint changed the independent proactive policy", saved, err)
 	}
+	p = saved
+	p.AllowProactiveAI = true
+	if err := f.repo.SavePreferences(f.ctx, "c", "operator", p, true); err != nil {
+		t.Fatal(err)
+	}
+	saved, err = f.repo.Preferences(f.ctx, "c", "operator")
+	if err != nil || !saved.AllowProactiveAI || !saved.MemoryOptIn || !saved.UserOptIn {
+		t.Fatal("policy update changed other settings", saved, err)
+	}
+	p = saved
+	if _, err := f.db.Exec(f.ctx, `INSERT INTO conversation_takeovers(conversation_id,operator_id) VALUES('c','stranger')`); err != nil {
+		t.Fatal(err)
+	}
+	assertDenied("stranger")
+	if _, err := f.repo.Preferences(f.ctx, "c", "operator"); err != nil {
+		t.Fatal("legacy assignment removed inheritor's settings access", err)
+	}
+	// An invalid self-assignment must not grant a chat participant management rights.
+	if _, err := f.db.Exec(f.ctx, `UPDATE conversation_takeovers SET operator_id='u' WHERE conversation_id='c'`); err != nil {
+		t.Fatal(err)
+	}
+	assertDenied("u")
 }
 
 type contextModel func(context.Context, provider.ChatRequest) (provider.Reply, error)
@@ -433,7 +459,7 @@ func TestEnrichmentWorkerUsesDurableJobAndNeverSends(t *testing.T) {
 	}
 	p := defaultPreferences()
 	p.MemoryOptIn = true
-	if err := f.repo.SavePreferences(f.ctx, "c", "u", p, false); err != nil {
+	if err := f.repo.SavePreferences(f.ctx, "c", "operator", p, false); err != nil {
 		t.Fatal(err)
 	}
 	calls := 0

@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"companion/server/internal/behavior"
+	"companion/server/internal/conversation"
 	"companion/server/pkg/response"
 	"context"
 	"encoding/json"
@@ -26,17 +27,17 @@ func lockConversation(ctx context.Context, tx pgx.Tx, id string) (AutoReply, err
 }
 func operator(ctx context.Context, tx pgx.Tx, id, actor string) (bool, error) {
 	var ok bool
-	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM conversation_takeovers t JOIN conversations c ON c.id=t.conversation_id WHERE t.conversation_id=$1 AND t.operator_id=$2 AND c.user_id<>$2)`, id, actor).Scan(&ok)
+	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM conversations c WHERE c.id=$1 AND `+conversation.ManageSQL+`)`, id, actor).Scan(&ok)
 	return ok, err
 }
 func forbidden() error {
-	return &response.Error{Status: 403, Code: "forbidden", Message: "没有此会话的接管权限"}
+	return &response.Error{Status: 403, Code: "forbidden", Message: "只有继承这个 AI 身份的用户才能进行此操作"}
 }
 func (r Repository) Settings(ctx context.Context, id, actor string) (AutoReply, error) {
 	var s AutoReply
 	err := r.DB.QueryRow(ctx, `SELECT owner_type,auto_reply_mode,reply_delay_seconds,settings_version,
- EXISTS(SELECT 1 FROM conversation_takeovers WHERE conversation_id=c.id AND operator_id=$2 AND c.user_id<>$2)
- FROM conversations c WHERE id=$1 AND (user_id=$2 OR EXISTS(SELECT 1 FROM conversation_takeovers WHERE conversation_id=c.id AND operator_id=$2))`, id, actor).Scan(&s.OwnerType, &s.Mode, &s.DelaySeconds, &s.Version, &s.CanManage)
+ `+conversation.ManageSQL+`
+ FROM conversations c WHERE id=$1 AND `+conversation.AccessSQL, id, actor).Scan(&s.OwnerType, &s.Mode, &s.DelaySeconds, &s.Version, &s.CanManage)
 	return s, err
 }
 func validSettings(mode string, delay int) bool {

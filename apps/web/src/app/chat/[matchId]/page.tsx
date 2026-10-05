@@ -6,7 +6,8 @@ export default async function ChatPage({
 }: {
   params: Promise<{ matchId: string }>;
 }) {
-  if (!(await getCurrentUser())) redirect("/login");
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
   const { matchId } = await params;
-  return <ChatRoom key={matchId} matchId={matchId} />;
+  return <ChatRoom key={matchId} matchId={matchId} inheritedIdentityId={user.inheritedIdentity?.id} />;
 }

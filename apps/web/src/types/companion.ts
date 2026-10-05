@@ -1,5 +1,13 @@
-export type User = { id: string; name: string; email: string };
-export type Identity = { id: string; name: string; age: number; avatarUrl: string };
+export type Gender = 'FEMALE' | 'MALE';
+export type User = {
+  id: string; name: string; email: string; gender: Gender | null;
+  onboardingCompleted: boolean; inheritedIdentity: Identity | null;
+};
+export type Identity = { id: string; name: string; age: number; avatarUrl: string; gender?: Gender; city?: string; background?: string };
+export type InheritanceState = {
+  gender: Gender | null; onboardingCompleted: boolean; identity: Identity | null;
+  items: Array<Identity & { available: boolean }>;
+};
 export type Match = { id: string; conversationId: string; identity: Identity };
 export type Message = {
   id: string; sender: { id: string; name: string }; senderType: 'user' | 'identity';

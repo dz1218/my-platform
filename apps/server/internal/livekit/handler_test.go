@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -122,14 +123,20 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 	if items[1].(map[string]any)["title"] != "room-empty" || items[1].(map[string]any)["status"] != "准备中" || items[2].(map[string]any)["viewers"] != float64(3) {
 		t.Fatal(items)
 	}
-	created := request(t, router, "POST", "/rooms", `{"id":"room-test","title":"直播测试"}`, 201)["item"].(map[string]any)
-	if created["id"] != "room-test" || created["title"] != "直播测试" {
+	created := request(t, router, "POST", "/rooms", `{"id":"room-new","title":"新的直播"}`, 201)["item"].(map[string]any)
+	if created["id"] != "room-new" || created["title"] != "新的直播" {
 		t.Fatal(created)
 	}
-	generated := request(t, router, "POST", "/rooms", `{}`, 201)["item"].(map[string]any)
-	if !roomID.MatchString(generated["id"].(string)) || generated["title"] != "未命名直播间" {
+	generated := request(t, router, "POST", "/rooms", `{"title":"  用户填写的名称  "}`, 201)["item"].(map[string]any)
+	if !roomID.MatchString(generated["id"].(string)) || generated["title"] != "用户填写的名称" {
 		t.Fatal(generated)
 	}
+	for _, invalid := range []string{`{}`, `{"title":""}`, `{"title":"   "}`, `{"title":null}`, `{"title":123}`} {
+		request(t, router, "POST", "/rooms", invalid, 400)
+	}
+	request(t, router, "POST", "/rooms", `{"title":"  直播测试  "}`, 409)
+	request(t, router, "POST", "/rooms", `{"title":"ROOM-EMPTY"}`, 409)
+	request(t, router, "POST", "/rooms", `{"id":"room-test","title":"其他名称"}`, 409)
 	for _, body := range []string{`{"identity":" user-1 ","name":" 测试 "}`, `{"identity":"user-1"}`} {
 		joined := request(t, router, "POST", "/rooms/room-test/join", body, 201)
 		if joined["livekitUrl"] != "wss://public.example.com" || !strings.HasPrefix(joined["identity"].(string), "host_test-user_") || joined["roomId"] != "room-test" {
@@ -162,7 +169,7 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 	}
 	request(t, router, "DELETE", "/rooms/room-test/agent/dispatch/AD_test", "", 200)
 	request(t, router, "DELETE", "/rooms/room-test", "", 200)
-	if len(seen) != 10 {
+	if len(seen) != 15 {
 		t.Fatalf("missing calls: %v", seen)
 	}
 }
@@ -240,8 +247,8 @@ func TestGuestTokensAndManagementAuthorization(t *testing.T) {
 	}
 	token := claims(t, result.Token)
 	grant := token["video"].(map[string]any)
-	if !strings.HasPrefix(result.Identity, "viewer_") || token["sub"] != result.Identity || grant["canPublish"] != false || grant["canPublishData"] != false || grant["canSubscribe"] != true {
-		t.Fatal("guest can impersonate or publish", token)
+	if !strings.HasPrefix(result.Identity, "viewer_") || token["sub"] != result.Identity || grant["canPublish"] != false || grant["canPublishData"] != true || grant["canSubscribe"] != true {
+		t.Fatal("guest must only subscribe and send chat data, without publishing media or impersonating a host", token)
 	}
 	for _, tc := range []struct{ method, path string }{
 		{"POST", "/rooms"}, {"DELETE", "/rooms/room-test"}, {"POST", "/rooms/room-test/agent/dispatch"}, {"GET", "/rooms/room-test/agent/dispatch"}, {"DELETE", "/rooms/room-test/agent/dispatch/AD_test"},
@@ -256,4 +263,54 @@ func TestGuestTokensAndManagementAuthorization(t *testing.T) {
 	if res := call("POST", "/rooms/missing-room/join", `{}`, ""); res.Code != 404 {
 		t.Fatalf("missing room accepted: %d", res.Code)
 	}
+}
+
+// Two submissions must not both pass the list check before either is created.
+func TestConcurrentRoomNamesAndReuseAfterClose(t *testing.T) {
+	var mu sync.Mutex
+	rooms := map[string]map[string]any{}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		var input map[string]any
+		json.NewDecoder(r.Body).Decode(&input)
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/ListRooms"):
+			items := []map[string]any{}
+			for _, item := range rooms {
+				items = append(items, item)
+			}
+			json.NewEncoder(w).Encode(map[string]any{"rooms": items})
+		case strings.HasSuffix(r.URL.Path, "/CreateRoom"):
+			rooms[input["name"].(string)] = input
+			json.NewEncoder(w).Encode(input)
+		case strings.HasSuffix(r.URL.Path, "/DeleteRoom"):
+			delete(rooms, input["room"].(string))
+			w.Write([]byte(`{}`))
+		}
+	}))
+	defer upstream.Close()
+	router := gin.New()
+	service := auth.Service{Secret: "test-session-secret"}
+	Register(router, Config{URL: upstream.URL, APIKey: "key", APISecret: "secret"}, auth.Handler{Service: service})
+	token, _ := service.Token("test-user")
+	statuses := make(chan int, 2)
+	for _, title := range []string{"Studio", " studio "} {
+		go func(title string) {
+			payload, _ := json.Marshal(map[string]string{"title": title})
+			req := httptest.NewRequest("POST", "/rooms", strings.NewReader(string(payload)))
+			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+			res := httptest.NewRecorder()
+			router.ServeHTTP(res, req)
+			statuses <- res.Code
+		}(title)
+	}
+	first, second := <-statuses, <-statuses
+	if !((first == 201 && second == 409) || (first == 409 && second == 201)) {
+		t.Fatalf("expected one create and one conflict, got %d and %d", first, second)
+	}
+	items := request(t, router, "GET", "/rooms", "", 200)["items"].([]any)
+	id := items[0].(map[string]any)["id"].(string)
+	request(t, router, "DELETE", "/rooms/"+id, "", 200)
+	request(t, router, "POST", "/rooms", `{"title":"Studio"}`, 201)
 }

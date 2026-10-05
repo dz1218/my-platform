@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"companion/server/internal/identity"
 	"companion/server/pkg/response"
 	"context"
 	"crypto/subtle"
@@ -24,7 +25,10 @@ type Service struct {
 	Secret string
 }
 
-func (s Service) Register(ctx context.Context, email, name, password string, consent bool) (User, error) {
+func (s Service) Register(ctx context.Context, email, name, password string, consent bool, gender string) (User, error) {
+	if !identity.ValidGender(gender) {
+		return User{}, response.BadRequest("请选择你的性别")
+	}
 	email = strings.ToLower(strings.TrimSpace(email))
 	name = strings.TrimSpace(name)
 	addr, err := mail.ParseAddress(email)
@@ -47,7 +51,7 @@ func (s Service) Register(ctx context.Context, email, name, password string, con
 	if err != nil {
 		return User{}, err
 	}
-	u, err := s.Repo.Create(ctx, email, name, string(hash))
+	u, err := s.Repo.Create(ctx, email, name, string(hash), gender)
 	var pe *pgconn.PgError
 	if errors.As(err, &pe) && pe.Code == "23505" {
 		return User{}, &response.Error{Status: 409, Code: "exists", Message: "该邮箱已被注册"}

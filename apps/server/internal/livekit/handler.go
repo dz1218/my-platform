@@ -1,12 +1,14 @@
 package livekit
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf16"
 
@@ -14,6 +16,9 @@ import (
 	"companion/server/pkg/database"
 	"github.com/gin-gonic/gin"
 )
+
+// Serializes room creation in deployments without a database.
+var roomCreationMu sync.Mutex
 
 var roomID = regexp.MustCompile(`^[a-zA-Z0-9_.-]{3,128}$`)
 
@@ -99,16 +104,45 @@ func (h Handler) create(c *gin.Context) {
 		return
 	}
 	id, hasID, validID := field(b, "id", 3, 128, false)
-	title, hasTitle, validTitle := field(b, "title", 1, 100, false)
-	if !validID || (hasID && !roomID.MatchString(id)) || !validTitle {
+	title, hasTitle, validTitle := field(b, "title", 1, 100, true)
+	if !validID || (hasID && !roomID.MatchString(id)) {
 		fail(c, 400, "Invalid request body")
+		return
+	}
+	if !hasTitle || !validTitle {
+		fail(c, 400, "请输入 1–100 个字符的房间名称")
 		return
 	}
 	if !hasID {
 		id = "room-" + database.ID()[:12]
 	}
-	if !hasTitle {
-		title = "未命名直播间"
+	// Hold the same lock across checking and creating, including across API replicas.
+	if db := h.Auth.Service.Repo.DB; db != nil {
+		tx, err := db.Begin(c.Request.Context())
+		if upstreamFailed(c, err) {
+			return
+		}
+		defer tx.Rollback(context.Background())
+		if _, err = tx.Exec(c.Request.Context(), "SELECT pg_advisory_xact_lock(716482901)"); upstreamFailed(c, err) {
+			return
+		}
+	} else {
+		roomCreationMu.Lock()
+		defer roomCreationMu.Unlock()
+	}
+	items, err := h.Client.ListRooms(c.Request.Context())
+	if upstreamFailed(c, err) {
+		return
+	}
+	for _, existing := range items {
+		if strings.EqualFold(strings.TrimSpace(existing.Title), title) {
+			fail(c, http.StatusConflict, "这个房间名称已被使用，请换一个名称")
+			return
+		}
+		if existing.ID == id {
+			fail(c, http.StatusConflict, "该直播间已存在，请创建新的直播间")
+			return
+		}
 	}
 	item, err := h.Client.CreateRoom(c.Request.Context(), id, title)
 	if !upstreamFailed(c, err) {

@@ -2,7 +2,9 @@ import { OpenAIChatCompletionsModel } from "@openai/agents";
 import OpenAI from "openai";
 import { env } from "./config.js";
 import { createCompanion } from "./agents/companion.js";
+import { createAssistant } from "./agents/assistant.js";
 import { createAgentServer } from "./server.js";
+import { promptVersion } from "./prompts/companion-v3.js";
 const ready = Boolean(env.LLM_API_KEY && env.LLM_MODEL);
 const model = new OpenAIChatCompletionsModel(
   new OpenAI({
@@ -17,10 +19,11 @@ const server = createAgentServer(
   env.AGENT_TOKEN,
   createCompanion(model, env.LLM_STRUCTURED_OUTPUT),
   ready,
+  createAssistant(model),
 );
 server.listen(env.AGENT_PORT, env.AGENT_HOST, () =>
   console.log(
-    `[agent] listening on ${env.AGENT_HOST}:${env.AGENT_PORT}; prompt=companion-v2; ready=${ready}`,
+    `[agent] listening on ${env.AGENT_HOST}:${env.AGENT_PORT}; prompt=${promptVersion}; ready=${ready}`,
   ),
 );
 for (const event of ["SIGTERM", "SIGINT"] as const)

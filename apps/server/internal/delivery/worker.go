@@ -130,6 +130,14 @@ func (w Worker) generate(parent context.Context, j Job) {
 		}
 		return
 	}
+	deferred, err := w.Repo.deferForTyping(ctx, j)
+	if err != nil {
+		slog.Error("typing deferral failed", "error", err)
+		return
+	}
+	if deferred {
+		return
+	}
 	request, err := w.Builder.Build(ctx, j.Conversation)
 	var reply provider.Reply
 	if err == nil {
