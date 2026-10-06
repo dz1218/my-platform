@@ -3,10 +3,11 @@ export type User = {
   id: string; name: string; email: string; gender: Gender | null;
   onboardingCompleted: boolean; inheritedIdentity: Identity | null;
 };
-export type Identity = { id: string; name: string; age: number; avatarUrl: string; gender?: Gender; city?: string; background?: string };
+export type Identity = { id: string; name: string; age: number; avatarUrl: string; gender?: Gender; city?: string; background?: string; occupationCode?: string; occupation?: string };
 export type InheritanceState = {
   gender: Gender | null; onboardingCompleted: boolean; identity: Identity | null;
   items: Array<Identity & { available: boolean }>;
+  selected?: (Identity & { available: boolean }) | null;
 };
 export type Match = { id: string; conversationId: string; identity: Identity };
 export type Message = {

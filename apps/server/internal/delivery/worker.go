@@ -156,6 +156,9 @@ func (w Worker) generate(parent context.Context, j Job) {
 			request.PendingSeconds = 0
 		}
 		if err == nil {
+			request, err = aicontext.BoundRequest(request)
+		}
+		if err == nil {
 			reply, err = w.Model.Generate(ctx, request)
 		}
 	}

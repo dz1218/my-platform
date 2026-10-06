@@ -52,6 +52,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.90.2
         version: 5.90.2(react@19.1.1)
+      '@virtuoso.dev/masonry':
+        specifier: 1.4.3
+        version: 1.4.3(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       cn:
         specifier: ^0.4.0
         version: 0.4.0
@@ -677,6 +680,18 @@ packages:
 
   '@types/ws@8.18.2':
     resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
+
+  '@virtuoso.dev/gurx@1.2.3':
+    resolution: {integrity: sha512-zqIzVOQgJGEbrG+hvNiNHdrtM2G/9zBVgBSRUAW2yT8iUOouSHAsPIxpCU/xsAYEwicXURGhU6cxzgBPVjXL+g==}
+    peerDependencies:
+      react: '>= 16 || >= 17 || >= 18 || >= 19'
+      react-dom: '>= 16 || >= 17 || >= 18 || >= 19'
+
+  '@virtuoso.dev/masonry@1.4.3':
+    resolution: {integrity: sha512-3LxsW2TxlWn061NWZFSi8FhLVK0bwNfGZNPMMsKBg5uxhgVUo8j7XaEuOMgY9UO/EuIFMijAyHDc3DO3A5+KCA==}
+    peerDependencies:
+      react: '>= 18 || >= 19'
+      react-dom: '>= 18 || >= 19'
 
   c12@3.1.0:
     resolution: {integrity: sha512-uWoS8OU1MEIsOv8p/5a82c3H31LsWVR5qiyXVfBNOzfffjUWtPnhAb4BYI2uG2HfGmZmFjCtui5XNWaps+iFuw==}
@@ -1673,6 +1688,17 @@ snapshots:
   '@types/ws@8.18.2':
     dependencies:
       '@types/node': 24.10.12
+
+  '@virtuoso.dev/gurx@1.2.3(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
+    dependencies:
+      react: 19.1.1
+      react-dom: 19.1.1(react@19.1.1)
+
+  '@virtuoso.dev/masonry@1.4.3(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
+    dependencies:
+      '@virtuoso.dev/gurx': 1.2.3(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      react: 19.1.1
+      react-dom: 19.1.1(react@19.1.1)
 
   c12@3.1.0:
     dependencies:

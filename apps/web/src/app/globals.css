@@ -124,3 +124,11 @@
 @utility btn-solid {
   @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
 }
+
+/* Keep the masonry's column widths unchanged when a full-page chat locks scroll. */
+html { scrollbar-gutter: stable; }
+.companion-chat-overlay { position: fixed; inset: var(--chat-nav-height, 120px) 0 0; z-index: 15; overflow: auto; overscroll-behavior: contain; background: var(--color-canvas); outline: none; }
+.companion-chat-overlay .chat-layout { height: 100%; }
+@media (min-width: 768px) {
+  .companion-chat-overlay { top: 0; left: var(--nav-width); }
+}

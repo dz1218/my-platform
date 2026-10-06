@@ -18,11 +18,12 @@ type InheritanceState struct {
 	OnboardingCompleted bool                `json:"onboardingCompleted"`
 	Identity            *Identity           `json:"identity"`
 	Items               []InheritanceOption `json:"items"`
+	Selected            *InheritanceOption  `json:"selected"`
 }
 
 func (r Repository) Inherited(ctx context.Context, user string) (*Identity, error) {
 	var i Identity
-	err := r.DB.QueryRow(ctx, `SELECT i.id,i.name,i.age,i.avatar_url,i.gender,i.city,i.background FROM identity_inheritances h JOIN identities i ON i.id=h.identity_id WHERE h.user_id=$1`, user).Scan(&i.ID, &i.Name, &i.Age, &i.AvatarURL, &i.Gender, &i.City, &i.Background)
+	err := r.DB.QueryRow(ctx, `SELECT `+PublicColumns+` FROM identity_inheritances h JOIN identities i ON i.id=h.identity_id WHERE h.user_id=$1`, user).Scan(PublicDestinations(&i)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -32,6 +33,9 @@ func (r Repository) Inherited(ctx context.Context, user string) (*Identity, erro
 	return &i, nil
 }
 func (r Repository) Inheritance(ctx context.Context, user string) (InheritanceState, error) {
+	return r.InheritanceState(ctx, user, true, "")
+}
+func (r Repository) InheritanceState(ctx context.Context, user string, includeItems bool, selectedID string) (InheritanceState, error) {
 	state := InheritanceState{Items: []InheritanceOption{}}
 	err := r.DB.QueryRow(ctx, `SELECT gender,onboarding_completed FROM users WHERE id=$1`, user).Scan(&state.Gender, &state.OnboardingCompleted)
 	if err != nil {
@@ -41,7 +45,20 @@ func (r Repository) Inheritance(ctx context.Context, user string) (InheritanceSt
 	if err != nil {
 		return state, err
 	}
-	rows, err := r.DB.Query(ctx, `SELECT i.id,i.name,i.age,i.avatar_url,i.gender,i.city,i.background,
+	if selectedID != "" {
+		var selected InheritanceOption
+		err = r.DB.QueryRow(ctx, `SELECT `+PublicColumns+`,(`+availableSQL+`) FROM identities i LEFT JOIN identity_inheritances h ON h.identity_id=i.id WHERE i.id=$2 AND i.gender=COALESCE((SELECT gender FROM users WHERE id=$1),'')`, user, selectedID).Scan(append(PublicDestinations(&selected.Identity), &selected.Available)...)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return state, err
+		}
+		if err == nil {
+			state.Selected = &selected
+		}
+	}
+	if !includeItems {
+		return state, nil
+	}
+	rows, err := r.DB.Query(ctx, `SELECT `+PublicColumns+`,
  h.identity_id IS NULL AND i.gender=COALESCE($1,'') AND NOT EXISTS(SELECT 1 FROM identity_inheritances WHERE user_id=$2)
  FROM identities i LEFT JOIN identity_inheritances h ON h.identity_id=i.id ORDER BY i.created_at,i.id`, state.Gender, user)
 	if err != nil {
@@ -50,7 +67,7 @@ func (r Repository) Inheritance(ctx context.Context, user string) (InheritanceSt
 	defer rows.Close()
 	for rows.Next() {
 		var i InheritanceOption
-		if err = rows.Scan(&i.ID, &i.Name, &i.Age, &i.AvatarURL, &i.Gender, &i.City, &i.Background, &i.Available); err != nil {
+		if err = rows.Scan(append(PublicDestinations(&i.Identity), &i.Available)...); err != nil {
 			return state, err
 		}
 		state.Items = append(state.Items, i)

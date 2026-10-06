@@ -6,11 +6,26 @@ import (
 	"companion/server/internal/identity"
 	"companion/server/pkg/response"
 	"github.com/gin-gonic/gin"
+	"strconv"
 )
 
 func inheritanceRoutes(api *gin.RouterGroup, ids identity.Repository, chat delivery.Service) {
 	state := func(c *gin.Context) {
-		s, err := ids.Inheritance(c.Request.Context(), auth.UserID(c))
+		includeItems := true
+		if raw, ok := c.GetQuery("includeItems"); ok {
+			parsed, err := strconv.ParseBool(raw)
+			if err != nil {
+				response.Fail(c, response.BadRequest("includeItems 必须为 true 或 false"))
+				return
+			}
+			includeItems = parsed
+		}
+		selectedID := c.Query("selectedId")
+		if len(selectedID) > 96 {
+			response.Fail(c, response.BadRequest("所选身份无效"))
+			return
+		}
+		s, err := ids.InheritanceState(c.Request.Context(), auth.UserID(c), includeItems, selectedID)
 		if err != nil {
 			response.Fail(c, err)
 			return
@@ -18,6 +33,19 @@ func inheritanceRoutes(api *gin.RouterGroup, ids identity.Repository, chat deliv
 		c.JSON(200, s)
 	}
 	api.GET("/identity-inheritance", state)
+	api.GET("/identity-inheritance/options", func(c *gin.Context) {
+		filters, err := identity.ParseFilters(c.Request.URL.Query())
+		if err != nil {
+			response.Fail(c, err)
+			return
+		}
+		page, err := ids.InheritancePage(c.Request.Context(), auth.UserID(c), filters)
+		if err != nil {
+			response.Fail(c, err)
+			return
+		}
+		c.JSON(200, page)
+	})
 	api.POST("/identity-inheritance", func(c *gin.Context) {
 		var b struct {
 			IdentityID string `json:"identityId"`

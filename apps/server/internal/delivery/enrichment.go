@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	aicontext "companion/server/internal/ai/context"
 	"companion/server/internal/ai/provider"
 	"companion/server/pkg/database"
 	"context"
@@ -87,7 +88,10 @@ func (w Worker) enrich(ctx context.Context) error {
 		}
 		request.Messages = append(request.Messages[:1], request.Messages[start:]...)
 		request.Kind = "CONTEXT_UPDATE"
-		reply, err = w.Model.Generate(call, request)
+		request, err = aicontext.BoundRequest(request)
+		if err == nil {
+			reply, err = w.Model.Generate(call, request)
+		}
 	}
 	if err == nil {
 		err = w.Repo.commitEnrichment(call, id, through, token, version, reply)

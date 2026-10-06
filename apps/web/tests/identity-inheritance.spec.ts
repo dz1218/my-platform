@@ -34,10 +34,11 @@ async function mockInheritance(page: Page, session: Session = 'female', authenti
   let reads = 0;
   let conflict = false;
   let failedClaim: 'before-save' | 'after-save' | null = null;
-  await page.route('**/api/v1/identity-inheritance', async (route) => {
+  await page.route(/\/api\/v1\/identity-inheritance(?:\?.*)?$/, async (route) => {
     if (route.request().method() === 'GET') {
       reads++;
-      return route.fulfill({ json: state });
+      const selectedId = new URL(route.request().url()).searchParams.get('selectedId');
+      return route.fulfill({ json: { ...state, items: [], selected: state.items.find(item => item.id === selectedId) ?? null } });
     }
     claims.push(route.request().postDataJSON());
     if (conflict) {
@@ -56,6 +57,10 @@ async function mockInheritance(page: Page, session: Session = 'female', authenti
     }
     return route.fulfill({ json: state });
   });
+  await page.route('**/api/v1/identity-inheritance/options?*', route => {
+    const items = state.items.filter(item => item.gender === state.gender);
+    return route.fulfill({ json: { items, total: items.length, availableTotal: items.filter(item => item.available).length, page: 1, pageSize: 24, nextPage: null, occupations: [] } });
+  });
   await page.route('**/api/v1/identity-inheritance/skip', async (route) => {
     skipped.push(route.request().postDataJSON());
     state.onboardingCompleted = true;
@@ -70,7 +75,7 @@ async function mockInheritance(page: Page, session: Session = 'female', authenti
     await login(page, body.gender === 'FEMALE' ? 'female' : 'male');
     return route.fulfill({ json: state });
   });
-  await page.route('**/api/v1/discover', (route) => route.fulfill({ json: { items: [otherIdentity] } }));
+  await page.route('**/api/v1/discover?*', (route) => route.fulfill({ json: { items: [otherIdentity], total: 1, availableTotal: 1, page: 1, pageSize: 24, nextPage: null, occupations: [] } }));
   await page.route('**/api/v1/matches', (route) => route.fulfill({ json: { items: [] } }));
   await page.route('**/api/v1/operator/conversations', (route) => route.fulfill({ json: { items: [] } }));
   return {
@@ -328,7 +333,7 @@ test('same-tab logout and login cannot reuse another account’s cached inherite
   let reads = 0;
   let release!: () => void;
   const pending = new Promise<void>((resolve) => { release = resolve; });
-  await page.route('**/api/v1/identity-inheritance', async (route) => {
+  await page.route(/\/api\/v1\/identity-inheritance(?:\?.*)?$/, async (route) => {
     reads++;
     await pending;
     return route.fulfill({ json: {
@@ -336,6 +341,9 @@ test('same-tab logout and login cannot reuse another account’s cached inherite
       items: [{ ...chenNian, available: false }, { ...otherIdentity, available: true }],
     } });
   });
+  await page.route('**/api/v1/identity-inheritance/options?*', route => route.fulfill({ json: {
+    items: [{ ...chenNian, available: false }, { ...otherIdentity, available: true }], total: 2, availableTotal: 1, page: 1, pageSize: 24, nextPage: null, occupations: [],
+  } }));
   await page.getByRole('textbox', { name: '邮箱', exact: true }).fill('inheritance-second@example.invalid');
   await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');
   await page.getByRole('button', { name: '登录', exact: true }).click();
@@ -361,7 +369,7 @@ test('an unavailable inheritance feature stops polling and recovers after manual
   await page.clock.install();
   let reads = 0;
   let ready = false;
-  await page.route('**/api/v1/identity-inheritance', route => {
+  await page.route(/\/api\/v1\/identity-inheritance(?:\?.*)?$/, route => {
     reads++;
     if (!ready) return route.fulfill({ status: 404, contentType: 'text/plain', body: '404 page not found' });
     return route.fulfill({ json: {
@@ -369,6 +377,9 @@ test('an unavailable inheritance feature stops polling and recovers after manual
       items: [{ ...chenNian, available: true }],
     } });
   });
+  await page.route('**/api/v1/identity-inheritance/options?*', route => route.fulfill({ json: {
+    items: [{ ...chenNian, available: true }], total: 1, availableTotal: 1, page: 1, pageSize: 24, nextPage: null, occupations: [],
+  } }));
   await page.goto('/choose-identity');
   await expect(page.getByRole('main').getByRole('alert')).toContainText('身份选择功能暂未就绪，请稍后刷新');
   await expect(page.getByRole('main')).not.toContainText('暂时连接不上');

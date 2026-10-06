@@ -47,8 +47,11 @@ pnpm dev          # Next.js :3011
 
 - [V2 实现、接口、迁移与验证](docs/companion-v2.md)
 - [身份继承、双身份聊天与 AI 托管](docs/autopilot.md)
+- [职业角色库、人设配置与批量导入](docs/identity-catalog.md)
 - Delivery policy: `apps/server/config/behavior.json`
-- Current Agent instructions: `apps/agent/src/prompts/companion-v3.ts`; reply pacing: `apps/server/config/behavior.json`
+- Current Agent instructions: `apps/agent/src/prompts/companion-v4.ts`; reply pacing: `apps/server/config/behavior.json`
+- Catalog: `pnpm identities:validate`, `pnpm identities:preview`, `pnpm identities:import` (apply `pnpm db:migrate` first). Generation is explicit: `pnpm identities:generate`; startup never replaces edited profiles.
+- Synthetic persona consistency evaluation: `pnpm --filter agent eval:personas` (6 characters × 5 turns, using the configured model; responses require review).
 - Synthetic V2/V3 model comparison: `pnpm --filter agent eval` (180 calls; see `apps/agent/README.md`)
 - `pnpm server:test`, `pnpm agent:test`, `pnpm typecheck`
 - `pnpm build` (Go API/worker, web and Agent), `pnpm server:build`

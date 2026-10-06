@@ -45,7 +45,7 @@ func TestInheritanceRepairsPreviouslyAppliedReplyDelayConstraint(t *testing.T) {
 		t.Fatal(err)
 	}
 	var applied int
-	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM schema_migrations`).Scan(&applied); err != nil || applied != 9 {
+	if err := f.db.QueryRow(f.ctx, `SELECT count(*) FROM schema_migrations WHERE version<'010_repair_reply_delay_constraint.sql'`).Scan(&applied); err != nil || applied != 9 {
 		t.Fatalf("legacy migration ledger: %d %v", applied, err)
 	}
 	err := f.repo.InheritIdentity(f.ctx, "operator", "identity_linwan", f.service.Policies)

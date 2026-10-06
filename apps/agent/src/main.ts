@@ -4,7 +4,7 @@ import { env } from "./config.js";
 import { createCompanion } from "./agents/companion.js";
 import { createAssistant } from "./agents/assistant.js";
 import { createAgentServer } from "./server.js";
-import { promptVersion } from "./prompts/companion-v3.js";
+import { promptVersion } from "./prompts/companion-v4.js";
 const ready = Boolean(env.LLM_API_KEY && env.LLM_MODEL);
 const model = new OpenAIChatCompletionsModel(
   new OpenAI({

@@ -1,9 +1,13 @@
 import { api, APIError } from './api/client';
+import { catalogSearch, type CatalogFilters, type CatalogPage } from './catalog';
 import type { Gender, Identity, InheritanceState } from '@/types/companion';
 
-export const getInheritance = async () => {
+export const getInheritance = async (selectedId?: string | null, signal?: AbortSignal) => {
   try {
-    return await api<InheritanceState>('/identity-inheritance');
+    const params = new URLSearchParams({ includeItems: 'false' });
+    if (selectedId) params.set('selectedId', selectedId);
+    const state = await api<InheritanceState>(`/identity-inheritance?${params}`, { signal });
+    return { ...state, selectedRequestId: selectedId ?? null };
   } catch (error) {
     // An older API serves a plain 404 when this feature has not been deployed.
     // Preserve structured errors from APIs that already support inheritance.
@@ -22,3 +26,6 @@ export const skipInheritance = () => api<{ ok: boolean }>('/identity-inheritance
 export const setInheritanceGender = (gender: Gender) => api<{ ok: boolean }>('/identity-inheritance/gender', {
   method: 'POST', body: JSON.stringify({ gender }),
 });
+
+export const inheritanceOptions = (filters: CatalogFilters, page: number, signal?: AbortSignal) =>
+  api<CatalogPage<Identity & { available: boolean }>>(`/identity-inheritance/options?${catalogSearch(filters, page)}`, { signal });

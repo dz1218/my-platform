@@ -5,14 +5,14 @@ import {
   replyInput,
   type ReplyInput,
 } from "../schemas/plan.js";
-import { companionInstructions, promptVersion } from "../prompts/companion-v3.js";
+import { companionInstructions, promptVersion } from "../prompts/companion-v4.js";
 import { recentReplyShape } from "./reply-shape.js";
 
-export function createCompanion(model: Model | string, structured = true) {
+export function createCompanion(model: Model | string, structured = true, prompts = { companionInstructions, promptVersion }) {
   const runner = new Runner({ tracingDisabled: true }); // Chat content never leaves via SDK tracing.
   const makeAgent = (kind: string) => new Agent({
     name: "Companion",
-    instructions: companionInstructions(kind),
+    instructions: prompts.companionInstructions(kind),
     model,
     ...(structured ? { outputType: planOutput } : {}),
     modelSettings: {
@@ -36,6 +36,6 @@ export function createCompanion(model: Model | string, structured = true) {
     const plan = parseModelPlan(result.finalOutput);
     if (input.kind === "CONTEXT_UPDATE" && plan.action !== "SILENCE")
       throw new Error("Invalid context update action");
-    return { ...plan, promptVersion };
+    return { ...plan, promptVersion: prompts.promptVersion };
   };
 }

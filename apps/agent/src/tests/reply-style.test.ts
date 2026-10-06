@@ -53,7 +53,7 @@ for (const structured of [true, false]) {
         { role: "assistant", source: "HUMAN", content: "真人上下文" }, user("新消息"),
       ] }), new AbortController().signal);
       assert.equal(calls, 1);
-      assert.equal(result.promptVersion, "companion-v3");
+      assert.equal(result.promptVersion, "companion-v4");
       assert.equal(result.messages.length, count);
     }
   });

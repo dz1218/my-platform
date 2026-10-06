@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMatch } from "@/services/companion";
@@ -12,7 +13,7 @@ import { MessageComposer } from "./message-composer";
 import type { Match } from "@/types/companion";
 import "./chat-room.css";
 
-export function ChatRoom({ matchId, inheritedIdentityId }: { matchId: string; inheritedIdentityId?: string }) {
+export function ChatRoom({ matchId, inheritedIdentityId, intercepted = false }: { matchId: string; inheritedIdentityId?: string; intercepted?: boolean }) {
   const match = useQuery({
     queryKey: ["match", matchId],
     queryFn: () => getMatch(matchId),
@@ -31,9 +32,7 @@ export function ChatRoom({ matchId, inheritedIdentityId }: { matchId: string; in
     return (
       <main id="main-content" tabIndex={-1} className="p-12 text-center">
         <p role="alert">{match.error?.message ?? "暂时无法打开聊天"}</p>
-        <Link href="/companion" className="btn-secondary mt-6">
-          返回陪伴
-        </Link>
+        <ChatBack intercepted={intercepted} className="btn-secondary mt-6">返回陪伴</ChatBack>
       </main>
     );
   if (match.data.identity.id === inheritedIdentityId)
@@ -41,19 +40,21 @@ export function ChatRoom({ matchId, inheritedIdentityId }: { matchId: string; in
       <section className="surface mx-auto max-w-lg p-6">
         <h1 className="text-xl font-semibold">这是你继承的 AI 身份</h1>
         <p className="mt-3 text-sm leading-7 text-muted">你已继承{match.data.identity.name}，不能再以本账户和这个身份聊天。你可以以{match.data.identity.name}的身份回复其他用户，或用本账户认识其他 AI 朋友。</p>
-        <div className="mt-5 flex flex-wrap gap-3"><Link href="/operator" className="btn-primary">以{match.data.identity.name}的身份回复</Link><Link href="/companion" className="btn-secondary">以本账户聊天</Link></div>
+        <div className="mt-5 flex flex-wrap gap-3"><Link href="/operator" className="btn-primary">以{match.data.identity.name}的身份回复</Link><ChatBack intercepted={intercepted} className="btn-secondary">以本账户聊天</ChatBack></div>
       </section>
     </main>;
-  return <Conversation key={match.data.conversationId} match={match.data} />;
+  return <Conversation key={match.data.conversationId} match={match.data} intercepted={intercepted} />;
 }
 export function Conversation({
   match,
   operator = false,
   participantName,
+  intercepted = false,
 }: {
   match: Match;
   operator?: boolean;
   participantName?: string;
+  intercepted?: boolean;
 }) {
   const chat = useConversation(match.conversationId);
   const settingsDialog = useRef<HTMLDialogElement | null>(null);
@@ -92,13 +93,12 @@ export function Conversation({
       }
     >
       <header className="flex items-center gap-2.5 border-b border-line bg-panel px-3.5 py-3 sm:py-2.5">
-        <Link
-          href={operator ? "/operator" : "/companion"}
+        <ChatBack intercepted={intercepted} operator={operator}
           aria-label={operator ? "返回我的 AI 身份" : "返回陪伴"}
           className="grid h-10 w-9 place-items-center rounded-lg text-2xl text-muted hover:bg-brand-50 hover:text-ink"
         >
           ←
-        </Link>
+        </ChatBack>
         <div
           className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line bg-brand-50 text-xl text-brand-600"
           aria-hidden="true"
@@ -114,7 +114,7 @@ export function Conversation({
           <p className="mt-1 text-xs text-muted">
             {operator
               ? `以${match.identity.name}的身份回复`
-              : "当前使用本账户 · 对话可能由 AI 与真人共同参与"}
+              : `${match.identity.occupation ? `${match.identity.occupation} · ` : ""}当前使用本账户 · 对话可能由 AI 与真人共同参与`}
           </p>
         </div>
         {canManage && (
@@ -246,4 +246,9 @@ export function Conversation({
       )}
     </main>
   );
+}
+
+function ChatBack({ intercepted, operator = false, children, ...props }: { intercepted: boolean; operator?: boolean; children: React.ReactNode; className?: string; "aria-label"?: string }) {
+  const router = useRouter();
+  return intercepted && !operator ? <button type="button" {...props} onClick={() => router.back()}>{children}</button> : <Link href={operator ? "/operator" : "/companion"} {...props}>{children}</Link>;
 }

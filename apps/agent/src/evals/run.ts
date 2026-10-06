@@ -69,7 +69,7 @@ const model: Model = {
   },
   getStreamedResponse: (request) => providerModel.getStreamedResponse(request),
 };
-const runV3 = createCompanion(model, env.LLM_STRUCTURED_OUTPUT);
+const runV3 = createCompanion(model, env.LLM_STRUCTURED_OUTPUT, { companionInstructions, promptVersion: "companion-v3" });
 const runner = new Runner({ tracingDisabled: true });
 const v2 = new Agent({ name: "CompanionV2Baseline", model,
   instructions: baseline + (env.LLM_STRUCTURED_OUTPUT ? "" : '\nJSON 格式：{"action":"REPLY或SILENCE","intent":"chat或empathetic_chat或share或follow_up或closure","messages":[{"clientItemKey":"1","content":"文本","delayMs":0}]}'),

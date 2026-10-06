@@ -6,8 +6,13 @@ export const replyInput = z
         z.object({
           id: z.string().optional(),
           role: z.enum(["system", "user", "assistant"]),
-          content: z.string().min(1).max(20000),
+          // Go budgets the complete JSON request at 48 KiB. The system facts
+          // can exceed 20k UTF-16 units when persona text is JSON-escaped.
+          content: z.string().min(1).max(48 * 1024),
           source: z.string().optional(),
+        }).superRefine((message, context) => {
+          if (message.role !== "system" && message.content.length > 20000)
+            context.addIssue({ code: "custom", path: ["content"], message: "Conversation message exceeds 20000 characters" });
         }),
       )
       .min(1)

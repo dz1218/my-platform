@@ -15,12 +15,12 @@ type Match struct {
 }
 type Repository struct{ DB *pgxpool.Pool }
 
-const columns = `m.id,c.id,i.id,i.name,i.age,i.avatar_url,i.gender`
+const columns = `m.id,c.id,` + identity.PublicColumns
 const joins = ` FROM matches m JOIN conversations c ON c.match_id=m.id JOIN identities i ON i.id=m.identity_id `
 
 func (r Repository) Get(ctx context.Context, userID, id string) (Match, error) {
 	var m Match
-	err := r.DB.QueryRow(ctx, `SELECT `+columns+joins+`WHERE m.user_id=$1 AND m.id=$2 AND NOT EXISTS(SELECT 1 FROM identity_inheritances h WHERE h.identity_id=m.identity_id AND h.user_id=$1)`, userID, id).Scan(&m.ID, &m.ConversationID, &m.Identity.ID, &m.Identity.Name, &m.Identity.Age, &m.Identity.AvatarURL, &m.Identity.Gender)
+	err := r.DB.QueryRow(ctx, `SELECT `+columns+joins+`WHERE m.user_id=$1 AND m.id=$2 AND NOT EXISTS(SELECT 1 FROM identity_inheritances h WHERE h.identity_id=m.identity_id AND h.user_id=$1)`, userID, id).Scan(append([]any{&m.ID, &m.ConversationID}, identity.PublicDestinations(&m.Identity)...)...)
 	return m, err
 }
 func (r Repository) List(ctx context.Context, userID string) ([]Match, error) {
@@ -32,7 +32,7 @@ func (r Repository) List(ctx context.Context, userID string) ([]Match, error) {
 	items := []Match{}
 	for rows.Next() {
 		var m Match
-		if err := rows.Scan(&m.ID, &m.ConversationID, &m.Identity.ID, &m.Identity.Name, &m.Identity.Age, &m.Identity.AvatarURL, &m.Identity.Gender); err != nil {
+		if err := rows.Scan(append([]any{&m.ID, &m.ConversationID}, identity.PublicDestinations(&m.Identity)...)...); err != nil {
 			return nil, err
 		}
 		items = append(items, m)

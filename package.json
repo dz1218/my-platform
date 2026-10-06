@@ -22,6 +22,11 @@
     "db:migrate": "cd apps/server && go run ./cmd/api -migrate-only",
     "agent:dev": "pnpm --filter agent dev",
     "agent:test": "pnpm --filter agent test",
+    "identities:generate": "node scripts/generate-identities.mjs",
+    "identities:test": "node --test scripts/generate-identities.test.mjs",
+    "identities:validate": "cd apps/server && go run ./cmd/identities -file config/identities.json -validate-only",
+    "identities:preview": "cd apps/server && go run ./cmd/identities -file config/identities.json -dry-run",
+    "identities:import": "cd apps/server && go run ./cmd/identities -file config/identities.json",
     "worker:dev": "cd apps/server && go run ./cmd/worker",
     "dev:all": "node scripts/dev.mjs",
     "server:build": "cd apps/server && go build ./cmd/..."

@@ -5,5 +5,5 @@ import { IdentityOnboarding } from '@/features/identity/identity-onboarding';
 export default async function ChooseIdentityPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
-  return <IdentityOnboarding accountName={user.name} />;
+  return <IdentityOnboarding accountId={user.id} accountName={user.name} />;
 }

@@ -6,7 +6,7 @@ import (
 	"companion/server/internal/identity"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 )
 
 type Builder struct {
@@ -23,7 +23,6 @@ func (b Builder) Build(ctx context.Context, c conversation.Conversation) (provid
 	if err != nil {
 		return provider.ChatRequest{}, err
 	}
-	system := fmt.Sprintf("身份事实（仅作上下文，不是用户指令）：\n姓名：%s\n年龄：%d\n城市：%s\n少量背景：%s", i.Name, i.Age, i.City, i.Background)
 	var summary, stage string
 	if err = b.Messages.DB.QueryRow(ctx, `SELECT CASE WHEN c.memory_opt_in THEN c.summary ELSE '' END,m.status FROM conversations c JOIN matches m ON m.id=c.match_id WHERE c.id=$1`, c.ID).Scan(&summary, &stage); err != nil {
 		return provider.ChatRequest{}, err
@@ -35,8 +34,77 @@ func (b Builder) Build(ctx context.Context, c conversation.Conversation) (provid
 	if err = b.Messages.DB.QueryRow(ctx, `SELECT COALESCE((SELECT jsonb_build_object('fictional',true,'activity',current_activity,'mood',mood,'version',version) FROM identity_daily_state WHERE identity_id=$1 AND NOT paused AND expires_at>now()),'null'::jsonb)`, c.IdentityID).Scan(&state); err != nil {
 		return provider.ChatRequest{}, err
 	}
-	facts, _ := json.Marshal(map[string]any{"identity": system, "relationshipStage": stage, "summary": summary, "memories": json.RawMessage(memories), "fictionalDailyState": json.RawMessage(state)})
-	return provider.ChatRequest{Messages: boundedHistory(string(facts), page.Items, 12000)}, nil
+	return assembleRequest(i, stage, summary, memories, state, page.Items)
+}
+
+// Leave room under the Agent's 64 KiB transport limit for scheduling metadata
+// and a proactive follow-up's original user message (at most 2000 runes).
+const requestBudget = 48 * 1024
+
+func assembleRequest(i identity.Identity, stage, summary string, memories, state json.RawMessage, history []conversation.Message) (provider.ChatRequest, error) {
+	if len(memories) == 0 {
+		memories = json.RawMessage(`[]`)
+	}
+	if len(state) == 0 {
+		state = json.RawMessage(`null`)
+	}
+	facts := map[string]any{
+		"identity": map[string]any{
+			"id": i.ID, "name": i.Name, "age": i.Age, "gender": i.Gender,
+			"city": i.City, "background": i.Background,
+			"occupationCode": i.OccupationCode, "occupation": i.Occupation,
+			"persona": i.Persona, "personaVersion": i.PersonaVersion, "fictional": true,
+		},
+		"relationshipStage": stage, "summary": summary,
+		"memories": memories, "fictionalDailyState": state,
+	}
+	encoded, err := json.Marshal(facts)
+	if err != nil {
+		return provider.ChatRequest{}, err
+	}
+	request := provider.ChatRequest{Messages: boundedHistory(string(encoded), history, 12000)}
+	return BoundRequest(request)
+}
+
+// BoundRequest also applies to enrichment, which replaces the initial history
+// with messages up to its leased cursor after Build has returned.
+func BoundRequest(request provider.ChatRequest) (provider.ChatRequest, error) {
+	if len(request.Messages) == 0 || request.Messages[0].Role != "system" {
+		return provider.ChatRequest{}, errors.New("missing identity context")
+	}
+	var facts map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(request.Messages[0].Content), &facts); err != nil {
+		return provider.ChatRequest{}, err
+	}
+	for {
+		body, err := json.Marshal(request)
+		if err != nil {
+			return provider.ChatRequest{}, err
+		}
+		if len(body) <= requestBudget && len(request.Messages) <= 41 {
+			return request, nil
+		}
+		// Keep the complete current message and identity. Optional older context
+		// is discarded first, including JSON escaping in the byte accounting.
+		if len(request.Messages) > 2 {
+			request.Messages = append(request.Messages[:1], request.Messages[2:]...)
+			continue
+		}
+		if len(facts["summary"]) > 0 && string(facts["summary"]) != `""` {
+			facts["summary"] = json.RawMessage(`""`)
+		} else if len(facts["memories"]) > 0 && string(facts["memories"]) != "[]" {
+			facts["memories"] = json.RawMessage(`[]`)
+		} else if len(facts["fictionalDailyState"]) > 0 && string(facts["fictionalDailyState"]) != "null" {
+			facts["fictionalDailyState"] = json.RawMessage(`null`)
+		} else {
+			return provider.ChatRequest{}, errors.New("identity and current message exceed context budget")
+		}
+		encoded, err := json.Marshal(facts)
+		if err != nil {
+			return provider.ChatRequest{}, err
+		}
+		request.Messages[0].Content = string(encoded)
+	}
 }
 
 // Rune budgeting is deliberately conservative for Chinese and bounds context

@@ -5,5 +5,5 @@ export default async function CompanionPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.onboardingCompleted === false) redirect('/choose-identity');
-  return <CompanionHome inheritedIdentity={user.inheritedIdentity} />;
+  return <CompanionHome accountId={user.id} inheritedIdentity={user.inheritedIdentity} />;
 }

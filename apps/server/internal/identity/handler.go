@@ -8,24 +8,15 @@ import (
 type Handler struct{ Repo Repository }
 
 func (h Handler) Discover(c *gin.Context) {
-	items, err := h.Repo.List(c.Request.Context())
+	filters, err := ParseFilters(c.Request.URL.Query())
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
-	inherited, err := h.Repo.Inherited(c.Request.Context(), c.GetString("userID"))
+	page, err := h.Repo.DiscoverPage(c.Request.Context(), c.GetString("userID"), filters)
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
-	if inherited != nil {
-		filtered := []Identity{}
-		for _, i := range items {
-			if i.ID != inherited.ID {
-				filtered = append(filtered, i)
-			}
-		}
-		items = filtered
-	}
-	c.JSON(200, gin.H{"items": items})
+	c.JSON(200, page)
 }

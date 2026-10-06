@@ -1,4 +1,4 @@
-import { Agent, Runner, type Model } from "@openai/agents";
+import { Agent, Runner, assistant, user, type Model } from "@openai/agents";
 import { assistantInput, parseAssistantReply, type AssistantInput } from "../schemas/assistant.js";
 
 export function createAssistant(model: Model | string) {
@@ -14,7 +14,8 @@ export function createAssistant(model: Model | string) {
   });
   return async (raw: AssistantInput, signal: AbortSignal) => {
     const input = assistantInput.parse(raw);
-    const result = await runner.run(agent, input.messages, { maxTurns: 1, signal });
+    const messages = input.messages.map(message => message.role === "assistant" ? assistant(message.content) : user(message.content));
+    const result = await runner.run(agent, messages, { maxTurns: 1, signal });
     return parseAssistantReply(result.finalOutput);
   };
 }
