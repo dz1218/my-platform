@@ -6,9 +6,17 @@ import {
 } from "node:http";
 import { replyInput, type ReplyInput } from "./schemas/plan.js";
 import { replyErrorCode } from "./reply-error.js";
-import { assistantInput, parseAssistantReply, type AssistantInput, type AssistantReply } from "./schemas/assistant.js";
+import {
+  assistantInput,
+  parseAssistantReply,
+  type AssistantInput,
+  type AssistantReply,
+} from "./schemas/assistant.js";
 
-export type AssistantRunner = (input: AssistantInput, signal: AbortSignal) => Promise<AssistantReply>;
+export type AssistantRunner = (
+  input: AssistantInput,
+  signal: AbortSignal,
+) => Promise<AssistantReply>;
 
 export type ReplyRunner = (
   input: ReplyInput,
@@ -53,9 +61,11 @@ export function createAgentServer(
       }
       if (
         req.method !== "POST" ||
-        !["/internal/reply", "/internal/agent/generate-plan", "/internal/assistant/chat"].includes(
-          req.url ?? "",
-        )
+        ![
+          "/internal/reply",
+          "/internal/agent/generate-plan",
+          "/internal/assistant/chat",
+        ].includes(req.url ?? "")
       ) {
         respond(res, 404, { error: "not_found" });
         return;
@@ -142,9 +152,13 @@ export function createAgentServer(
             res.end(
               `event: error\ndata: ${JSON.stringify({ error: code })}\n\n`,
             );
-        } else respond(res, isAssistant && abort.signal.aborted ? 504 : 502, {
-          error: isAssistant && abort.signal.aborted ? "generation_timeout" : "generation_failed",
-        });
+        } else
+          respond(res, isAssistant && abort.signal.aborted ? 504 : 502, {
+            error:
+              isAssistant && abort.signal.aborted
+                ? "generation_timeout"
+                : "generation_failed",
+          });
       } finally {
         clearTimeout(timer);
         clearInterval(heartbeat);
@@ -162,13 +176,20 @@ export function createAgentServer(
   );
 }
 
-function logReply(requestId: string, reply: Awaited<ReturnType<ReplyRunner>>, generationMs: number) {
-  console.info(JSON.stringify({
-    event: "agent_plan_generated",
-    requestId,
-    generationMs,
-    promptVersion: reply.promptVersion,
-    bubbleCount: reply.messages?.length ?? 0,
-    characterCount: reply.messages?.reduce((n, m) => n + [...m.content].length, 0) ?? 0,
-  }));
+function logReply(
+  requestId: string,
+  reply: Awaited<ReturnType<ReplyRunner>>,
+  generationMs: number,
+) {
+  console.info(
+    JSON.stringify({
+      event: "agent_plan_generated",
+      requestId,
+      generationMs,
+      promptVersion: reply.promptVersion,
+      bubbleCount: reply.messages?.length ?? 0,
+      characterCount:
+        reply.messages?.reduce((n, m) => n + [...m.content].length, 0) ?? 0,
+    }),
+  );
 }

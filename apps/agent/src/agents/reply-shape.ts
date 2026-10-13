@@ -8,7 +8,9 @@ export type ReplyShape = {
 
 // Only committed, explicitly AI-sourced history contributes. Human/unknown
 // sources remain in the input but must not become AI style observations.
-export function recentReplyShape(messages: ReplyInput["messages"]): ReplyShape[] {
+export function recentReplyShape(
+  messages: ReplyInput["messages"],
+): ReplyShape[] {
   const shapes: ReplyShape[] = [];
   let current: ReplyShape | undefined;
   for (const message of messages) {

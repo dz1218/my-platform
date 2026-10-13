@@ -11,15 +11,17 @@
 - `pnpm --filter agent eval:personas`：从完整角色库抽取 6 个职业各一人，每人 5 轮，共最多 30 次模型调用，输出位于 `test-results/persona-v4`。使用 `--output` 区分修改后的实验。
 - `pnpm --filter agent dev:livekit`：保留既有 LiveKit 工具。
 
-`src/prompts/companion-v4.ts` 在 V3 的自然表达规则上增加稳定角色事实、职业和个人经历、关系来源及旧资料兼容规则。Go 每次按当前会话身份读取结构化人设；完整人设不通过公开角色列表返回。`src/agents/companion.ts` 按任务选择指令，每个请求只做一次模型调用，不共享用户会话状态。聊天输入附带最近四段已发送 AI 回复的条数、Unicode 字数和问句结尾摘要；真人或来源不明的消息不参与统计，但完整保留在上下文中。摘要只用于提醒重复，不控制条数。
+`src/prompts/companion-v5.ts` 保留 V4 的稳定角色事实、职业和个人经历、关系来源及旧资料兼容规则，替换聊天表达部分。用连续对话示范短承接、长展开和自然补发，移除偏向压缩、合并补充的重复约束；不以固定字数、条数或随机拆句制造变化。用户短输入也可以引出具体展开，搬家和找工作不自动触发建议，不固定评价后追问。Go 每次按当前会话身份读取结构化人设；完整人设不通过公开角色列表返回。`src/agents/companion.ts` 按任务选择指令，每个请求只做一次模型调用，不共享用户会话状态。聊天输入附带最近四段已发送 AI 回复的条数、Unicode 字数和问句结尾摘要；真人或来源不明的消息不参与统计，但完整保留在上下文中。摘要只用于提醒重复，不控制条数。
 
 `src/schemas/plan.ts` 保留 0–3 条候选、总计 500 字和 20 秒延迟上限。当前指令让模型输出 `delayMs=0`，Go 根据任务快照里的 `replyPacing=typing` 计算实际延迟；旧任务缺少配置仍按候选延迟执行。`CONTEXT_UPDATE` 独立选择整理指令，不接受聊天风格摘要，只产生摘要和待用户确认的记忆候选。
+
+V5 将角色事实核对放在聊天示例之后，避免将设想写成既有经历，或把用户的计划补成已经发生的事实。内部输出预算为 4096 token：部分供应商将思考 token 也计入输出，原 2048 预算在真实评测中出现 `finish_reason=length`，正文 JSON 被截断；提高内部预算不放宽 500 字正文校验。历史 V3/V4 评测仍固定使用 2048 token。
 
 JSON mode 偶尔省略建议字段 `delayMs` 时，Agent 仅补为 0，再经过原有严格校验；非法动作、空正文、重复 key、显式无效值和超预算输出仍然拒绝。模型只返回空白时记为 `incomplete_model_response`，由现有 Go 队列重试，不转换成 SILENCE，也不增加单请求模型调用次数。供应商亦说明 JSON 输出存在偶发空内容，见 [DeepSeek JSON 输出文档](https://api-docs.deepseek.com/zh-cn/guides/json_mode/)。
 
 SDK tracing 关闭；普通日志只记录随机请求编号、策略版本、条数、字数、耗时及固定错误分类。服务端并发上限 4，生成 deadline 90 秒，供应商重试为 0，持久化重试由 Go 决定。
 
-`POST /internal/agent/generate-plan` 返回 JSON；Go 当前复用 `/internal/reply` 的内部 SSE 整体候选事件。两者均使用 Bearer 服务鉴权，浏览器统一使用 Go WebSocket，不接收模型 token。V4 复用 V3 表达规则；历史 V2/V3 对比评测显式固定原版本，不随默认提示词升级而改名失真。
+`POST /internal/agent/generate-plan` 返回 JSON；Go 当前复用 `/internal/reply` 的内部 SSE 整体候选事件。两者均使用 Bearer 服务鉴权，浏览器统一使用 Go WebSocket，不接收模型 token。历史 V2/V3 对比和 V4 人设评测显式固定原版本，不随默认提示词升级而改名失真。
 
 人设评测仅使用角色配置和固定合成用户台词，覆盖身份介绍、工作之外的话题、用户偏好分离、要求篡改姓名/年龄/职业和虚构共同往事。结果包含实际回复供审阅；结构校验通过不代表人设表现通过。脚本保留已完成记录，重跑同一输出目录不会重复调用已记录轮次，错误轮次也保留；需要重试时使用新输出目录。无密钥或模型不可用时不能声称真实对话已验证。
 
@@ -35,6 +37,14 @@ pnpm --filter agent eval --case sarcasm-correction --samples 1 --output test-res
 pnpm --filter agent eval --output test-results/companion-v3
 ```
 
-支持 `--variant v2|v3|both`、`--samples 1..10`、`--concurrency 1..4`、`--case ID`。相同配置和提示词的输出目录支持断点续跑；不同实验请使用不同目录。每个模型在连续对话中接收自身已产生的回复，用户台词相同。
+支持 `--variant v2|v3|v4|v5|both|v4-v5`、`--suite PATH`、`--samples 1..10`、`--concurrency 1..4`、`--case ID`。`both` 仍表示 V2/V3；`samples` 只控制单轮场景。相同配置和提示词的输出目录支持断点续跑；不同实验请使用不同目录。每个模型在连续对话中接收自身已产生的回复，用户台词相同；某轮失败时停止该对话，避免用不完整前情继续评测。
+
+`evals/companion-v5.json` 保存许可欣角色资料和“准备来上海 → 先找工作”的十轮合成对话，另含旧模板历史恢复、明确要求长短结合两个单轮场景。对比 V4/V5 共 24 次调用：
+
+```bash
+pnpm --filter agent eval --variant v4-v5 --suite evals/companion-v5.json --samples 1 --concurrency 2 --output test-results/companion-v5-live
+```
+
+检查实际内容与上下文是否贴合、长短变化是否自然、是否仍在每轮评价后建议或追问；不能只因条数增加就判定通过。
 
 `results.jsonl` 和 `report.json` 保存合成文本、场景标准、模型配置及耗时；不保存密钥。`review-template.json` 留空评分，供审阅者按接话准确、回应具体、表达自然各 1–5 分评估，均分目标至少 4，关键场景逐项通过。统计气泡数量不代表质量通过，生成成功也不等于人工验收通过。修改提示词后应使用新输出目录重跑。

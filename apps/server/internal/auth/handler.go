@@ -2,9 +2,10 @@ package auth
 
 import (
 	"companion/server/pkg/response"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {

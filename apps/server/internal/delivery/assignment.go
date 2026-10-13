@@ -17,8 +17,8 @@ type Assignment struct {
 
 func (r Repository) Assignments(ctx context.Context, actor string) ([]Assignment, error) {
 	rows, err := r.DB.Query(ctx, `SELECT c.match_id,c.id,i.id,i.name,i.age,i.avatar_url,i.gender,COALESCE(NULLIF(u.name,''),'聊天用户')
- FROM conversations c JOIN identities i ON i.id=c.identity_id JOIN users u ON u.id=c.user_id
- WHERE `+strings.ReplaceAll(conversation.ManageSQL, "$2", "$1")+` ORDER BY c.updated_at DESC`, actor)
+  FROM conversations c JOIN identities i ON i.id=c.identity_id JOIN users u ON u.id=c.user_id
+  WHERE `+strings.ReplaceAll(conversation.ManageSQL, "$2", "$1")+` ORDER BY c.updated_at DESC`, actor)
 	if err != nil {
 		return nil, err
 	}

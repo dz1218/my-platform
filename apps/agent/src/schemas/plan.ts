@@ -3,17 +3,26 @@ export const replyInput = z
   .object({
     messages: z
       .array(
-        z.object({
-          id: z.string().optional(),
-          role: z.enum(["system", "user", "assistant"]),
-          // Go budgets the complete JSON request at 48 KiB. The system facts
-          // can exceed 20k UTF-16 units when persona text is JSON-escaped.
-          content: z.string().min(1).max(48 * 1024),
-          source: z.string().optional(),
-        }).superRefine((message, context) => {
-          if (message.role !== "system" && message.content.length > 20000)
-            context.addIssue({ code: "custom", path: ["content"], message: "Conversation message exceeds 20000 characters" });
-        }),
+        z
+          .object({
+            id: z.string().optional(),
+            role: z.enum(["system", "user", "assistant"]),
+            // Go budgets the complete JSON request at 48 KiB. The system facts
+            // can exceed 20k UTF-16 units when persona text is JSON-escaped.
+            content: z
+              .string()
+              .min(1)
+              .max(48 * 1024),
+            source: z.string().optional(),
+          })
+          .superRefine((message, context) => {
+            if (message.role !== "system" && message.content.length > 20000)
+              context.addIssue({
+                code: "custom",
+                path: ["content"],
+                message: "Conversation message exceeds 20000 characters",
+              });
+          }),
       )
       .min(1)
       .max(41),
@@ -90,11 +99,20 @@ export function parseModelPlan(raw: unknown): CandidatePlan {
     if (!raw.trim()) throw new Error("Incomplete model response");
     raw = JSON.parse(raw);
   }
-  if (raw && typeof raw === "object" && "messages" in raw && Array.isArray(raw.messages)) {
-    raw = { ...raw, messages: raw.messages.map((item: unknown) => {
-      if (item && typeof item === "object" && !("delayMs" in item)) return { ...item, delayMs: 0 };
-      return item;
-    }) };
+  if (
+    raw &&
+    typeof raw === "object" &&
+    "messages" in raw &&
+    Array.isArray(raw.messages)
+  ) {
+    raw = {
+      ...raw,
+      messages: raw.messages.map((item: unknown) => {
+        if (item && typeof item === "object" && !("delayMs" in item))
+          return { ...item, delayMs: 0 };
+        return item;
+      }),
+    };
   }
   return candidatePlan.parse(raw);
 }

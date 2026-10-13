@@ -32,9 +32,11 @@ for (const structured of [true, false]) {
   test(`one model call preserves 1–3 bubbles and silence (structured=${structured})`, async () => {
     for (const count of [1, 2, 3, 0]) {
       let calls = 0;
+      const contents = ["这事我倒有点不同的想法。等消息最烦的就是没个准数，容易一会儿又看一眼。\n\n你说投出去没回音，我能理解为什么烦。", "嗯，懂了", "刚才还想到一点：也不用每次都把话收得那么齐。"].slice(0, count);
       const model: Model = {
         async getResponse(request) {
           calls++;
+          assert.equal(request.modelSettings.maxTokens, 4096);
           assert.match(JSON.stringify(request.input), /recentReplyShape/);
           assert.match(JSON.stringify(request.input), /HUMAN/);
           return {
@@ -42,7 +44,7 @@ for (const structured of [true, false]) {
             output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify({
               action: count ? "REPLY" : "SILENCE", intent: count ? "chat" : "closure",
               summary: null, memoryProposals: [],
-              messages: Array.from({ length: count }, (_, i) => ({ clientItemKey: String(i), content: `内容${i}`, delayMs: 0 })),
+              messages: contents.map((content, i) => ({ clientItemKey: String(i), content, delayMs: 0 })),
             }) }] }],
           };
         },
@@ -53,8 +55,9 @@ for (const structured of [true, false]) {
         { role: "assistant", source: "HUMAN", content: "真人上下文" }, user("新消息"),
       ] }), new AbortController().signal);
       assert.equal(calls, 1);
-      assert.equal(result.promptVersion, "companion-v4");
+      assert.equal(result.promptVersion, "companion-v5");
       assert.equal(result.messages.length, count);
+      assert.deepEqual(result.messages.map(m => m.content), contents);
     }
   });
 }
@@ -65,7 +68,7 @@ test("context updates use separate instructions and no reply shape while retaini
     async getResponse(request) {
       const encoded = JSON.stringify(request);
       assert.match(encoded, /当前任务仅做上下文整理/);
-      assert.doesNotMatch(encoded, /recentReplyShape|白得意了/);
+      assert.doesNotMatch(encoded, /recentReplyShape|白得意了|诚实的厨子|节奏示例/);
       assert.match(encoded, /喜欢安静/);
       return {
         usage: new Usage({ inputTokens: 1, outputTokens: 1 }),

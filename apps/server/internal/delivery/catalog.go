@@ -50,7 +50,7 @@ func (r Repository) ImportCatalog(ctx context.Context, catalog identity.Catalog,
 		}
 	}
 	query := `SELECT ` + identity.PublicColumns + `,i.persona,i.persona_version
- FROM identities i WHERE i.id=ANY($1::text[]) ORDER BY i.id`
+  FROM identities i WHERE i.id=ANY($1::text[]) ORDER BY i.id`
 	if !dryRun {
 		query += ` FOR NO KEY UPDATE OF i`
 	}

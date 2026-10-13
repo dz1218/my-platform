@@ -4,6 +4,7 @@ import (
 	"companion/server/internal/identity"
 	"companion/server/pkg/database"
 	"context"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

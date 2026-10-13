@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Usage, type Model } from "@openai/agents";
 import { createCompanion } from "../agents/companion.js";
-import { companionInstructions } from "../prompts/companion-v4.js";
+import { companionInstructions } from "../prompts/companion-v5.js";
 import { replyInput } from "../schemas/plan.js";
 
 test("concurrent characters and users share only instructions, never context or memory", async () => {
@@ -31,7 +31,7 @@ test("concurrent characters and users share only instructions, never context or 
   const editor = captured.find(s => s.includes("identity_editor"))!;
   assert.match(doctor, /摄影/); assert.doesNotMatch(doctor, /种花|用户乙/);
   assert.match(editor, /种花/); assert.doesNotMatch(editor, /摄影|用户甲/);
-  assert.ok(results.every(r => r.promptVersion === "companion-v4"));
+  assert.ok(results.every(r => r.promptVersion === "companion-v5"));
 });
 
 test("identity rules cover legacy context and context updates without importing chat examples", () => {
@@ -40,7 +40,7 @@ test("identity rules cover legacy context and context updates without importing 
   assert.match(chat, /不能覆盖当前资料/);
   assert.match(chat, /旧 identity 仍是文本/);
   assert.match(context, /不能产生替换共享人设的记忆提案/);
-  assert.doesNotMatch(context, /白得意了/);
+  assert.doesNotMatch(context, /白得意了|诚实的厨子|节奏示例/);
 });
 
 test("escaped persona facts fit the Go budget without widening user message limits", () => {
