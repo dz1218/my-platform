@@ -48,19 +48,19 @@ export default async function EditNovelPage({
         </Link>
       </div>
 
-      <h1 className="mb-6 text-2xl font-semibold tracking-[-0.5px] text-slate-900">
+      <h1 className="mb-6 text-2xl font-semibold tracking-[-0.5px] text-ink">
         管理小说
       </h1>
 
       {/* ── 编辑小说信息 ── */}
       <div className="surface mb-6 p-5">
-        <h2 className="mb-5 text-base font-bold text-slate-800">基本信息</h2>
+        <h2 className="mb-5 text-base font-bold text-ink">基本信息</h2>
         <form action={updateNovelAction} className="grid gap-5">
           <UnsavedChanges />
           <input type="hidden" name="novelId" value={id} />
 
           <label className="grid gap-[7px]">
-            <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">
+            <span className="text-[13px] font-semibold tracking-[0.02em] text-muted">
               标题
             </span>
             <input
@@ -73,7 +73,7 @@ export default async function EditNovelPage({
           </label>
 
           <label className="grid gap-[7px]">
-            <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">
+            <span className="text-[13px] font-semibold tracking-[0.02em] text-muted">
               简介
             </span>
             <textarea
@@ -85,7 +85,7 @@ export default async function EditNovelPage({
           </label>
 
           <label className="grid gap-[7px]">
-            <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">
+            <span className="text-[13px] font-semibold tracking-[0.02em] text-muted">
               状态
             </span>
             <select name="status" defaultValue={novel.status} className="input-field">
@@ -103,9 +103,9 @@ export default async function EditNovelPage({
       {/* ── 章节管理 ── */}
       <div className="surface mb-6 p-5">
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-base font-bold text-slate-800">
+          <h2 className="text-base font-bold text-ink">
             章节管理
-            <span className="ml-2 text-sm font-normal text-slate-500">
+            <span className="ml-2 text-sm font-normal text-muted">
               ({novel.chapters.length} 章)
             </span>
           </h2>
@@ -139,7 +139,7 @@ export default async function EditNovelPage({
         </form>
 
         {novel.chapters.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-500">
+          <p className="py-6 text-center text-sm text-muted">
             还没有章节，在上方输入标题添加第一章。
           </p>
         ) : (
@@ -147,19 +147,19 @@ export default async function EditNovelPage({
             {novel.chapters.map((chapter) => (
               <div
                 key={chapter.id}
-                className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3"
+                className="flex items-center justify-between rounded-xl border border-line bg-panel px-4 py-3"
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-500">
+                  <span className="text-xs font-bold text-muted">
                     {String(chapter.orderIndex).padStart(2, '0')}
                   </span>
-                  <span className="text-sm text-slate-800">{chapter.title}</span>
+                  <span className="text-sm text-ink">{chapter.title}</span>
                   {chapter.published ? (
-                    <span className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                    <span className="rounded-md border border-success-line bg-success-soft px-1.5 py-0.5 text-[10px] font-bold text-success">
                       已发布
                     </span>
                   ) : (
-                    <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                    <span className="rounded-md border border-warning-line bg-warning-soft px-1.5 py-0.5 text-[10px] font-bold text-warning">
                       草稿
                     </span>
                   )}
@@ -177,9 +177,9 @@ export default async function EditNovelPage({
       </div>
 
       {/* ── 危险区域 ── */}
-      <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.05] p-5">
-        <h2 className="mb-3 text-base font-bold text-rose-700">危险区域</h2>
-        <p className="mb-4 text-sm text-slate-500">
+      <div className="rounded-2xl border border-danger-line bg-danger-soft p-5">
+        <h2 className="mb-3 text-base font-bold text-danger">危险区域</h2>
+        <p className="mb-4 text-sm text-muted">
           删除后无法恢复，所有章节将一并删除。
         </p>
         <ConfirmForm action={deleteNovelAction} message="删除后无法恢复，确定删除吗？">

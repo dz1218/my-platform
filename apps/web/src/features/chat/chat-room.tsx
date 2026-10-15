@@ -23,7 +23,7 @@ export function ChatRoom({ matchId, inheritedIdentityId, intercepted = false }: 
       <main
         id="main-content"
         tabIndex={-1}
-        className="p-12 text-center text-slate-600"
+        className="p-12 text-center text-muted"
       >
         正在打开聊天…
       </main>
@@ -95,12 +95,12 @@ export function Conversation({
       <header className="flex items-center gap-2.5 border-b border-line bg-panel px-3.5 py-3 sm:py-2.5">
         <ChatBack intercepted={intercepted} operator={operator}
           aria-label={operator ? "返回我的 AI 身份" : "返回陪伴"}
-          className="grid h-10 w-9 place-items-center rounded-lg text-2xl text-muted hover:bg-brand-50 hover:text-ink"
+          className="grid h-10 w-9 place-items-center rounded-lg text-2xl text-muted hover:bg-surface-soft hover:text-ink"
         >
           ←
         </ChatBack>
         <div
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line bg-brand-50 text-xl text-brand-600"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line bg-surface-soft text-xl text-accent"
           aria-hidden="true"
         >
           {match.identity.name.slice(-1)}
@@ -150,29 +150,29 @@ export function Conversation({
           <button
             disabled={chat.loadingOlder}
             onClick={() => void loadOlder()}
-            className="mx-auto mb-6 block text-xs text-slate-600"
+            className="mx-auto mb-6 block text-xs text-muted"
           >
             {chat.loadingOlder ? "正在加载…" : "查看更早的消息"}
           </button>
         )}
         {chat.olderError && (
-          <p role="alert" className="mb-4 text-center text-sm text-rose-700">
+          <p role="alert" className="mb-4 text-center text-sm text-danger">
             {chat.olderError.message}
           </p>
         )}
         {chat.latest.isPending ? (
-          <p className="text-center text-sm text-slate-500">
+          <p className="text-center text-sm text-muted">
             正在打开你们的对话…
           </p>
         ) : (
           !chat.messages.length && (
-            <p className="my-12 text-center text-sm text-slate-500">
+            <p className="my-12 text-center text-sm text-muted">
               还没有消息，和{operator ? (participantName ?? '对方') : match.identity.name}打个招呼吧。
             </p>
           )
         )}
         {chat.latest.error && (
-          <div role="alert" className="mb-5 text-center text-sm text-rose-700">
+          <div role="alert" className="mb-5 text-center text-sm text-danger">
             暂时连接不上，正在尝试恢复。
             <button
               onClick={() => void chat.latest.refetch()}
@@ -213,7 +213,7 @@ export function Conversation({
       </div>
       <footer className="border-t border-line bg-panel px-3 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-4">
         {chat.error && (
-          <p role="alert" className="mb-3 text-sm text-rose-700">
+          <p role="alert" className="mb-3 text-sm text-danger">
             {chat.error.message}
           </p>
         )}

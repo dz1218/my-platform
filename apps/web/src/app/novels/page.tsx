@@ -25,14 +25,14 @@ export default async function NovelListPage() {
       />
       <div className="section-heading">
         <h2>书架</h2>
-        <span className="text-xs font-normal text-slate-500">
+        <span className="text-xs font-normal text-muted">
           {novels.length} 本小说
         </span>
       </div>
 
       {novels.length === 0 ? (
         <div className="empty-state">
-          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-[20px] border border-brand-300/25">
+          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-[20px] border border-accent-line">
             <svg
               aria-hidden="true"
               width="32"
@@ -49,8 +49,8 @@ export default async function NovelListPage() {
               <path d="M9 7h6M9 11h6M9 15h4" />
             </svg>
           </div>
-          <p className="mb-2 text-[17px] font-bold text-slate-600">暂无小说</p>
-          <p className="mx-auto max-w-80 text-sm leading-7 text-slate-500">
+          <p className="mb-2 text-[17px] font-bold text-muted">暂无小说</p>
+          <p className="mx-auto max-w-80 text-sm leading-7 text-muted">
             {loggedIn
               ? "点击上方「创建小说」开始你的创作之旅。"
               : "还没有人发布小说，敬请期待。"}
@@ -62,31 +62,31 @@ export default async function NovelListPage() {
             <Link
               key={novel.id}
               href={`/novels/${novel.id}`}
-              className="content-panel block no-underline text-inherit hover:border-brand-300"
+              className="content-panel block no-underline text-inherit hover:border-accent-line"
             >
               <div className="room-card h-full px-5 py-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-wrap items-center gap-2.5">
-                      <h2 className="m-0 text-lg font-bold text-slate-900">
+                      <h2 className="m-0 text-lg font-bold text-ink">
                         {novel.title}
                       </h2>
                       <span
                         className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold tracking-[0.06em] ${
                           novel.status === "completed"
-                            ? "border border-emerald-400/30 bg-emerald-400/10 text-emerald-700"
-                            : "border border-brand-300/30 bg-brand-300/10 text-brand-700"
+                            ? "border border-success-line bg-success-soft text-success"
+                            : "border border-accent-line bg-accent-soft text-accent"
                         }`}
                       >
                         {novel.status === "completed" ? "已完结" : "连载中"}
                       </span>
                     </div>
                     {novel.description && (
-                      <p className="mb-3 line-clamp-2 text-sm leading-6 text-slate-600">
+                      <p className="mb-3 line-clamp-2 text-sm leading-6 text-muted">
                         {novel.description}
                       </p>
                     )}
-                    <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <div className="flex items-center gap-4 text-xs text-muted">
                       <span>{novel.author.name ?? "匿名"}</span>
                       <span>·</span>
                       <span>{novel.chapterCount} 章</span>
@@ -102,7 +102,7 @@ export default async function NovelListPage() {
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="mt-1.5 shrink-0 text-slate-500"
+                    className="mt-1.5 shrink-0 text-muted"
                   >
                     <path d="M9 18l6-6-6-6" />
                   </svg>

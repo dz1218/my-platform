@@ -41,11 +41,21 @@ createServer(async (request, response) => {
   if (request.url === '/api/v1/me' && /^inheritance-test-(female|male|legacy|completed|inherited|second)$/.test(session ?? '')) {
     return response.end(JSON.stringify({ user: inheritanceUser(session) }));
   }
+  if (['/api/v1/auth/code', '/api/v1/auth/verify'].includes(request.url) && request.method === 'POST') {
+    let body = ''; for await (const part of request) body += part;
+    const data = JSON.parse(body);
+    if (data.phone === '13800138001') {
+      response.statusCode = 409; return response.end(JSON.stringify({error:{code:'exists'}}));
+    }
+    if (request.url.endsWith('/code')) return response.end(JSON.stringify({sent:true,retryAfter:60}));
+    if (data.code !== '123456') { response.statusCode=400; return response.end(JSON.stringify({error:{code:'invalid_code'}})); }
+    return response.end(JSON.stringify({ticket:'browser-test-phone-proof'}));
+  }
   if (request.url === '/api/v1/auth/login' && request.method === 'POST') {
     let body = '';
     for await (const part of request) body += part;
     const data = JSON.parse(body);
-    if (data.email !== 'inheritance-second@example.invalid' || data.password !== 'only-for-browser-test') {
+    if (data.phone !== '13800138000' || data.password !== 'only-for-browser-test') {
       response.statusCode = 401;
       return response.end(JSON.stringify({ error: { code: 'invalid', message: '测试账户信息不正确' } }));
     }
@@ -56,11 +66,15 @@ createServer(async (request, response) => {
     let body = '';
     for await (const part of request) body += part;
     const data = JSON.parse(body);
-    if (data.email === 'already-registered@example.invalid') {
+    if (!String(data.name ?? '').trim()) {
+      response.statusCode = 400;
+      return response.end(JSON.stringify({ error: { code: 'name_required', message: '请输入昵称' } }));
+    }
+    if (data.phone === '13800138001') {
       response.statusCode = 409;
       return response.end(JSON.stringify({ error: { code: 'exists' } }));
     }
-    if (!/^inheritance-[^@]+@example\.invalid$/.test(data.email ?? '') || !['FEMALE', 'MALE'].includes(data.gender)) {
+    if (!/^1[3-9]\d{9}$/.test(data.phone ?? '') || data.ticket !== 'browser-test-phone-proof' || !['FEMALE', 'MALE'].includes(data.gender)) {
       response.statusCode = 400;
       return response.end(JSON.stringify({ error: { code: 'invalid_request', message: '测试注册信息不完整' } }));
     }

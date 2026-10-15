@@ -43,13 +43,13 @@ export default async function CreateNovelPage({
         </Link>
       </div>
 
-      <h1 className="mb-6 text-2xl font-semibold tracking-[-0.5px] text-slate-900">
+      <h1 className="mb-6 text-2xl font-semibold tracking-[-0.5px] text-ink">
         创建小说
       </h1>
 
       <div className="surface p-5">
         {errorMsg && (
-          <div className="mb-5 flex items-center gap-2 rounded-[10px] border border-rose-500/25 bg-rose-500/[0.12] px-3.5 py-2.5">
+          <div className="mb-5 flex items-center gap-2 rounded-[10px] border border-danger-line bg-danger-soft px-3.5 py-2.5">
             <svg
               aria-hidden="true"
               width="15"
@@ -65,15 +65,15 @@ export default async function CreateNovelPage({
               <circle cx="12" cy="12" r="10" />
               <path d="M12 8v4M12 16h.01" />
             </svg>
-            <span className="text-[13px] text-rose-700">{errorMsg}</span>
+            <span className="text-[13px] text-danger">{errorMsg}</span>
           </div>
         )}
 
         <form action={createNovelAction} className="grid gap-5">
           <UnsavedChanges />
           <label className="grid gap-[7px]">
-            <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">
-              标题 <span className="text-rose-700">*</span>
+            <span className="text-[13px] font-semibold tracking-[0.02em] text-muted">
+              标题 <span className="text-danger">*</span>
             </span>
             <input
               name="title"
@@ -86,7 +86,7 @@ export default async function CreateNovelPage({
           </label>
 
           <label className="grid gap-[7px]">
-            <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">
+            <span className="text-[13px] font-semibold tracking-[0.02em] text-muted">
               简介
             </span>
             <textarea

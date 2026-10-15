@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import type { Gender } from "@/types/companion";
 
 const options = [
@@ -130,10 +131,8 @@ export function GenderSelect({
           }
         }}
       >
-        <span className={value ? undefined : "text-slate-500"}>{options[selected]?.label ?? "请选择性别"}</span>
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0 text-muted">
-          <path d={open ? "m6 15 6-6 6 6" : "m6 9 6 6 6-6"} strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <span className={value ? undefined : "text-muted"}>{options[selected]?.label ?? "请选择性别"}</span>
+        {open ? <ChevronUp aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0 text-muted" /> : <ChevronDown aria-hidden="true" size={16} strokeWidth={1.75} className="shrink-0 text-muted" />}
       </button>
       {open && !disabled && (
         <ul id={`${id}-options`} role="listbox" aria-label="性别" className={`select-menu ${above ? "bottom-full mb-1.5" : "top-full mt-1.5"}`}>
@@ -150,12 +149,12 @@ export function GenderSelect({
               onClick={() => choose(index)}
             >
               {option.label}
-              {value === option.value && <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="m5 12 4 4L19 6" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              {value === option.value && <Check aria-hidden="true" size={16} strokeWidth={1.75} />}
             </li>
           ))}
         </ul>
       )}
-      {invalid && <p id={`${id}-error`} role="alert" className="mt-2 text-xs text-rose-700">请选择性别。</p>}
+      {invalid && <p id={`${id}-error`} role="alert" className="mt-2 text-xs text-danger">请选择性别。</p>}
     </div>
   );
 }

@@ -10,8 +10,8 @@ export function MessageBubble({ message, sending = false, operator = false }: { 
       <div
         aria-hidden="true"
         className={cn(
-          "hidden h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-sm text-brand-600 sm:grid",
-          own && "bg-slate-200 text-slate-600",
+          "hidden h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-soft text-sm text-accent sm:grid",
+          own && "bg-surface-selected text-muted",
         )}
       >
         {own && !operator ? "我" : message.sender.name.slice(-1)}
@@ -30,7 +30,7 @@ export function MessageBubble({ message, sending = false, operator = false }: { 
           className={cn(
             "whitespace-pre-wrap wrap-break-word rounded-xl rounded-tl-sm border border-line bg-panel px-3.5 py-2.5 text-sm leading-[1.85]",
             own &&
-              "rounded-tl-xl rounded-tr-sm border-brand-100 bg-brand-50 text-ink",
+              "rounded-tl-xl rounded-tr-sm border-action bg-action text-on-action",
           )}
         >
           {message.content}

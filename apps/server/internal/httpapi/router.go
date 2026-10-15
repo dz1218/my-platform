@@ -59,7 +59,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 		}
 		c.JSON(200, gin.H{"ok": true, "service": "companion"})
 	})
-	ah := auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: cfg.JWTSecret}, SecureCookie: cfg.SecureCookie}
+	ah := auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: cfg.JWTSecret, SMS: cfg.SMS}, SecureCookie: cfg.SecureCookie}
 	livekit.Register(r, cfg.LiveKit, ah, cache)
 	ids := identity.Repository{DB: db}
 	messages := conversation.Repository{DB: db}
@@ -67,6 +67,8 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 	chat := delivery.Service{Repo: delivery.Repository{DB: db}, Messages: messages, Policies: policies}
 	api := r.Group("/api/v1")
 	livekit.Register(api, cfg.LiveKit, ah, cache)
+	api.POST("/auth/code", rateLimit(cache, "sms-send", 5, false), ah.SendCode)
+	api.POST("/auth/verify", rateLimit(cache, "sms-verify", 20, false), ah.VerifyCode)
 	api.POST("/auth/register", rateLimit(cache, "auth", 60, false), ah.Register)
 	api.POST("/auth/login", rateLimit(cache, "auth", 60, false), ah.Login)
 	api.POST("/auth/logout", ah.Logout)

@@ -30,7 +30,7 @@ export default async function ChapterReadPage({
     .filter((line) => line.trim().length > 0);
 
   return (
-    <main id="main-content" tabIndex={-1} className="page-reading page-content">
+    <main id="main-content" tabIndex={-1} className="page-reading page-content min-h-dvh bg-reading">
       {/* Header */}
       <div className="mb-5 flex items-center justify-between">
         <Link
@@ -65,14 +65,14 @@ export default async function ChapterReadPage({
 
       {/* Chapter title */}
       <div className="mb-10">
-        <p className="mb-1.5 text-xs font-bold tracking-[0.08em] text-brand-700/70">
+        <p className="mb-1.5 text-xs font-bold tracking-[0.08em] text-accent">
           第 {chapter.orderIndex} 章
         </p>
-        <h1 className="text-2xl font-semibold tracking-[-0.5px] text-slate-900">
+        <h1 className="text-2xl font-semibold tracking-[-0.5px] text-ink">
           {chapter.title}
         </h1>
         {!chapter.published && (
-          <span className="mt-2 inline-block rounded-md border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+          <span className="mt-2 inline-block rounded-md border border-warning-line bg-warning-soft px-2 py-0.5 text-[10px] font-bold text-warning">
             草稿 · 仅作者可见
           </span>
         )}
@@ -81,7 +81,7 @@ export default async function ChapterReadPage({
       {/* Content */}
       <article className="mb-14">
         {paragraphs.length === 0 ? (
-          <p className="py-12 text-center text-sm text-slate-500">
+          <p className="py-12 text-center text-sm text-muted">
             本章暂无内容。
           </p>
         ) : (
@@ -89,8 +89,7 @@ export default async function ChapterReadPage({
             {paragraphs.map((p, i) => (
               <p
                 key={i}
-                className="text-[15px] leading-[1.9] text-slate-700"
-                style={{ textIndent: "2em" }}
+                className="indent-[2em] text-base leading-[1.9] text-ink"
               >
                 {p}
               </p>
@@ -116,15 +115,15 @@ export default async function ChapterReadPage({
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="shrink-0 text-slate-500"
+              className="shrink-0 text-muted"
             >
               <path d="M15 18l-6-6 6-6" />
             </svg>
             <div className="min-w-0">
-              <p className="text-[10px] font-bold tracking-[0.08em] text-slate-500">
+              <p className="text-[10px] font-bold tracking-[0.08em] text-muted">
                 上一章
               </p>
-              <p className="truncate text-sm font-medium text-slate-700">
+              <p className="truncate text-sm font-medium text-ink">
                 {prevChapter.title}
               </p>
             </div>
@@ -139,10 +138,10 @@ export default async function ChapterReadPage({
             className="surface-soft room-card flex flex-1 items-center justify-end gap-3 px-5 py-4 no-underline text-inherit"
           >
             <div className="min-w-0 text-right">
-              <p className="text-[10px] font-bold tracking-[0.08em] text-slate-500">
+              <p className="text-[10px] font-bold tracking-[0.08em] text-muted">
                 下一章
               </p>
-              <p className="truncate text-sm font-medium text-slate-700">
+              <p className="truncate text-sm font-medium text-ink">
                 {nextChapter.title}
               </p>
             </div>
@@ -156,7 +155,7 @@ export default async function ChapterReadPage({
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="shrink-0 text-slate-500"
+              className="shrink-0 text-muted"
             >
               <path d="M9 18l6-6-6-6" />
             </svg>

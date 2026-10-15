@@ -88,14 +88,16 @@ async function mockInheritance(page: Page, session: Session = 'female', authenti
 test('registration collects gender and opens the identity choice before regular chat', async ({ page }) => {
   await mockInheritance(page, 'female', false);
   await page.goto('/register');
+  await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138002');
+  await page.getByRole('textbox', { name: '短信验证码', exact: true }).fill('123456');
+  await page.getByRole('button', { name: '验证并继续' }).click();
   await page.getByRole('textbox', { name: '昵称' }).fill('继承测试用户');
-  await page.getByRole('textbox', { name: '邮箱' }).fill('inheritance-registration@example.invalid');
   await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');
   await page.getByLabel('确认密码', { exact: true }).fill('only-for-browser-test');
   await page.getByRole('combobox', { name: '性别', exact: true }).click();
   await page.getByRole('option', { name: '女', exact: true }).click();
   await page.getByRole('checkbox').check();
-  await page.getByRole('button', { name: '注册', exact: true }).click();
+  await page.getByRole('button', { name: '完成注册', exact: true }).click();
   await expect(page).toHaveURL('/choose-identity');
   await expect(page.getByRole('heading', { name: '要继承一个 AI 身份吗？' })).toBeVisible();
   await expect(page.getByRole('button', { name: '选择陈念', exact: true })).toBeEnabled();
@@ -344,7 +346,7 @@ test('same-tab logout and login cannot reuse another account’s cached inherite
   await page.route('**/api/v1/identity-inheritance/options?*', route => route.fulfill({ json: {
     items: [{ ...chenNian, available: false }, { ...otherIdentity, available: true }], total: 2, availableTotal: 1, page: 1, pageSize: 24, nextPage: null, occupations: [],
   } }));
-  await page.getByRole('textbox', { name: '邮箱', exact: true }).fill('inheritance-second@example.invalid');
+  await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138000');
   await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL('/companion');

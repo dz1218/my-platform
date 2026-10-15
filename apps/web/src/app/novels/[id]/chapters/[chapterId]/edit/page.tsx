@@ -59,7 +59,7 @@ export default async function EditChapterPage({
       </div>
 
       {saved && (
-        <div className="mb-5 flex items-center gap-2 rounded-[10px] border border-emerald-500/25 bg-emerald-500/[0.12] px-3.5 py-2.5">
+        <div className="mb-5 flex items-center gap-2 rounded-[10px] border border-success-line bg-success-soft px-3.5 py-2.5">
           <svg aria-hidden="true"
             width="15"
             height="15"
@@ -73,20 +73,20 @@ export default async function EditChapterPage({
           >
             <path d="M20 6L9 17l-5-5" />
           </svg>
-          <span className="text-[13px] text-emerald-700">保存成功</span>
+          <span className="text-[13px] text-success">保存成功</span>
         </div>
       )}
 
       {error && (
-        <div className="mb-5 flex items-center gap-2 rounded-[10px] border border-rose-500/25 bg-rose-500/[0.12] px-3.5 py-2.5">
-          <span className="text-[13px] text-rose-700">请填写章节标题</span>
+        <div className="mb-5 flex items-center gap-2 rounded-[10px] border border-danger-line bg-danger-soft px-3.5 py-2.5">
+          <span className="text-[13px] text-danger">请填写章节标题</span>
         </div>
       )}
 
-      <h1 className="mb-1 text-[22px] font-semibold tracking-[-0.5px] text-slate-900">
+      <h1 className="mb-1 text-[22px] font-semibold tracking-[-0.5px] text-ink">
         编辑章节
       </h1>
-      <p className="mb-6 text-[13px] text-slate-500">
+      <p className="mb-6 text-[13px] text-muted">
         第 {chapter.orderIndex} 章 · {chapter.novel.title}
       </p>
 
@@ -98,7 +98,7 @@ export default async function EditChapterPage({
           <input type="hidden" name="novelId" value={id} />
 
           <label className="grid gap-[7px]">
-            <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">
+            <span className="text-[13px] font-semibold tracking-[0.02em] text-muted">
               章节标题
             </span>
             <input
@@ -111,7 +111,7 @@ export default async function EditChapterPage({
           </label>
 
           <label className="grid gap-[7px]">
-            <span className="text-[13px] font-semibold tracking-[0.02em] text-slate-600">
+            <span className="text-[13px] font-semibold tracking-[0.02em] text-muted">
               内容
             </span>
             <textarea

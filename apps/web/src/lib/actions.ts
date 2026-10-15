@@ -9,6 +9,8 @@ import type { User } from '@/types/companion';
 export type AuthFormState = { error?: string };
 
 async function authenticate(kind: 'register' | 'login', formData: FormData): Promise<AuthFormState> {
+  const name = String(formData.get('name') ?? '').trim();
+  if (kind === 'register' && !name) return { error: 'name_required' };
   const password = String(formData.get('password') ?? '');
   if (kind === 'register' && password !== formData.get('confirm')) return { error: 'mismatch' };
   const gender = String(formData.get('gender') ?? '');
@@ -18,7 +20,7 @@ async function authenticate(kind: 'register' | 'login', formData: FormData): Pro
   try {
     const result = await serverFetch(`/auth/${kind}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: String(formData.get('email') ?? ''), name: String(formData.get('name') ?? ''), password, consent: formData.get('consent') === 'on', ...(kind === 'register' ? { gender } : {}) }),
+      body: JSON.stringify({ phone: String(formData.get('phone') ?? ''), ticket: String(formData.get('ticket') ?? ''), name, password, consent: formData.get('consent') === 'on', ...(kind === 'register' ? { gender } : {}) }),
     });
     if (!result.ok) {
       const body = await result.json();
@@ -40,6 +42,15 @@ async function authenticate(kind: 'register' | 'login', formData: FormData): Pro
 }
 export async function registerAction(_state: AuthFormState, formData: FormData) { return authenticate('register', formData); }
 export async function loginAction(_state: AuthFormState, formData: FormData) { return authenticate('login', formData); }
+async function phoneVerification(path: string, body: object): Promise<{ error?: string; ticket?: string }> {
+  try {
+    const result = await serverFetch(`/auth/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await result.json();
+    return result.ok ? data : { error: data.error?.code ?? 'unavailable' };
+  } catch { return { error: 'unavailable' }; }
+}
+export async function sendCodeAction(phone: string) { return phoneVerification('code', { phone }); }
+export async function verifyCodeAction(phone: string, code: string) { return phoneVerification('verify', { phone, code }); }
 export async function logoutAction() {
   const store = await cookies();
   store.delete(sessionCookie); store.delete('mp_auth'); store.delete('mp_nickname');

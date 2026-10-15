@@ -1,6 +1,7 @@
 package config
 
 import (
+	"companion/server/internal/auth"
 	"companion/server/internal/livekit"
 	"fmt"
 	"github.com/joho/godotenv"
@@ -10,6 +11,7 @@ import (
 )
 
 type Config struct {
+	SMS                                                                                      auth.AlibabaSMS
 	LiveKit                                                                                  livekit.Config
 	Address, DatabaseURL, RedisURL, JWTSecret, WebOrigin, AgentURL, AgentToken, BehaviorFile string
 	SecureCookie                                                                             bool
@@ -19,6 +21,7 @@ func Load() (Config, error) {
 	// Server-specific settings override root defaults; actual environment always wins.
 	_ = godotenv.Load(".env", "../../.env")
 	c := Config{Address: value("SERVER_ADDR", "127.0.0.1:8080"), DatabaseURL: os.Getenv("DATABASE_URL"), RedisURL: value("REDIS_URL", "redis://localhost:6379/0"), JWTSecret: os.Getenv("JWT_SECRET"), WebOrigin: value("WEB_ORIGIN", "http://localhost:3011"), AgentURL: value("AGENT_URL", "http://127.0.0.1:8081"), AgentToken: os.Getenv("AGENT_TOKEN"), BehaviorFile: value("BEHAVIOR_CONFIG", "config/behavior.json"), SecureCookie: os.Getenv("COOKIE_SECURE") == "true"}
+	c.SMS = auth.AlibabaSMS{AccessKeyID: os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_ID"), AccessKeySecret: os.Getenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET"), SignName: os.Getenv("SMS_SIGN_NAME"), TemplateCode: os.Getenv("SMS_TEMPLATE_CODE"), CodeParameter: value("SMS_CODE_PARAMETER", "code")}
 	c.LiveKit = livekit.Config{URL: os.Getenv("LIVEKIT_URL"), InternalURL: os.Getenv("LIVEKIT_INTERNAL_URL"), APIKey: os.Getenv("LIVEKIT_API_KEY"), APISecret: os.Getenv("LIVEKIT_API_SECRET"), AgentName: value("LIVEKIT_AGENT_NAME", "room-assistant")}
 	if err := c.LiveKit.Validate(); err != nil {
 		return c, err

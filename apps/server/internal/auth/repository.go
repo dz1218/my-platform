@@ -10,6 +10,7 @@ import (
 
 type User struct {
 	ID                  string             `json:"id"`
+	Phone               string             `json:"phone"`
 	Email               string             `json:"email"`
 	Name                string             `json:"name"`
 	PasswordHash        string             `json:"-"`
@@ -21,7 +22,7 @@ type Repository struct{ DB *pgxpool.Pool }
 
 func (r Repository) ByEmail(ctx context.Context, email string) (User, error) {
 	var u User
-	err := r.DB.QueryRow(ctx, `SELECT id,email,COALESCE(name,''),password_hash,gender,onboarding_completed FROM users WHERE email=$1`, email).Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.Gender, &u.OnboardingCompleted)
+	err := r.DB.QueryRow(ctx, `SELECT id,COALESCE(email,''),COALESCE(phone,''),COALESCE(name,''),password_hash,gender,onboarding_completed FROM users WHERE email=$1`, email).Scan(&u.ID, &u.Email, &u.Phone, &u.Name, &u.PasswordHash, &u.Gender, &u.OnboardingCompleted)
 	if err == nil {
 		u.InheritedIdentity, err = (identity.Repository{DB: r.DB}).Inherited(ctx, u.ID)
 	}
@@ -29,7 +30,7 @@ func (r Repository) ByEmail(ctx context.Context, email string) (User, error) {
 }
 func (r Repository) ByID(ctx context.Context, id string) (User, error) {
 	var u User
-	err := r.DB.QueryRow(ctx, `SELECT id,email,COALESCE(name,''),password_hash,gender,onboarding_completed FROM users WHERE id=$1`, id).Scan(&u.ID, &u.Email, &u.Name, &u.PasswordHash, &u.Gender, &u.OnboardingCompleted)
+	err := r.DB.QueryRow(ctx, `SELECT id,COALESCE(email,''),COALESCE(phone,''),COALESCE(name,''),password_hash,gender,onboarding_completed FROM users WHERE id=$1`, id).Scan(&u.ID, &u.Email, &u.Phone, &u.Name, &u.PasswordHash, &u.Gender, &u.OnboardingCompleted)
 	if err == nil {
 		u.InheritedIdentity, err = (identity.Repository{DB: r.DB}).Inherited(ctx, u.ID)
 	}
@@ -38,5 +39,14 @@ func (r Repository) ByID(ctx context.Context, id string) (User, error) {
 func (r Repository) Create(ctx context.Context, email, name, hash, gender string) (User, error) {
 	u := User{ID: database.ID(), Email: email, Name: name, Gender: &gender}
 	_, err := r.DB.Exec(ctx, `INSERT INTO users(id,email,name,password_hash,gender,updated_at) VALUES($1,$2,$3,$4,$5,now())`, u.ID, email, name, hash, gender)
+	return u, err
+}
+
+func (r Repository) ByPhone(ctx context.Context, phone string) (User, error) {
+	var u User
+	err := r.DB.QueryRow(ctx, `SELECT id,COALESCE(email,''),COALESCE(phone,''),COALESCE(name,''),password_hash,gender,onboarding_completed FROM users WHERE phone=$1`, phone).Scan(&u.ID, &u.Email, &u.Phone, &u.Name, &u.PasswordHash, &u.Gender, &u.OnboardingCompleted)
+	if err == nil {
+		u.InheritedIdentity, err = (identity.Repository{DB: r.DB}).Inherited(ctx, u.ID)
+	}
 	return u, err
 }

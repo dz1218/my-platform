@@ -86,7 +86,7 @@ export function CompanionPreferences({ id }: { id: string }) {
           </form>
         )}
         <DailyStateEditor id={id} busy={busy} write={write} />
-        {error && <p role="alert" className="mt-2 text-rose-700">{error}</p>}
+        {error && <p role="alert" className="mt-2 text-danger">{error}</p>}
         {notice && <p role="status" className="mt-2 text-muted">{notice}</p>}
       </div>
     </details>

@@ -13,7 +13,9 @@ type Handler struct {
 	SecureCookie bool
 }
 type credentials struct {
-	Email    string `json:"email"`
+	Phone    string `json:"phone"`
+	Ticket   string `json:"ticket"`
+	Code     string `json:"code"`
 	Name     string `json:"name"`
 	Password string `json:"password"`
 	Consent  bool   `json:"consent"`
@@ -26,7 +28,7 @@ func (h Handler) Register(c *gin.Context) {
 		response.Fail(c, response.BadRequest("请求格式不正确"))
 		return
 	}
-	u, err := h.Service.Register(c.Request.Context(), b.Email, b.Name, b.Password, b.Consent, b.Gender)
+	u, err := h.Service.Register(c.Request.Context(), b.Phone, b.Name, b.Password, b.Consent, b.Gender, b.Ticket)
 	h.session(c, u, err, 201)
 }
 func (h Handler) Login(c *gin.Context) {
@@ -35,7 +37,7 @@ func (h Handler) Login(c *gin.Context) {
 		response.Fail(c, response.BadRequest("请求格式不正确"))
 		return
 	}
-	u, err := h.Service.Login(c.Request.Context(), b.Email, b.Password)
+	u, err := h.Service.Login(c.Request.Context(), b.Phone, b.Password)
 	h.session(c, u, err, 200)
 }
 func (h Handler) session(c *gin.Context, u User, err error, status int) {
@@ -78,4 +80,30 @@ func (h Handler) Me(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"user": u})
+}
+
+func (h Handler) SendCode(c *gin.Context) {
+	var b credentials
+	if c.ShouldBindJSON(&b) != nil {
+		response.Fail(c, response.BadRequest("请求格式不正确"))
+		return
+	}
+	if err := h.Service.SendCode(c.Request.Context(), b.Phone); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"sent": true, "retryAfter": 60})
+}
+func (h Handler) VerifyCode(c *gin.Context) {
+	var b credentials
+	if c.ShouldBindJSON(&b) != nil {
+		response.Fail(c, response.BadRequest("请求格式不正确"))
+		return
+	}
+	ticket, err := h.Service.VerifyCode(c.Request.Context(), b.Phone, b.Code)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	c.JSON(200, gin.H{"ticket": ticket})
 }

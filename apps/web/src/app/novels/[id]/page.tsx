@@ -44,20 +44,20 @@ export default async function NovelDetailPage({
         <div className="mb-3 flex items-start justify-between gap-4">
           <div>
             <div className="mb-2 flex items-center gap-2.5">
-              <h1 className="m-0 text-2xl font-semibold tracking-[-0.5px] text-slate-900">
+              <h1 className="m-0 text-2xl font-semibold tracking-[-0.5px] text-ink">
                 {novel.title}
               </h1>
               <span
                 className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold tracking-[0.06em] ${
                   novel.status === 'completed'
-                    ? 'border border-emerald-400/30 bg-emerald-400/10 text-emerald-700'
-                    : 'border border-brand-300/30 bg-brand-300/10 text-brand-700'
+                    ? 'border border-success-line bg-success-soft text-success'
+                    : 'border border-accent-line bg-accent-soft text-accent'
                 }`}
               >
                 {novel.status === 'completed' ? '已完结' : '连载中'}
               </span>
             </div>
-            <p className="text-[13px] text-slate-500">
+            <p className="text-[13px] text-muted">
               作者：{novel.author.name ?? '匿名'}
             </p>
           </div>
@@ -86,14 +86,14 @@ export default async function NovelDetailPage({
         </div>
 
         {novel.description && (
-          <p className="mt-4 text-sm leading-7 text-slate-600">{novel.description}</p>
+          <p className="mt-4 text-sm leading-7 text-muted">{novel.description}</p>
         )}
       </div>
 
       <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-lg font-bold text-slate-800">
+        <h2 className="text-lg font-bold text-ink">
           章节目录
-          <span className="ml-2 text-sm font-normal text-slate-500">
+          <span className="ml-2 text-sm font-normal text-muted">
             ({visibleChapters.length} 章)
           </span>
         </h2>
@@ -101,7 +101,7 @@ export default async function NovelDetailPage({
 
       {visibleChapters.length === 0 ? (
         <div className="surface-soft px-6 py-12 text-center">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted">
             {isAuthor ? '还没有章节，去管理页面添加第一章吧。' : '暂无已发布章节。'}
           </p>
         </div>
@@ -115,14 +115,14 @@ export default async function NovelDetailPage({
             >
               <div className="surface-soft room-card flex items-center justify-between px-5 py-3.5">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-slate-500">
+                  <span className="text-xs font-bold text-muted">
                     {String(chapter.orderIndex).padStart(2, '0')}
                   </span>
-                  <span className="text-sm font-medium text-slate-800">
+                  <span className="text-sm font-medium text-ink">
                     {chapter.title}
                   </span>
                   {isAuthor && !chapter.published && (
-                    <span className="rounded-md border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                    <span className="rounded-md border border-warning-line bg-warning-soft px-1.5 py-0.5 text-[10px] font-bold text-warning">
                       草稿
                     </span>
                   )}
@@ -136,7 +136,7 @@ export default async function NovelDetailPage({
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="shrink-0 text-slate-500"
+                  className="shrink-0 text-muted"
                 >
                   <path d="M9 18l6-6-6-6" />
                 </svg>

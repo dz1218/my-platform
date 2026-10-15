@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/hex"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -9,6 +10,15 @@ import (
 	"testing"
 	"time"
 )
+
+func TestRegisterRequiresName(t *testing.T) {
+	for _, name := range []string{"", "   ", "\t\n", "\u3000"} {
+		t.Run(hex.EncodeToString([]byte(name)), func(t *testing.T) {
+			_, err := (Service{}).Register(context.Background(), "13800138000", name, "password123", true, "FEMALE", strings.Repeat("a", 64))
+			requireCode(t, err, "name_required")
+		})
+	}
+}
 
 func TestPasswords(t *testing.T) {
 	password := "correct horse battery"

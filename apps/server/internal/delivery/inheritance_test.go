@@ -201,10 +201,10 @@ func TestInheritanceGenderAndOnboarding(t *testing.T) {
 		t.Fatalf("claimed state: %+v %v", state, err)
 	}
 	service := auth.Service{Repo: auth.Repository{DB: f.db}}
-	if _, err = service.Register(f.ctx, "new@example.test", "New", "password123", true, ""); err == nil {
+	if _, err = service.Register(f.ctx, "13800138000", "New", "password123", true, "", ""); err == nil {
 		t.Fatal("registration accepted missing gender")
 	}
-	created, err := service.Register(f.ctx, "new@example.test", "New", "password123", true, "FEMALE")
+	created, err := service.Repo.Create(f.ctx, "new@example.test", "New", "unused", "FEMALE")
 	if err != nil || created.Gender == nil || *created.Gender != "FEMALE" || created.OnboardingCompleted || created.InheritedIdentity != nil {
 		t.Fatalf("registration state: %+v %v", created, err)
 	}

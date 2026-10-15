@@ -79,7 +79,7 @@ export function AutoReplyPanel({ id, settings }: { id: string; settings: AutoRep
                 : "AI 会自动回复新消息；你主动回复后，当前尚未发送的 AI 回复会被取消。"}
         </p>
         {change.isPending && <p role="status" className="mt-2 text-xs text-muted">正在保存…</p>}
-        {change.error && <p role="alert" className="mt-2 text-rose-700">{change.error.message}</p>}
+        {change.error && <p role="alert" className="mt-2 text-danger">{change.error.message}</p>}
       </div>
     </details>
   );

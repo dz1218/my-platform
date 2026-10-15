@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { UserRound } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -16,9 +17,9 @@ import { emptyCatalogFilters, type CatalogFilters as Filters } from '@/services/
 type Candidate = Identity & { available: boolean };
 type ChoiceContext = { selectedId: string | null; busy: boolean; choose: (identity: Candidate) => void };
 function ChoiceCard({ data: identity, index, context }: { data: Candidate; index: number; context: ChoiceContext }) {
-  return <div className="p-2"><article data-identity-id={identity.id} data-identity-index={index} className={`surface flex flex-col p-5 ${context.selectedId === identity.id ? 'border-brand-500 ring-1 ring-brand-500' : ''}`}>
+  return <div className="p-2"><article data-identity-id={identity.id} data-identity-index={index} className={`surface flex flex-col p-5 ${context.selectedId === identity.id ? 'border-focus ring-1 ring-focus' : ''}`}>
     <div className="flex items-center gap-3"><Avatar identity={identity} large /><div className="min-w-0"><h3 className="text-lg font-semibold">{identity.name}</h3><p className="mt-1 text-sm text-muted">{identity.age} 岁{identity.city ? `，${identity.city}` : ''}</p></div></div>
-    {identity.occupation && <p className="mt-4 text-sm font-medium text-brand-600">{identity.occupation}</p>}
+    {identity.occupation && <p className="mt-4 text-sm font-medium text-accent">{identity.occupation}</p>}
     {identity.background && <p className="mt-4 text-sm leading-7 text-muted">{identity.background}</p>}
     <div className="mt-auto pt-5"><button type="button" aria-pressed={context.selectedId === identity.id} className="btn-secondary w-full" disabled={!identity.available || context.busy} onClick={() => context.choose(identity)}>{identity.available ? `选择${identity.name}` : `${identity.name}已被继承`}</button></div>
   </article></div>;
@@ -116,7 +117,7 @@ export function IdentityOnboarding({ accountId, accountName }: { accountId: stri
           <p className="page-description max-w-[640px]">{inherited ? '本账户和 AI 身份各自保留，你可以随时切换聊天方式。' : '继承后，你可以以这个 AI 身份和其他真实用户聊天，也可以用本账户认识其他 AI 朋友。'}</p>
         </div>
       </header>
-      {error && <div role="alert" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-800">
+      {error && <div role="alert" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-soft p-4 text-sm leading-6 text-danger">
         <p>{inheritanceError(error)}</p>
         <button type="button" disabled={busy || state.isFetching} className="btn-secondary" onClick={() => { void state.refetch(); if (state.data?.gender && !inherited) void options.refetch(); }}>重新加载</button>
       </div>}
@@ -130,7 +131,7 @@ export function IdentityOnboarding({ accountId, accountName }: { accountId: stri
             <Link href="/companion" className="btn-secondary mt-6 w-full">以本账户聊天</Link>
           </div>
         </section>
-        <section className="content-panel border-brand-300">
+        <section className="content-panel border-accent-line">
           <h2 className="panel-heading">我的 AI 身份</h2>
           <div className="p-6">
             <div className="flex items-center gap-3"><Avatar identity={inherited} /><p className="text-xl font-semibold">{inherited.name}</p></div>
@@ -139,11 +140,12 @@ export function IdentityOnboarding({ accountId, accountName }: { accountId: stri
           </div>
         </section>
       </section> : <div className="grid items-start gap-7 lg:grid-cols-[250px_minmax(0,1fr)]">
-        <aside className="border-b border-line pb-6 lg:border-r lg:border-b-0 lg:pr-7" aria-labelledby="own-account-heading">
-          <h2 id="own-account-heading" className="text-sm font-semibold text-muted">你的本账户</h2>
+        <aside className="rounded-panel border border-line bg-panel p-5 lg:sticky lg:top-8" aria-labelledby="own-account-heading">
+          <div className="mb-5 flex size-10 items-center justify-center rounded-control bg-surface-soft text-muted"><UserRound aria-hidden="true" size={20} strokeWidth={1.75} /></div>
+          <h2 id="own-account-heading" className="text-sm font-medium text-muted">你的本账户</h2>
           <p className="mt-3 text-xl font-semibold">{accountName}</p>
           <p className="mt-3 text-sm leading-7 text-muted">继承不会替换你的账号。每个 AI 身份只能被继承一次，每个账户只能继承一个。</p>
-          <p className="mt-3 text-sm leading-7 text-muted">你只能继承与自己性别相同的 AI 身份。暂不继承也能继续使用，之后可从「我的」回来选择。</p>
+          <p className="mt-4 border-t border-line pt-4 text-sm leading-7 text-muted">你只能继承与自己性别相同的 AI 身份。暂不继承也能继续使用，之后可从「我的」回来选择。</p>
           <button type="button" className="btn-secondary mt-5 w-full" disabled={busy} onClick={() => skip.mutate()}>{skip.isPending ? '正在进入…' : '暂不继承，以本账户继续'}</button>
         </aside>
         <section aria-labelledby="available-identities-heading" className="min-w-0">
@@ -164,11 +166,11 @@ export function IdentityOnboarding({ accountId, accountName }: { accountId: stri
               <p className="mt-3">你可以先以本账户和 AI 朋友聊天，之后再回来看看。</p>
             </div> : null}
             <IdentityMasonry items={candidates} context={cardContext} ItemContent={ChoiceCard} autoLoad={!selectedId} hasNextPage={options.hasNextPage} loading={options.isFetchingNextPage} error={options.data ? options.error : null} loadMore={loadMore} />
-            {selected && <section ref={review} tabIndex={-1} aria-label={`确认继承${selected.name}`} className="mt-6 rounded-xl border border-brand-300 bg-brand-50 p-5 sm:p-6">
+            {selected && <section ref={review} tabIndex={-1} aria-label={`确认继承${selected.name}`} className="mt-6 rounded-xl border border-accent-line bg-surface-soft p-5 sm:p-6">
               <h3 className="text-lg font-semibold">确认继承{selected.name}</h3>
               <p className="mt-3 text-sm leading-7">确认后，{selected.name}将成为你唯一的 AI 身份，其他用户不能再继承。继承后不可更换，你的本账户仍然保留。</p>
               <p className="mt-2 text-sm leading-7 text-muted">你可以以{selected.name}的身份回复对话，并管理 AI 托管。和其他 AI 朋友聊天时，使用你的本账户。</p>
-              {!selected.available && <p role="status" className="mt-3 text-sm text-rose-700">{selected.name}刚刚被其他用户继承，请重新选择。</p>}
+              {!selected.available && <p role="status" className="mt-3 text-sm text-danger">{selected.name}刚刚被其他用户继承，请重新选择。</p>}
               <div className="mt-5 flex flex-wrap gap-3"><button type="button" className="btn-primary" disabled={busy || !selected.available} onClick={() => claim.mutate(selected.id)}>{claim.isPending ? '正在继承…' : `确认继承${selected.name}`}</button><button type="button" className="btn-secondary" disabled={busy} onClick={() => setSelectedId(null)}>重新选择</button></div>
             </section>}
           </>}

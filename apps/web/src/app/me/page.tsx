@@ -21,7 +21,7 @@ export default async function MePage() {
         <div className="flex items-center gap-4 px-5 py-6">
           <span
             aria-hidden="true"
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-brand-50 text-xl text-brand-600"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-surface-soft text-xl text-accent"
           >
             {user.name?.slice(-1) || "我"}
           </span>
@@ -29,8 +29,8 @@ export default async function MePage() {
             <h3 className="wrap-break-word text-base font-semibold">
               {user.name}
             </h3>
-            <p className="mt-1 break-all text-sm text-slate-500">
-              {user.email}
+            <p className="mt-1 break-all text-sm text-muted">
+              {user.phone || '尚未绑定手机号'}
             </p>
           </div>
         </div>
@@ -53,20 +53,20 @@ export default async function MePage() {
         </h2>
         <Link
           href="/privacy"
-          className="settings-row transition-colors hover:bg-slate-50"
+          className="settings-row transition-colors hover:bg-surface-soft"
         >
           <div>
             <h3 className="text-sm font-medium">平台互动说明</h3>
-            <p className="mt-1 text-xs leading-5 text-slate-500">
+            <p className="mt-1 text-xs leading-5 text-muted">
               了解 AI 身份、聊天记录与隐私
             </p>
           </div>
-          <span aria-hidden="true" className="text-slate-400">
+          <span aria-hidden="true" className="text-faint">
             ›
           </span>
         </Link>
-        <div className="settings-row border-t border-slate-200">
-          <p className="text-sm text-slate-600">退出当前账号</p>
+        <div className="settings-row border-t border-line">
+          <p className="text-sm text-muted">退出当前账号</p>
           <form action={logoutAction}>
             <button className="btn-secondary">退出登录</button>
           </form>

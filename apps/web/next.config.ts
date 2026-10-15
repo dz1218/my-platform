@@ -1,14 +1,15 @@
 import type { NextConfig } from 'next';
+import { PHASE_DEVELOPMENT_SERVER } from 'next/constants';
 import path from 'path';
 
-const nextConfig: NextConfig = {
+const nextConfig = (phase: string): NextConfig => ({
   reactStrictMode: true,
-  // Keep validation builds isolated from a running development server.
-  distDir: process.env.NEXT_BUILD_DIR || ".next",
+  // A build must not remove chunks still referenced by the running dev server.
+  distDir: process.env.NEXT_BUILD_DIR || (phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next'),
   async rewrites() {
     return [{ source: '/ws/conversations/:id', destination: `${process.env.COMPANION_API_URL ?? 'http://127.0.0.1:8080'}/api/v1/conversations/:id/socket` }];
   },
   outputFileTracingRoot: path.join(__dirname, '../..'),
-};
+});
 
 export default nextConfig;

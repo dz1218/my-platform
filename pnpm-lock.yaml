@@ -61,6 +61,9 @@ importers:
       livekit-client:
         specifier: ^2.15.2
         version: 2.17.1(@types/dom-mediacapture-record@1.0.22)
+      lucide-react:
+        specifier: ^1.57.0
+        version: 1.57.0(@types/react@19.2.13)(react@19.1.1)
       next:
         specifier: 15.5.12
         version: 15.5.12(@playwright/test@1.63.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -924,6 +927,15 @@ packages:
   loglevel@1.9.2:
     resolution: {integrity: sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg==}
     engines: {node: '>= 0.6.0'}
+
+  lucide-react@1.57.0:
+    resolution: {integrity: sha512-bXFZEucYhAzLD62Jse76AbTR6LiSLTn3Tqir2f1n8rZrWAdLodYy7jnRZSPIT89dRLk/IseMOUWG82wJtTyTTw==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -1926,6 +1938,12 @@ snapshots:
       jose: 5.10.0
 
   loglevel@1.9.2: {}
+
+  lucide-react@1.57.0(@types/react@19.2.13)(react@19.1.1):
+    dependencies:
+      react: 19.1.1
+    optionalDependencies:
+      '@types/react': 19.2.13
 
   magic-string@0.30.21:
     dependencies:

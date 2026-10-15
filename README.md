@@ -1,4 +1,4 @@
-# 今晚 · Companion
+# Radio Friday
 
 Next.js + Go/Gin + TypeScript Agent (OpenAI Agents SDK + Zod), PostgreSQL and Redis.
 Chat uses durable asynchronous replies: send succeeds immediately, validated message bubbles appear later and unsent bubbles can be interrupted.
@@ -29,6 +29,10 @@ Open http://localhost:3011. API and worker automatically apply versioned SQL mig
 Redis and PostgreSQL must already be running. If you already have PostgreSQL on 5432,
 keep using that instance and start only Redis with `docker compose up -d redis`.
 
+The web development server uses `apps/web/.next-dev`; production builds and
+`next start` use `apps/web/.next`. This keeps builds from deleting scripts needed
+by an open development page. Tests can select a separate directory with `NEXT_BUILD_DIR`.
+
 The Go API and worker do not hot-reload. After changing Go routes or migrations,
 restart `pnpm dev:all`; refreshing the Next.js page alone leaves the old API running.
 For schema changes, add a new numbered migration. Editing an already applied SQL
@@ -44,6 +48,8 @@ pnpm dev          # Next.js :3011
 ```
 
 ## Customization and checks
+
+- [手机号登录、阿里云短信配置与验证](docs/phone-auth.md)
 
 - [V2 实现、接口、迁移与验证](docs/companion-v2.md)
 - [身份继承、双身份聊天与 AI 托管](docs/autopilot.md)

@@ -1,6 +1,6 @@
 export type Gender = 'FEMALE' | 'MALE';
 export type User = {
-  id: string; name: string; email: string; gender: Gender | null;
+  id: string; name: string; email: string; phone?: string; gender: Gender | null;
   onboardingCompleted: boolean; inheritedIdentity: Identity | null;
 };
 export type Identity = { id: string; name: string; age: number; avatarUrl: string; gender?: Gender; city?: string; background?: string; occupationCode?: string; occupation?: string };

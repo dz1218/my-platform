@@ -4,10 +4,16 @@ import { Providers } from "@/components/providers";
 import { AppShell } from "@/components/main-nav";
 import { getCurrentUser } from "@/lib/auth";
 export const metadata: Metadata = {
-  title: { default: "今晚 · 陪伴", template: "%s · 今晚" },
+  title: { default: "Radio Friday · 陪伴", template: "%s · Radio Friday" },
   description: "聊天、阅读，留一点时间给自己。",
 };
-export const viewport: Viewport = { themeColor: "#F5F7F8" };
+// Keep browser chrome aligned with --rf-canvas in theme.css.
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(min-width: 768px)", color: "#181818" },
+    { media: "(max-width: 767px)", color: "#F7F6F3" },
+  ],
+};
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {

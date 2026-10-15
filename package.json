@@ -1,5 +1,5 @@
 {
-  "name": "my-platform",
+  "name": "radio-friday",
   "private": true,
   "engines": {
     "node": ">=22 <25"

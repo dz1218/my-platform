@@ -4,7 +4,7 @@ export default function ErrorPage({ reset }: { reset: () => void }) {
   return (
     <main id="main-content" tabIndex={-1} className="page-shell page-content">
       <h1 className="page-title">暂时无法完成操作</h1>
-      <p role="alert" className="mt-4 text-slate-500">
+      <p role="alert" className="mt-4 text-muted">
         连接可能中断了。请稍后重试；填写中的内容请先保留。
       </p>
       <div className="mt-8 flex gap-3">

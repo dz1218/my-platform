@@ -34,7 +34,7 @@ export function IdentityMasonry<T extends Identity, C>({ items, context, ItemCon
   return <div ref={container} data-testid="identity-catalog" data-loaded-count={items.length} data-columns={columns}>
     {items.length > 0 && <div className="-mx-2"><VirtuosoMasonry data={items} columnCount={columns} useWindowScroll initialItemCount={Math.min(6, items.length)} ItemContent={ItemContent} context={context} /></div>}
     <div ref={sentinel} className="flex min-h-20 flex-col items-center justify-center gap-3 py-5" aria-live="polite">
-      {error && <p role="alert" className="text-sm text-rose-700">{error.message}</p>}
+      {error && <p role="alert" className="text-sm text-danger">{error.message}</p>}
       {loading ? <p role="status" className="text-sm text-muted">正在加载更多…</p> : hasNextPage ? <button type="button" className="btn-secondary" disabled={paused} onClick={loadMore}>{error ? '重试加载' : '加载更多'}</button> : items.length > 0 ? <p className="text-xs text-muted">已经看到全部了</p> : null}
     </div>
   </div>;
