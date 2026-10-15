@@ -35,7 +35,7 @@ export default async function ChapterReadPage({
       <div className="mb-5 flex items-center justify-between">
         <Link
           href={`/novels/${id}`}
-          className="link-muted inline-flex items-center gap-1.5"
+          className="link-muted inline-flex min-h-11 items-center gap-1.5"
         >
           <svg
             aria-hidden="true"
@@ -89,7 +89,7 @@ export default async function ChapterReadPage({
             {paragraphs.map((p, i) => (
               <p
                 key={i}
-                className="indent-[2em] text-base leading-[1.9] text-ink"
+                className="indent-[2em] text-lg leading-[1.9] text-ink"
               >
                 {p}
               </p>
@@ -99,7 +99,7 @@ export default async function ChapterReadPage({
       </article>
 
       {/* Prev / Next navigation */}
-      <div className="flex items-stretch gap-3">
+      <div className="sticky bottom-0 flex items-stretch gap-3 border-t border-line bg-reading py-4 pb-[max(16px,env(safe-area-inset-bottom))]">
         {prevChapter ? (
           <Link
             href={`/novels/${id}/chapters/${prevChapter.id}`}

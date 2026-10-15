@@ -89,6 +89,14 @@ createServer(async (request, response) => {
   if (request.url === '/api/v1/me' && session === 'live-test-viewer') {
     return response.end(JSON.stringify({ user: { id: 'live-test-viewer', name: '登录观众', email: 'viewer@example.invalid' } }));
   }
+  // Deterministic server-rendered content for the dual-experience visual suite.
+  if (session?.startsWith('inheritance-test-') && request.url?.startsWith('/api/v1/novels')) {
+    const chapter = { id: 'design-chapter', novelId: 'design-novel', title: '窗边的第一封信', orderIndex: 1, published: true, content: '雨停之前，她把收音机调到了熟悉的频率。街道另一端的灯还亮着。\n每一段平凡的日常，都值得有人认真倾听。'.repeat(8) };
+    const novel = { id: 'design-novel', title: '雨停之前的来信', description: '一座城市，两段生活。那些未曾说出口的话，终于在一个雨夜有了回音。', status: 'ongoing', authorId: 'inheritance-test-user', author: { id: 'inheritance-test-user', name: '夜行人' }, chapterCount: 1, chapters: [chapter] };
+    if (request.url === '/api/v1/novels') return response.end(JSON.stringify({ items: [novel, { ...novel, id: 'design-novel-two', title: '在城市的另一边，等一个缓缓而来的晴天', author: { ...novel.author, name: '远山' }, status: 'completed' }] }));
+    if (request.url === '/api/v1/novels/design-novel') return response.end(JSON.stringify(novel));
+    if (request.url === '/api/v1/novels/design-novel/chapters/design-chapter') return response.end(JSON.stringify(chapter));
+  }
   if (request.url === '/api/v1/rooms') {
     return response.end(JSON.stringify({ items: [] }));
   }

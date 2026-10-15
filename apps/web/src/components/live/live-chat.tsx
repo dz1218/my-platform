@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Room, RoomEvent, type RemoteParticipant } from 'livekit-client';
+import { useViewport } from '@/components/use-viewport';
 import { LiveIcon } from './live-icon';
 
 const CHAT_TOPIC = 'live-chat.v1';
@@ -11,6 +12,7 @@ const MAX_MESSAGES = 200;
 type Message = { id: string; identity: string; name: string; host: boolean; text: string; time: number; own: boolean };
 
 export function LiveChat({ room, connected, nickname, visible }: { room: Room | null; connected: boolean; nickname: string; visible: boolean }) {
+  const viewport = useViewport();
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -95,9 +97,9 @@ export function LiveChat({ room, connected, nickname, visible }: { room: Room | 
       {error && <p role="alert" className="live-form-error">{error}</p>}
       <label className="sr-only" htmlFor="live-message">发送消息</label>
       <textarea id="live-message" ref={inputRef} maxLength={MAX_LENGTH} rows={2} disabled={!connected || sending} placeholder={connected ? '说点什么…' : '连接后即可发送消息'} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => {
-        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); void send(); }
+        if (viewport === 'desktop' && event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); void send(); }
       }} />
-      <div className="live-chat-form-footer"><span>{draft.length ? `${draft.length}/${MAX_LENGTH}` : 'Enter 发送 · Shift + Enter 换行'}</span><button type="submit" className="live-button live-button-primary" disabled={!connected || !draft.trim() || sending}><LiveIcon name="send" size={15} />{sending ? '发送中…' : '发送'}</button></div>
+      <div className="live-chat-form-footer"><span>{draft.length ? `${draft.length}/${MAX_LENGTH}` : viewport === 'desktop' ? 'Enter 发送 · Shift + Enter 换行' : '回车换行，点击发送'}</span><button type="submit" className="live-button live-button-primary" disabled={!connected || !draft.trim() || sending}><LiveIcon name="send" size={15} />{sending ? '发送中…' : '发送'}</button></div>
     </form>
   </div>;
 }

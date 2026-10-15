@@ -37,10 +37,11 @@
   --font-sans: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-brand: Georgia, "Times New Roman", serif;
   --radius-control: 0.625rem;
-  --radius-panel: 0.875rem;
-  --shadow-panel: 0 2px 8px rgb(38 37 34 / 3%);
-  --shadow-popover: 0 8px 28px rgb(38 37 34 / 12%);
-  --shadow-dialog: 0 24px 80px rgb(0 0 0 / 24%);
+  --radius-panel: 1rem;
+  --radius-scene: 1.5rem;
+  --shadow-panel: 0 2px 8px rgb(0 0 0 / 12%);
+  --shadow-popover: 0 8px 28px rgb(0 0 0 / 28%);
+  --shadow-dialog: 0 24px 80px rgb(0 0 0 / 40%);
   --color-overlay: #18181680;
   --color-photo-ink: #f6f4f0;
   --color-photo-muted: #d1ccc3;
@@ -53,43 +54,11 @@
 @layer base {
   :root {
     --nav-width: 236px;
-    --rf-canvas: #f7f6f3;
-    --rf-surface: #ffffff;
-    --rf-surface-soft: #f2f1ed;
-    --rf-surface-hover: #eeede8;
-    --rf-surface-selected: #e8e6e0;
-    --rf-ink: #262522;
-    --rf-muted: #6e6b66;
-    --rf-faint: #736f69;
-    --rf-line: #e3e0db;
-    --rf-control: #8f8b83;
-    --rf-action: #292826;
-    --rf-action-hover: #43413d;
-    --rf-on-action: #ffffff;
-    --rf-accent: #8b6a45;
-    --rf-accent-soft: #f2ece2;
-    --rf-accent-line: #d7c8b3;
-    --rf-focus: #8b6a45;
-    --rf-success: #37634c;
-    --rf-success-soft: #edf4ef;
-    --rf-success-line: #c5d9cb;
-    --rf-danger: #a13e3b;
-    --rf-danger-hover: #84302e;
-    --rf-danger-soft: #fbefed;
-    --rf-danger-line: #e9c8c3;
-    --rf-warning: #825f24;
-    --rf-warning-soft: #fbf4e5;
-    --rf-warning-line: #e7d4aa;
-    --rf-reading: #f5f2eb;
-  }
-
-  /* Preserve the mobile palette; desktop shares one neutral dark scene. */
-  @media (min-width: 768px) {
-    :root { @apply theme-graphite; }
+    --mobile-nav-height: 64px;
+    @apply theme-night;
   }
 }
 
-/* A scene uses the same semantic utilities with different local values. */
 @utility theme-night {
     --rf-canvas: #1b1b19;
     --rf-surface: #141413;
@@ -118,46 +87,6 @@
     --rf-warning: #e7c586;
     --rf-warning-soft: #393020;
     --rf-warning-line: #7e6740;
+    --rf-reading: #1d1c19;
     color-scheme: dark;
-}
-
-/* Neutral desktop palette, also available to locally scoped scenes. */
-@utility theme-graphite {
-  --rf-canvas: #181818;
-  --rf-surface: #232323;
-  --rf-surface-soft: #2a2a2a;
-  --rf-surface-hover: #303030;
-  --rf-surface-selected: #383838;
-  --rf-ink: #e8e8e8;
-  --rf-muted: #a6a6a6;
-  --rf-faint: #949494;
-  --rf-line: #3b3b3b;
-  --rf-control: #777777;
-  --rf-action: #dedede;
-  --rf-action-hover: #f5f5f5;
-  --rf-on-action: #1b1b1b;
-  --rf-accent: #c8c8c8;
-  --rf-accent-soft: #303030;
-  --rf-accent-line: #505050;
-  --rf-focus: #c8c8c8;
-  --rf-success: #a8d3b7;
-  --rf-success-soft: #23352a;
-  --rf-success-line: #46634f;
-  --rf-danger: #ffb4aa;
-  --rf-danger-hover: #ffd1ca;
-  --rf-danger-soft: #3c2525;
-  --rf-danger-line: #89524b;
-  --rf-warning: #e7c586;
-  --rf-warning-soft: #393020;
-  --rf-warning-line: #7e6740;
-  --rf-reading: #1d1d1d;
-  --color-overlay: #00000099;
-  --color-photo-ink: #f0f0f0;
-  --color-photo-muted: #cccccc;
-  --color-photo-shade: #121212;
-  --color-photo-accent: #dedede;
-  --shadow-panel: 0 2px 8px rgb(0 0 0 / 12%);
-  --shadow-popover: 0 8px 28px rgb(0 0 0 / 28%);
-  --shadow-dialog: 0 24px 80px rgb(0 0 0 / 40%);
-  color-scheme: dark;
 }

@@ -57,6 +57,18 @@ export function Conversation({
   intercepted?: boolean;
 }) {
   const chat = useConversation(match.conversationId);
+  const layout = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const update = () => {
+      if (window.innerWidth < 768) layout.current?.style.setProperty('--chat-viewport-height', `${viewport?.height ?? window.innerHeight}px`);
+      else layout.current?.style.removeProperty('--chat-viewport-height');
+    };
+    update();
+    viewport?.addEventListener('resize', update);
+    window.addEventListener('resize', update);
+    return () => { viewport?.removeEventListener('resize', update); window.removeEventListener('resize', update); };
+  }, []);
   const settingsDialog = useRef<HTMLDialogElement | null>(null);
   const canManage = !chat.settings.isError && !!chat.settings.data?.canManage;
   const bottom = useRef<HTMLDivElement | null>(null);
@@ -85,6 +97,7 @@ export function Conversation({
     <main
       id="main-content"
       tabIndex={-1}
+      ref={layout}
       className={`chat-layout${canManage ? " chat-layout-with-settings" : ""}`}
       aria-label={
         operator
@@ -95,7 +108,7 @@ export function Conversation({
       <header className="flex items-center gap-2.5 border-b border-line bg-panel px-3.5 py-3 sm:py-2.5">
         <ChatBack intercepted={intercepted} operator={operator}
           aria-label={operator ? "返回我的 AI 身份" : "返回陪伴"}
-          className="grid h-10 w-9 place-items-center rounded-lg text-2xl text-muted hover:bg-surface-soft hover:text-ink"
+          className="grid h-11 w-11 place-items-center rounded-lg text-2xl text-muted hover:bg-surface-soft hover:text-ink"
         >
           ←
         </ChatBack>
@@ -182,7 +195,7 @@ export function Conversation({
             </button>
           </div>
         )}
-        <div role="log" aria-label="聊天记录" className="flex flex-col gap-3.5">
+        <div role="log" aria-label="聊天记录" className="flex flex-col gap-5">
           {chat.messages.map((message) => (
             <MessageBubble
               key={message.id}

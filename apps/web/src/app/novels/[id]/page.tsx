@@ -1,3 +1,4 @@
+import { BookCover } from '@/features/novels/book-cover';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getNovel } from '@/services/novels';
@@ -21,9 +22,9 @@ export default async function NovelDetailPage({
     : novel.chapters.filter((c) => c.published);
 
   return (
-    <main id="main-content" tabIndex={-1} className="page-list page-content">
+    <main id="main-content" tabIndex={-1} className="page-shell page-content">
       <div className="mb-5">
-        <Link href="/novels" className="link-muted inline-flex items-center gap-1.5">
+        <Link href="/novels" className="link-muted inline-flex min-h-11 items-center gap-1.5">
           <svg aria-hidden="true"
             width="14"
             height="14"
@@ -40,10 +41,11 @@ export default async function NovelDetailPage({
         </Link>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-10 grid items-start gap-7 md:grid-cols-[180px_minmax(0,1fr)]">
+        <div className="hidden md:block"><BookCover title={novel.title} author={novel.author.name ?? '匿名'} /></div><div>
         <div className="mb-3 flex items-start justify-between gap-4">
           <div>
-            <div className="mb-2 flex items-center gap-2.5">
+            <div className="mb-2 flex flex-wrap items-center gap-2.5">
               <h1 className="m-0 text-2xl font-semibold tracking-[-0.5px] text-ink">
                 {novel.title}
               </h1>
@@ -90,6 +92,7 @@ export default async function NovelDetailPage({
         )}
       </div>
 
+      </div>
       <div className="mb-5 flex items-center justify-between">
         <h2 className="text-lg font-bold text-ink">
           章节目录
@@ -106,14 +109,14 @@ export default async function NovelDetailPage({
           </p>
         </div>
       ) : (
-        <div className="grid gap-2">
+        <div className="divide-y divide-line rounded-panel bg-panel px-2 md:px-4">
           {visibleChapters.map((chapter) => (
             <Link
               key={chapter.id}
               href={`/novels/${id}/chapters/${chapter.id}`}
               className="block no-underline text-inherit"
             >
-              <div className="surface-soft room-card flex items-center justify-between px-5 py-3.5">
+              <div className="room-card flex min-h-16 items-center justify-between gap-3 rounded-control px-5 py-3.5">
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-bold text-muted">
                     {String(chapter.orderIndex).padStart(2, '0')}

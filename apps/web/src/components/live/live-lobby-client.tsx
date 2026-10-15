@@ -1,148 +1,42 @@
 'use client';
-
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ApiRoomItem } from '@/lib/api';
-import { check } from '@/services/api/client';
+import { useEffect, useState } from 'react';
+import { SceneBanner } from '@/components/scene-banner';
+import { PageHeading } from '@/components/page-heading';
+import { Sheet } from '@/components/sheet';
+import { useViewport, ViewportSkeleton } from '@/components/use-viewport';
 import { LiveIcon } from './live-icon';
+import { useLiveLobby, type LiveLobbyProps, type LiveLobbyModel, type Filter } from './use-live-lobby';
 
-type Props = {
-  apiBaseUrl: string;
-  initialRooms: ApiRoomItem[] | undefined;
-  isLoggedIn: boolean;
-  hostNickname: string;
-};
-
-type Filter = '全部' | '直播中' | '准备中';
-
-export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn, hostNickname }: Props) {
-  const queryClient = useQueryClient();
-  const queryKey = ['live-rooms', apiBaseUrl];
-  const roomsQuery = useQuery({
-    queryKey,
-    queryFn: async ({ signal }) => {
-      const response = await fetch(`${apiBaseUrl}/rooms`, { cache: 'no-store', signal });
-      await check(response);
-      return ((await response.json()) as { items: ApiRoomItem[] }).items;
-    },
-    initialData: initialRooms,
-    initialDataUpdatedAt: 0,
-    staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: 'always',
-    refetchInterval: 5_000,
-  });
-  const rooms = roomsQuery.data ?? [];
-  const ownedRooms = isLoggedIn ? rooms.filter((room) => room.canManage) : [];
-  const ownedRoom = ownedRooms[0];
-  const [title, setTitle] = useState('');
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<Filter>('全部');
-  const [isCreating, setIsCreating] = useState(false);
-  const [closingRoomId, setClosingRoomId] = useState<string | null>(null);
-  const [roomToClose, setRoomToClose] = useState<ApiRoomItem | null>(null);
-  const [createdRoom, setCreatedRoom] = useState<ApiRoomItem | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [closeError, setCloseError] = useState<string | null>(null);
-  const mutationPending = useRef(false);
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const titleRef = useRef<HTMLInputElement>(null);
-  const isMutating = isCreating || closingRoomId !== null;
-  const liveCount = rooms.filter((room) => room.status === '直播中').length;
-  const visibleRooms = rooms.filter((room) => (filter === '全部' || room.status === filter) && room.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
-
-  useEffect(() => {
-    if (roomToClose) dialogRef.current?.showModal();
-    else dialogRef.current?.close();
-  }, [roomToClose]);
-
-  async function createRoom() {
-    if (mutationPending.current || roomsQuery.isPending || roomsQuery.isError) return;
-    if (ownedRoom) {
-      setError('你已有一个直播间，请先关闭后再创建');
-      return;
-    }
-    const name = title.trim();
-    if (!name || name.length > 100) {
-      setError('请输入 1–100 个字符的房间名称');
-      titleRef.current?.focus();
-      return;
-    }
-    if (rooms.some((room) => room.title.trim().toLowerCase() === name.toLowerCase())) {
-      setError('这个房间名称已被使用，请换一个名称');
-      titleRef.current?.focus();
-      return;
-    }
-    mutationPending.current = true;
-    setError(null);
-    setIsCreating(true);
-    try {
-      const response = await fetch(`${apiBaseUrl}/rooms`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: name }),
-      });
-      if (response.status === 409) {
-        const conflict = await response.clone().json().catch(() => null) as { error?: { code?: string; message?: string }; item?: ApiRoomItem } | null;
-        if (conflict?.error?.code === 'room_already_exists' && conflict.item?.canManage) {
-          const item = conflict.item;
-          await queryClient.cancelQueries({ queryKey });
-          queryClient.setQueryData<ApiRoomItem[]>(queryKey, (current = []) => [item, ...current.filter((room) => room.id !== item.id)]);
-          setError(conflict.error.message || '你已有一个直播间，请先关闭后再创建');
-          return;
-        }
-      }
-      await check(response);
-      const { item } = (await response.json()) as { item: ApiRoomItem };
-      await queryClient.cancelQueries({ queryKey });
-      queryClient.setQueryData<ApiRoomItem[]>(queryKey, (current = []) => [item, ...current.filter((room) => room.id !== item.id)]);
-      setTitle('');
-      setSearch('');
-      setFilter('全部');
-      setCreatedRoom(item);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '创建房间失败，请重试');
-    } finally {
-      mutationPending.current = false;
-      setIsCreating(false);
-    }
-  }
-
-  async function closeRoom() {
-    if (mutationPending.current || !roomToClose) return;
-    const roomId = roomToClose.id;
-    mutationPending.current = true;
-    setClosingRoomId(roomId);
-    setCloseError(null);
-    try {
-      const response = await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}`, { method: 'DELETE' });
-      await check(response);
-      await queryClient.cancelQueries({ queryKey });
-      queryClient.setQueryData<ApiRoomItem[]>(queryKey, (current = []) => current.filter((room) => room.id !== roomId));
-      if (createdRoom?.id === roomId) setCreatedRoom(null);
-      setError(null);
-      setRoomToClose(null);
-    } catch (err) {
-      setCloseError(err instanceof Error ? err.message : '关闭房间失败，请重试');
-    } finally {
-      mutationPending.current = false;
-      setClosingRoomId(null);
-    }
-  }
-
+export function LiveLobbyClient(props: LiveLobbyProps) {
+  const model = useLiveLobby(props);
+  const viewport = useViewport();
+  const [creating, setCreating] = useState(false);
+  useEffect(() => { if (viewport === 'desktop') setCreating(false); }, [viewport]);
   return <>
-    <header className="live-heading">
-      <div><h1>直播大厅<span className="live-heading-dot" /></h1><p>找个感兴趣的房间，让交流现在发生。</p></div>
-      <div className="live-profile"><span className="live-avatar">{isLoggedIn ? hostNickname.slice(0, 1) : <LiveIcon name="users" />}</span><div><strong>{isLoggedIn ? hostNickname : '访客'}</strong><span>{isLoggedIn ? '看直播，也可以自己开播' : '随时进入，参与聊天'}</span></div></div>
-    </header>
+    {!viewport ? <ViewportSkeleton /> : viewport === 'desktop' ? <DesktopLiveLobby model={model} /> : <MobileLiveLobby model={model} onCreate={() => setCreating(true)} />}
+    <Sheet open={creating && viewport === 'mobile'} onClose={() => setCreating(false)} title="我的直播间"><CreateRoomPanel model={model} /></Sheet>
+    <CloseRoomDialog model={model} />
+  </>;
+}
+function DesktopLiveLobby({ model }: { model: LiveLobbyModel }) {
+  return <>
+    <PageHeading title="直播大厅" description="找个感兴趣的房间，让交流现在发生。" />
+    <SceneBanner scene="live" title="把心事，调到同一个频率。" description="听一个声音，分享一段日常。总有故事正在发生。" />
+    <div className="live-lobby-layout"><LobbyDirectory model={model} /><CreateRoomPanel model={model} /></div>
+  </>;
+}
+function MobileLiveLobby({ model, onCreate }: { model: LiveLobbyModel; onCreate: () => void }) {
+  return <>
+    <PageHeading title="直播" description="找一个声音，陪你度过此刻。" actions={model.ownedRoom ? <Link href={`/live/${encodeURIComponent(model.ownedRoom.id)}`} className="btn-primary">我的直播间</Link> : model.isLoggedIn ? <button type="button" onClick={onCreate} className="btn-primary">开播</button> : <Link href="/login" className="btn-secondary">登录开播</Link>} />
+    <SceneBanner compact scene="live" title="此刻，有人同频。" description={model.liveCount ? `${model.liveCount} 场直播正在进行` : '好话题，等你来开启。'} />
+    <LobbyDirectory model={model} />
+  </>;
+}
 
-    <section className="live-welcome" aria-label="直播广场">
-      <div><h2>把日常，聊成现场。</h2><p>分享一个想法，听听不同的声音。你的下一场对话，从这里开始。</p></div>
-      <div className="live-broadcast-art" aria-hidden="true"><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /></div>
-      <div className="live-welcome-status"><LiveIcon name="video" size={18} /><span>{liveCount ? `${liveCount} 场直播正在进行` : '好话题，等你来开启'}</span></div>
-    </section>
-    <div className="live-lobby-layout">
-      <section className="live-directory" aria-label="直播间列表">
+function LobbyDirectory({ model }: { model: LiveLobbyModel }) {
+  const { roomsQuery, rooms, title, search, setSearch, filter, setFilter, setRoomToClose, error, setCloseError, isMutating, liveCount, visibleRooms, isLoggedIn } = model;
+  return (      <section className="live-directory" aria-label="直播间列表">
         <div className="live-directory-top"><h2>发现直播 <span>{rooms.length}</span></h2><span className="live-update-note"><i />每 5 秒自动更新</span></div>
         <div className="live-directory-toolbar">
           <div className="live-filters" aria-label="筛选直播间">{(['全部', '直播中', '准备中'] as Filter[]).map((value) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}{value === '直播中' && <span>{liveCount}</span>}</button>)}</div>
@@ -169,8 +63,12 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn, hostNick
         </div>}
         <p className="live-result-count" aria-live="polite">{!roomsQuery.isPending && `${visibleRooms.length} 个直播间${search || filter !== '全部' ? `，共 ${rooms.length} 个` : ''}`}</p>
       </section>
+  );
+}
 
-      <aside className="live-create-panel">
+function CreateRoomPanel({ model }: { model: LiveLobbyModel }) {
+  const { roomsQuery, ownedRooms, ownedRoom, title, setTitle, isCreating, createdRoom, error, setError, titleRef, isMutating, createRoom, isLoggedIn } = model;
+  return (      <aside className="live-create-panel">
         <div className="live-create-icon"><LiveIcon name="video" size={24} /></div>
         <h2>{ownedRoom ? '我的直播间' : '创建直播间'}</h2><p>{ownedRoom ? '每个账号同时只能保留一个直播间。' : '给房间起个名字，邀请大家来聊聊。'}</p>
         {ownedRoom ? <>
@@ -188,12 +86,15 @@ export function LiveLobbyClient({ apiBaseUrl, initialRooms, isLoggedIn, hostNick
         </form> : <><Link href="/login" className="live-button live-button-primary live-create-button">登录后创建<LiveIcon name="arrow" size={16} /></Link><p className="live-create-hint">观看直播和发送消息无需登录。</p></>}
         <div className="live-create-footer"><LiveIcon name="chat" size={17} /><p>进入直播间，就能和大家实时聊天。</p></div>
       </aside>
-    </div>
+  );
+}
 
-    <dialog ref={dialogRef} className="live-dialog" aria-labelledby="close-room-title" aria-describedby="close-room-description" onCancel={(event) => { if (closingRoomId) event.preventDefault(); else setRoomToClose(null); }} onClose={() => setRoomToClose(null)}>
+function CloseRoomDialog({ model }: { model: LiveLobbyModel }) {
+  const { title, closingRoomId, roomToClose, setRoomToClose, error, closeError, dialogRef, closeRoom } = model;
+  return (    <dialog ref={dialogRef} className="live-dialog" aria-labelledby="close-room-title" aria-describedby="close-room-description" onCancel={(event) => { if (closingRoomId) event.preventDefault(); else setRoomToClose(null); }} onClose={() => setRoomToClose(null)}>
       <h2 id="close-room-title">关闭这个直播间？</h2><p id="close-room-description">关闭「{roomToClose?.title}」后，所有参与者将断开连接。之后可以创建新的直播间。</p>
       {closeError && <p role="alert" className="live-form-error">{closeError}</p>}
       <div className="live-dialog-actions"><button autoFocus type="button" className="live-button live-button-secondary" disabled={closingRoomId !== null} onClick={() => setRoomToClose(null)}>取消</button><button type="button" className="live-button live-button-danger" disabled={closingRoomId !== null} onClick={() => void closeRoom()}>{closingRoomId ? '关闭中…' : '确认关闭'}</button></div>
     </dialog>
-  </>;
+  );
 }

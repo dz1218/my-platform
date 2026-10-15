@@ -10,7 +10,7 @@ import { APIError } from '@/services/api/client';
 import { GenderSelect } from '@/features/auth/gender-select';
 import type { Gender, Identity, InheritanceState } from '@/types/companion';
 import { Avatar } from './avatar';
-import { CatalogFilters } from '@/features/catalog/catalog-filters';
+import { ResponsiveCatalogFilters } from '@/features/catalog/catalog-filters';
 import { IdentityMasonry } from '@/features/catalog/identity-masonry';
 import { emptyCatalogFilters, type CatalogFilters as Filters } from '@/services/catalog';
 
@@ -159,7 +159,7 @@ export function IdentityOnboarding({ accountId, accountName }: { accountId: stri
             <button type="submit" className="btn-primary" disabled={!gender || busy}>{saveGender.isPending ? '正在保存…' : '保存性别，查看身份'}</button>
           </form> : <>
             <div className="section-heading"><h2 id="available-identities-heading" className="text-base font-semibold">{state.data.gender === 'FEMALE' ? '女性 AI 身份' : '男性 AI 身份'}</h2><span className="text-xs font-normal text-muted">{options.data?.pages[0]?.availableTotal ?? 0} 位可继承</span></div>
-            <CatalogFilters value={filters} occupations={options.data?.pages[0]?.occupations ?? []} onChange={next => { void client.cancelQueries({ queryKey: optionsKey }); setFilters(next); document.getElementById('available-identities-heading')?.scrollIntoView({ block: 'start', behavior: 'instant' }); }} />
+            <ResponsiveCatalogFilters value={filters} occupations={options.data?.pages[0]?.occupations ?? []} onChange={next => { void client.cancelQueries({ queryKey: optionsKey }); setFilters(next); document.getElementById('available-identities-heading')?.scrollIntoView({ block: 'start', behavior: 'instant' }); }} />
             {options.isPending && <p role="status" className="surface p-6 text-sm text-muted">正在加载身份…</p>}
             {!options.isPending && !options.error && candidates.length === 0 ? <div className="empty-state text-left">
               <h3 className="text-base font-medium text-ink">{state.data.gender === 'MALE' ? '男性 AI 身份暂未开放' : '暂时没有可继承的女性 AI 身份'}</h3>

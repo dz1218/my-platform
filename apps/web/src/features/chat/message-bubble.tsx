@@ -28,7 +28,7 @@ export function MessageBubble({ message, sending = false, operator = false }: { 
         </p>
         <div
           className={cn(
-            "whitespace-pre-wrap wrap-break-word rounded-xl rounded-tl-sm border border-line bg-panel px-3.5 py-2.5 text-sm leading-[1.85]",
+            "whitespace-pre-wrap wrap-break-word rounded-xl rounded-tl-sm border border-line/60 bg-surface-soft px-4 py-3 text-sm leading-[1.85]",
             own &&
               "rounded-tl-xl rounded-tr-sm border-action bg-action text-on-action",
           )}

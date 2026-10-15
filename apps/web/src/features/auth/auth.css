@@ -2,7 +2,7 @@
 @property --border-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
 @keyframes border-drift { to { --border-angle: 360deg; } }
 @keyframes story-reveal { from { opacity: .4; } to { opacity: 1; } }
-.auth-page { min-height: 100dvh; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: center; padding: 52px 5vw 25px; color-scheme: dark; @apply theme-night md:theme-graphite text-ink bg-canvas; }
+.auth-page { min-height: 100dvh; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: center; padding: 52px 5vw 25px; color-scheme: dark; @apply theme-night text-ink bg-canvas; }
 .auth-ambient { position: absolute; inset: 0; z-index: -1; overflow: hidden; background: radial-gradient(ellipse at 12% 85%, color-mix(in srgb, var(--color-photo-accent) 8%, transparent), transparent 45%), radial-gradient(ellipse at 90% 8%, color-mix(in srgb, var(--color-photo-accent) 12%, transparent), transparent 40%); }
 .auth-ambient::before { content: ""; position: absolute; inset: 0; opacity: .12; background: url('/images/radio-friday/radio-host.jpg') center 45% / cover; filter: blur(50px); }
 .auth-frame { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(360px, .86fr) minmax(0, 1.14fr); width: min(1200px, 100%); min-height: min(760px, 82dvh); margin: auto; border-radius: 28px; backdrop-filter: blur(28px); @apply border border-accent-line bg-surface-soft/65 shadow-dialog; }

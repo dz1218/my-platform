@@ -31,21 +31,11 @@ export function CompanionNavigation({ children, chat }: { children: ReactNode; c
     root.style.overflow = 'hidden';
     root.style.overscrollBehavior = 'none';
     body.style.overflow = 'hidden';
-    const nav = document.querySelector<HTMLElement>('.site-nav');
-    const updateInset = () => {
-      overlay.current?.style.setProperty('--chat-nav-height', `${window.innerWidth < 768 ? nav?.getBoundingClientRect().height ?? 120 : 0}px`);
-    };
-    updateInset();
-    const observer = new ResizeObserver(updateInset);
-    if (nav) observer.observe(nav);
-    window.addEventListener('resize', updateInset);
     overlay.current?.focus({ preventScroll: true });
     return () => {
       root.style.overflow = oldRootOverflow;
       body.style.overflow = oldBodyOverflow;
       root.style.overscrollBehavior = oldOverscroll;
-      observer.disconnect();
-      window.removeEventListener('resize', updateInset);
     };
   }, [active, prepareChat]);
   useLayoutEffect(() => {

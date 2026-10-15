@@ -13,20 +13,20 @@ export default async function MePage() {
         title="我的"
         description="管理本账户与 AI 身份，选择你想使用的聊天方式。"
       />
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-      <section className="content-panel" aria-labelledby="profile-heading">
-        <h2 id="profile-heading" className="panel-heading">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+      <section className="overflow-hidden rounded-panel bg-panel" aria-labelledby="profile-heading">
+        <h2 id="profile-heading" className="px-6 pt-6 text-xs text-muted">
           本账户
         </h2>
-        <div className="flex items-center gap-4 px-5 py-6">
+        <div className="flex items-center gap-5 px-6 py-8">
           <span
             aria-hidden="true"
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-surface-soft text-xl text-accent"
+            className="grid h-16 w-16 shrink-0 place-items-center rounded-full border border-accent-line bg-accent-soft text-2xl text-accent"
           >
             {user.name?.slice(-1) || "我"}
           </span>
           <div className="min-w-0">
-            <h3 className="wrap-break-word text-base font-semibold">
+            <h3 className="wrap-break-word text-2xl font-semibold">
               {user.name}
             </h3>
             <p className="mt-1 break-all text-sm text-muted">
@@ -35,7 +35,7 @@ export default async function MePage() {
           </div>
         </div>
         <div className="border-t border-line px-5 py-4"><Link href="/companion" className="btn-secondary w-full">以本账户聊天</Link></div>
-        <div className="border-t border-line px-5 py-5">
+        <div className="mx-5 mb-5 rounded-panel border border-accent-line/60 bg-accent-soft/40 px-5 py-6">
           <h2 className="text-sm font-semibold">我的 AI 身份</h2>
           {user.inheritedIdentity ? <>
             <div className="mt-4 flex items-center gap-3"><Avatar identity={user.inheritedIdentity} /><p className="font-medium">{user.inheritedIdentity.name}</p></div>

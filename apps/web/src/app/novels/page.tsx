@@ -1,5 +1,7 @@
 export const dynamic = "force-dynamic";
 import Link from "next/link";
+import { SceneBanner } from '@/components/scene-banner';
+import { BookCover } from '@/features/novels/book-cover';
 import { PageHeading } from "@/components/page-heading";
 import { listNovels } from "@/services/novels";
 import { isAuthenticated } from "@/lib/auth";
@@ -23,6 +25,7 @@ export default async function NovelListPage() {
           ) : undefined
         }
       />
+      <SceneBanner scene="reading" title="翻开一页，走进另一种生活。" description="读几页书，让想象慢下来。下一段故事，从此刻开始。" />
       <div className="section-heading">
         <h2>书架</h2>
         <span className="text-xs font-normal text-muted">
@@ -57,59 +60,13 @@ export default async function NovelListPage() {
           </p>
         </div>
       ) : (
-        <div className="collection-grid">
-          {novels.map((novel) => (
-            <Link
-              key={novel.id}
-              href={`/novels/${novel.id}`}
-              className="content-panel block no-underline text-inherit hover:border-accent-line"
-            >
-              <div className="room-card h-full px-5 py-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-2 flex flex-wrap items-center gap-2.5">
-                      <h2 className="m-0 text-lg font-bold text-ink">
-                        {novel.title}
-                      </h2>
-                      <span
-                        className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold tracking-[0.06em] ${
-                          novel.status === "completed"
-                            ? "border border-success-line bg-success-soft text-success"
-                            : "border border-accent-line bg-accent-soft text-accent"
-                        }`}
-                      >
-                        {novel.status === "completed" ? "已完结" : "连载中"}
-                      </span>
-                    </div>
-                    {novel.description && (
-                      <p className="mb-3 line-clamp-2 text-sm leading-6 text-muted">
-                        {novel.description}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-4 text-xs text-muted">
-                      <span>{novel.author.name ?? "匿名"}</span>
-                      <span>·</span>
-                      <span>{novel.chapterCount} 章</span>
-                    </div>
-                  </div>
-                  <svg
-                    aria-hidden="true"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="mt-1.5 shrink-0 text-muted"
-                  >
-                    <path d="M9 18l6-6-6-6" />
-                  </svg>
-                </div>
-              </div>
-            </Link>
-          ))}
+        <div className="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] md:gap-7">
+          {novels.map(novel => <Link key={novel.id} href={`/novels/${novel.id}`} className="group min-w-0 rounded-panel outline-offset-4">
+            <BookCover title={novel.title} author={novel.author.name ?? '匿名'} />
+            <h2 className="mt-4 text-base leading-6 font-semibold group-hover:text-accent">{novel.title}</h2>
+            <p className="mt-2 text-xs text-muted">{novel.chapterCount} 章 <span className="ml-2">{novel.status === 'completed' ? '已完结' : '连载中'}</span></p>
+            {novel.description && <p className="mt-3 line-clamp-2 text-xs leading-6 text-muted">{novel.description}</p>}
+          </Link>)}
         </div>
       )}
     </main>

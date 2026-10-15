@@ -1,5 +1,6 @@
 "use client";
 import { useRef } from "react";
+import { useViewport } from '@/components/use-viewport';
 import { useChatUI } from "@/stores/chat";
 export function MessageComposer({
   matchId,
@@ -16,6 +17,7 @@ export function MessageComposer({
   onTyping?: () => void;
   onSend: (content: string) => Promise<unknown>;
 }) {
+  const viewport = useViewport();
   const draft = useChatUI((state) => state.drafts[matchId] ?? "");
   const setDraft = useChatUI((state) => state.setDraft);
   const inFlight = useRef(false);
@@ -39,7 +41,7 @@ export function MessageComposer({
         event.preventDefault();
         void submit();
       }}
-      className="rounded-lg border border-control bg-panel px-3.5 pb-2.5 pt-3 transition-colors focus-within:border-focus"
+      className="rounded-panel border border-control bg-surface-soft px-3.5 pb-2.5 pt-3 transition-colors focus-within:border-focus"
     >
       <label className="block">
         <span className="sr-only">给{name}发消息</span>
@@ -56,6 +58,7 @@ export function MessageComposer({
           }}
           onKeyDown={(event) => {
             if (
+              viewport === "desktop" &&
               event.key === "Enter" &&
               !event.shiftKey &&
               !event.nativeEvent.isComposing
@@ -65,12 +68,12 @@ export function MessageComposer({
             }
           }}
           placeholder={`和${name}说点什么…`}
-          className="block max-h-[150px] min-h-10 w-full resize-y border-0 bg-transparent py-0.5 text-base leading-relaxed text-ink outline-none placeholder:text-muted focus-visible:outline-none"
+          className="block max-h-[150px] min-h-10 w-full resize-none md:resize-y border-0 bg-transparent py-0.5 text-base leading-relaxed text-ink outline-none placeholder:text-muted focus-visible:outline-none"
         />
       </label>
       <div className="mt-2 flex items-center justify-between gap-3">
         <span className="text-[10px] text-muted sm:text-xs">
-          Enter 发送 · Shift + Enter 换行
+          {viewport === 'desktop' ? 'Enter 发送 · Shift + Enter 换行' : '回车换行，点击发送'}
         </span>
         <button
           type="submit"

@@ -3,8 +3,8 @@ import { VirtuosoMasonry, type ItemContent } from '@virtuoso.dev/masonry';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Identity } from '@/types/companion';
 
-export function IdentityMasonry<T extends Identity, C>({ items, context, ItemContent, paused = false, autoLoad = true, hasNextPage, loading, error, loadMore }: {
-  items: T[]; context: C; ItemContent: ItemContent<T, C>; paused?: boolean; autoLoad?: boolean;
+export function IdentityMasonry<T extends Identity, C>({ items, context, ItemContent, paused = false, autoLoad = true, singleColumn = false, hasNextPage, loading, error, loadMore }: {
+  items: T[]; context: C; ItemContent: ItemContent<T, C>; paused?: boolean; autoLoad?: boolean; singleColumn?: boolean;
   hasNextPage: boolean; loading: boolean; error: Error | null; loadMore: () => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -15,13 +15,13 @@ export function IdentityMasonry<T extends Identity, C>({ items, context, ItemCon
     if (!container.current || paused) return;
     const update = () => {
       const width = container.current?.clientWidth ?? 0;
-      setColumns(width < 480 ? 1 : width < 760 ? 2 : width < 1040 ? 3 : 4);
+      setColumns(singleColumn || window.innerWidth < 768 ? 1 : width < 480 ? 1 : width < 760 ? 2 : width < 1040 ? 3 : 4);
     };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(container.current);
     return () => observer.disconnect();
-  }, [paused]);
+  }, [paused, singleColumn]);
   useEffect(() => {
     if (!sentinel.current || paused || !autoLoad) return;
     const observer = new IntersectionObserver(([entry]) => setIntersecting(entry.isIntersecting), { rootMargin: '600px 0px' });

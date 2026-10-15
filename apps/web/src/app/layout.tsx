@@ -8,12 +8,7 @@ export const metadata: Metadata = {
   description: "聊天、阅读，留一点时间给自己。",
 };
 // Keep browser chrome aligned with --rf-canvas in theme.css.
-export const viewport: Viewport = {
-  themeColor: [
-    { media: "(min-width: 768px)", color: "#181818" },
-    { media: "(max-width: 767px)", color: "#F7F6F3" },
-  ],
-};
+export const viewport: Viewport = { themeColor: "#1B1B19", viewportFit: "cover" };
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {

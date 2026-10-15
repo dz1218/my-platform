@@ -15,7 +15,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 10px;
   border-radius: 8px;
   font-size: 12px; @apply border border-line text-accent;
@@ -42,7 +42,7 @@
 .chat-settings-heading { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; min-height: 80px; padding: 16px 20px; @apply border-b border-b-line; }
 .chat-settings-heading h2 { font-size: 15px; font-weight: 600; }
 .chat-settings-heading p { margin-top: 5px; font-size: 12px; @apply text-muted; }
-.chat-settings-close { display: grid; flex-shrink: 0; place-items: center; width: 36px; height: 36px; border-radius: 8px; @apply text-muted; }
+.chat-settings-close { display: grid; flex-shrink: 0; place-items: center; width: 44px; height: 44px; border-radius: 8px; @apply text-muted; }
 .chat-settings-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
 .chat-settings-section { @apply border-b border-b-line; }
 .chat-settings-section > summary { display: flex; align-items: center; gap: 8px; min-height: 60px; padding: 16px 20px; list-style: none; cursor: pointer; font-size: 13px; font-weight: 600; }
@@ -57,7 +57,7 @@
 .chat-settings-status[data-owner="HUMAN"] { @apply bg-success-soft text-success; }
 .chat-settings-fields { display: grid; min-width: 0; gap: 14px; }
 .chat-settings-field { display: grid; min-width: 0; gap: 7px; font-size: 13px; }
-.chat-settings-field .input-field { min-width: 0; min-height: 40px; }
+.chat-settings-field .input-field { min-width: 0; min-height: 44px; }
 .chat-settings-help { font-size: 12px; line-height: 1.75; @apply text-muted; }
 .chat-settings-checkbox { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; line-height: 1.65; cursor: pointer; }
 .chat-settings-checkbox input { flex-shrink: 0; width: 16px; height: 16px; margin-top: 3px; }
@@ -79,4 +79,11 @@
   .chat-layout-with-settings > header { gap: 8px; padding-inline: 10px; }
   .chat-settings-trigger { width: 40px; padding: 8px; }
   .chat-settings-trigger > span { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+
+@media (max-width: 767px) {
+  .chat-settings { inset: 0; width: 100%; border: 0; }
+  .chat-layout > header { padding-top: max(12px, env(safe-area-inset-top)); }
+  .chat-settings-heading { padding-top: max(16px, env(safe-area-inset-top)); }
+  .chat-settings-trigger { width: 44px; }
 }

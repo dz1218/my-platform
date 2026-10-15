@@ -3,7 +3,7 @@
 
 @layer base {
   * { box-sizing: border-box; }
-  html { min-height: 100%; color-scheme: light; scroll-padding-top: 76px; }
+  html { min-height: 100%; color-scheme: dark; scroll-padding-top: 76px; }
   body { @apply m-0 min-h-screen bg-canvas font-sans text-ink antialiased; }
   ::selection { @apply bg-accent-soft text-ink; }
   button, input, textarea, select { font: inherit; }
@@ -19,22 +19,27 @@
 }
 @layer components {
   .app-shell { min-height: 100dvh; }
-  .app-content { min-width: 0; }
-  .site-nav { @apply sticky top-0 z-20 border-b border-line bg-panel; }
+  .app-content { min-width: 0; padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom)); }
+  .app-shell[data-immersive="true"] .app-content { padding-bottom: 0; }
+  .app-shell[data-immersive="true"] .mobile-nav { display: none; }
+  .site-nav { @apply hidden bg-panel; }
+  .mobile-nav { @apply fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-panel px-2; padding-bottom: env(safe-area-inset-bottom); }
+  .mobile-nav .nav-item { @apply min-h-16 flex-col gap-1 rounded-none px-1 text-xs; }
   .site-brand { @apply flex items-center gap-3 px-4 py-3 text-lg font-semibold; }
   .brand-caption { @apply hidden text-xs font-normal text-muted; }
   .primary-nav { @apply grid grid-cols-4 px-2 pb-2; }
   .nav-item { @apply flex min-h-11 items-center justify-center gap-2 rounded-control px-3 text-sm text-muted transition-colors hover:bg-surface-soft hover:text-ink; }
-  .nav-item-active { @apply bg-surface-selected font-semibold text-ink; }
+  .nav-item-active { @apply bg-accent-soft font-semibold text-accent; }
   .nav-item-active svg { @apply text-accent; }
   .nav-footer { display: none; }
-  .page-shell { width: 100%; padding-inline: clamp(16px, 3vw, 48px); }
+  .page-shell { width: 100%; max-width: 1440px; margin-inline: auto; padding-inline: clamp(16px, 3vw, 48px); }
   .companion-layout { @apply grid items-start gap-8; }
   .conversation-rail { @apply rounded-panel border border-line bg-panel p-5; }
   .collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
-  .chat-layout { @apply grid w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-bg text-ink; height: calc(100dvh - 120px); }
+  .chat-layout { @apply grid w-full grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden bg-bg text-ink; height: var(--chat-viewport-height, 100dvh); }
   @media (min-width: 768px) {
-    .app-content { margin-left: var(--nav-width); }
+    .app-content { margin-left: var(--nav-width); padding-bottom: 0; }
+    .mobile-nav { display: none; }
     .site-nav { position: fixed; inset: 0 auto 0 0; width: var(--nav-width); display: flex; flex-direction: column; border-bottom: 0; @apply border-r border-r-line; }
     .site-brand { padding: 32px 24px; }
     .brand-caption { display: block; margin-top: 6px; font-size: 10px; }
@@ -49,8 +54,8 @@
     .companion-layout { grid-template-columns: minmax(0, 1fr) 300px; }
     .conversation-rail { position: sticky; top: 32px; }
   }
-  .page-content { @apply pb-12 pt-6 sm:pt-8; }
-  .page-heading { @apply mb-7 flex flex-wrap items-center justify-between gap-4 border-b border-line pb-6; }
+  .page-content { @apply pb-12 pt-6 md:pt-10; }
+  .page-heading { @apply mb-7 flex flex-wrap items-center justify-between gap-4 pb-2; }
   .page-description { @apply mt-3 text-sm leading-7 text-muted; }
   .section-heading { @apply mb-3 flex items-center justify-between gap-3 text-sm font-semibold; }
   .content-panel { @apply overflow-hidden rounded-panel border border-line bg-panel shadow-panel; }
@@ -58,13 +63,13 @@
   .settings-row { @apply flex flex-wrap items-center justify-between gap-4 px-5 py-4; }
   .empty-state { @apply rounded-panel border border-dashed border-control bg-panel px-6 py-10 text-center text-sm leading-7 text-muted; }
   .person-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 16px; }
-  .person-card { @apply flex flex-col items-start gap-8 rounded-panel border border-line bg-panel p-6 shadow-panel transition-colors hover:border-control; }
+  .person-card { @apply flex flex-col items-start gap-8 rounded-panel border border-line/60 bg-panel p-6 transition-colors hover:border-accent-line; }
   .recent-chat { @apply flex min-w-0 items-center gap-3 rounded-lg border bg-panel px-4 py-3 transition-colors hover:border-accent-line; @apply border-line; }
   .page-list { width: 100%; padding-inline: clamp(16px, 3vw, 48px); }
   .page-form { @apply mx-auto w-full max-w-[600px] px-4 sm:px-6; }
   .page-account { @apply mx-auto w-full max-w-[520px] px-4 sm:px-6; }
   .page-reading { @apply mx-auto w-full max-w-[680px] px-4 sm:px-6; }
-  .page-title { @apply text-2xl font-semibold leading-tight tracking-tight sm:text-[28px]; }
+  .page-title { @apply text-2xl font-semibold leading-tight tracking-tight md:text-[32px]; }
   .surface { @apply rounded-panel border border-line bg-panel; }
   .surface-soft { @apply rounded-control border border-line bg-panel; }
   .link-muted { @apply text-sm text-muted underline-offset-4 hover:text-accent hover:underline; }
@@ -98,7 +103,7 @@
 
 /* Keep the masonry's column widths unchanged when a full-page chat locks scroll. */
 html { scrollbar-gutter: stable; }
-.companion-chat-overlay { position: fixed; inset: var(--chat-nav-height, 120px) 0 0; z-index: 15; overflow: auto; overscroll-behavior: contain; outline: none; @apply bg-canvas; }
+.companion-chat-overlay { position: fixed; inset: 0; z-index: 15; overflow: auto; overscroll-behavior: contain; outline: none; @apply bg-canvas; }
 .companion-chat-overlay .chat-layout { height: 100%; }
 @media (min-width: 768px) {
   .companion-chat-overlay { top: 0; left: var(--nav-width); }
@@ -109,4 +114,31 @@ html { scrollbar-gutter: stable; }
   .radio-mark svg { @apply size-[23px]; }
   .site-brand > span:last-child { @apply whitespace-nowrap font-brand tracking-[-.5px]; }
   .site-brand .brand-caption { @apply font-sans tracking-normal; }
+}
+
+@layer components {
+  .scene-banner { @apply relative mb-9 h-[260px] overflow-hidden rounded-scene bg-panel; }
+  .scene-shade { position: absolute; inset: 0; background: linear-gradient(90deg, var(--color-photo-shade) 0%, color-mix(in srgb, var(--color-photo-shade) 80%, transparent) 35%, transparent 100%); }
+  .scene-banner .radio-mark { @apply size-7 rounded-lg; }
+  .scene-banner .radio-mark svg { @apply size-4; }
+  .scene-banner-compact { @apply mb-6 h-36 rounded-panel; }
+  .scene-banner-compact .scene-shade { background: linear-gradient(90deg, var(--color-photo-shade), color-mix(in srgb, var(--color-photo-shade) 55%, transparent)); }
+  .scene-banner-compact h2 { @apply text-xl; }
+  .scene-banner-compact p { @apply mt-2 text-xs leading-5; }
+  .scene-banner-compact .relative > span { display: none; }
+  .sheet { position: fixed; inset: auto 0 0; margin: 0 auto; width: 100%; max-width: 640px; max-height: min(90dvh, 800px); padding: 0; @apply overflow-hidden rounded-t-scene border border-line bg-panel text-ink shadow-dialog; }
+  .sheet[open] { display: flex; flex-direction: column; }
+  .sheet::backdrop { @apply bg-overlay; }
+  .sheet-full { height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  .sheet-content { overflow-y: auto; overscroll-behavior: contain; padding: 20px 20px max(24px, env(safe-area-inset-bottom)); }
+  .book-cover { @apply relative flex aspect-[3/4] flex-col justify-between overflow-hidden rounded-r-panel border border-accent-line/60 bg-accent-soft p-5 text-accent; box-shadow: inset 5px 0 0 var(--rf-surface-selected); }
+  .book-cover::after { content: ''; @apply pointer-events-none absolute inset-3 border border-accent-line/40; }
+}
+@media (max-width: 767px) {
+  html { scroll-padding-top: 16px; }
+  .page-heading { margin-bottom: 24px; }
+  .page-description { font-size: 12px; line-height: 1.8; margin-top: 8px; }
+  .scene-banner:not(.scene-banner-compact) { height: 144px; border-radius: var(--radius-panel); margin-bottom: 24px; }
+  .scene-banner .relative > span { display: none; }
+  .scene-banner p { font-size: 12px; line-height: 1.7; margin-top: 8px; }
 }
