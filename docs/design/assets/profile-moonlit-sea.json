@@ -1,0 +1,6 @@
+{
+  "asset": "apps/web/public/images/radio-friday/profile-moonlit-sea.png",
+  "tool": "image_gen.imagegen (built-in)",
+  "prompt": "A cinematic panoramic photograph for a dark personal profile cover, aspect ratio 3:1. A quiet moonlit sea at blue hour, distant soft mountain silhouettes on the far right, a small pale moon high in the right third, delicate silver reflections on calm water, hazy blue-gray atmosphere. Wide open horizon in the upper half, very dark clean lower third for white profile text. Refined natural photography with subtle fine grain, restrained cool blue and charcoal colors, no warm colors, no nebula, no dense stars, no people, no buildings, no boats, no lettering, no logos or UI. Peaceful, spacious and softly luminous rather than dramatic.",
+  "transparent_background": false
+}

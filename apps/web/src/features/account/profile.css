@@ -1,0 +1,53 @@
+@reference "../../app/globals.css";
+
+/* Fade the photograph into the actual shell background instead of a solid card. */
+.profile-cover-media {
+  mask-image: linear-gradient(to bottom, var(--color-ink) 12%, transparent 100%);
+}
+
+@media (min-width: 768px) {
+  .profile-cover-media {
+    mask-image:
+      linear-gradient(to bottom, var(--color-ink) 12%, transparent 100%),
+      linear-gradient(to right, transparent, var(--color-ink) 16%);
+    mask-composite: intersect;
+  }
+}
+
+/* One persistent indicator keeps rapid reversals continuous. */
+.profile-tab-indicator {
+  width: calc((100% - 0.5rem) / 2);
+  transform: translateX(0);
+  transition: transform 520ms cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+.profile-tab-indicator[data-active="identity"] {
+  transform: translateX(calc(100% + 0.5rem));
+}
+
+.profile-tab-indicator[data-direction="right"] .profile-tab-line {
+  transform-origin: left center;
+  animation: profile-tab-stretch-right 520ms ease-out;
+}
+
+.profile-tab-indicator[data-direction="left"] .profile-tab-line {
+  transform-origin: right center;
+  animation: profile-tab-stretch-left 520ms ease-out;
+}
+
+@keyframes profile-tab-stretch-right {
+  0%, 100% { transform: scaleX(1); }
+  32% { transform: scaleX(1.5); }
+  72% { transform: scaleX(0.94); }
+}
+
+@keyframes profile-tab-stretch-left {
+  0%, 100% { transform: scaleX(1); }
+  32% { transform: scaleX(1.5); }
+  72% { transform: scaleX(0.94); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-tab-indicator { transition: none; }
+  .profile-tab-indicator[data-direction] .profile-tab-line { animation: none; }
+}

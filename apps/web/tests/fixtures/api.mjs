@@ -9,7 +9,7 @@ const inheritanceUser = (session) => session === 'inheritance-test-second' ? {
   id: 'inheritance-second-user', name: '第二测试用户', email: 'inheritance-second@example.invalid',
   gender: 'FEMALE', onboardingCompleted: true, inheritedIdentity: null,
 } : ({
-  id: 'inheritance-test-user', name: '继承测试用户', email: 'inheritance-test@example.invalid',
+  id: 'inheritance-test-user', name: '继承测试用户', phone: '13800138000', email: 'inheritance-test@example.invalid',
   gender: session === 'inheritance-test-legacy' ? null : session === 'inheritance-test-male' ? 'MALE' : 'FEMALE',
   onboardingCompleted: session === 'inheritance-test-completed' || session === 'inheritance-test-inherited',
   inheritedIdentity: session === 'inheritance-test-inherited' ? inheritedIdentity : null,

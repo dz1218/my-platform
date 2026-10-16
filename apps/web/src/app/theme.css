@@ -37,6 +37,9 @@
 }
 
 @theme {
+  --background-image-profile-tab-gradient: linear-gradient(90deg, #22d3ee 0%, #818cf8 50%, #e879f9 100%);
+  --shadow-profile-tab: 0 0 10px rgb(129 140 248 / 24%);
+  --shadow-card-hover-glow: 0 0 0 1px rgb(165 210 225 / 10%), -1px -1px 8px rgb(165 210 225 / 6%), 1px 2px 8px rgb(181 169 207 / 7%);
   --font-sans: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-brand: Georgia, "Times New Roman", serif;
   --radius-control: 0.625rem;
