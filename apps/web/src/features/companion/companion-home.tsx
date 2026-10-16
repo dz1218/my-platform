@@ -15,7 +15,7 @@ import { useCompanionHome, type CompanionModel } from './use-companion-home';
 import type { Identity } from '@/types/companion';
 
 type Tab = 'recent' | 'discover';
-export function CompanionHome({ accountId, inheritedIdentity }: { accountId: string; inheritedIdentity?: Identity | null }) {
+export function CompanionHome({ accountId, inheritedIdentity }: { accountId: string | null; inheritedIdentity?: Identity | null }) {
   // The controller is intentionally above both presentations and survives resizing.
   const model = useCompanionHome(accountId, inheritedIdentity);
   const viewport = useViewport();
@@ -26,7 +26,7 @@ export function CompanionHome({ accountId, inheritedIdentity }: { accountId: str
   useEffect(() => {
     if (!initialTab && model.conversations.data) setInitialTab(model.recent?.length ? 'recent' : 'discover');
   }, [initialTab, model.conversations.data, model.recent?.length]);
-  const selected = requested === 'discover' || requested === 'recent' ? requested : initialTab;
+  const selected = requested === 'discover' || requested === 'recent' ? requested : model.isLoggedIn ? initialTab : 'discover';
   if (!model.paused && selected) lastTab.current = selected;
   const tab = model.paused ? lastTab.current : selected;
   const chooseTab = (value: Tab) => {
@@ -36,7 +36,7 @@ export function CompanionHome({ accountId, inheritedIdentity }: { accountId: str
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
   return <main id={model.paused ? undefined : 'main-content'} tabIndex={-1} className="page-shell page-content">
-    <PageHeading title={viewport === 'mobile' ? '陪伴' : '今天想和谁聊聊？'} description="认识一位新朋友，或继续上次没聊完的话题。" />
+    <PageHeading title={viewport === 'mobile' ? '陪伴' : '今天想和谁聊聊？'} description="认识一位新朋友，或继续上次没聊完的话题。" actions={!model.isLoggedIn && viewport === 'mobile' && <Link href="/login" className="btn-secondary">登录 / 注册</Link>} />
     {inheritedIdentity && <IdentityModeSwitch identity={inheritedIdentity} />}
     {model.error && <div role="alert" className="mb-6 flex items-center justify-between gap-4 rounded-control border border-danger-line bg-danger-soft p-4 text-sm text-danger"><span>{model.error.message}</span><button className="min-h-11 shrink-0 hover:text-danger-hover" onClick={model.retry}>重试</button></div>}
     {!viewport ? <ViewportSkeleton /> : viewport === 'desktop' ? <DesktopCompanion model={model} /> : <MobileCompanion model={model} tab={tab} chooseTab={chooseTab} />}
@@ -77,7 +77,7 @@ function Discovery({ model: m, mobile = false }: { model: CompanionModel; mobile
 function RecentConversations({ model: m, onDiscover, mobile = false }: { model: CompanionModel; onDiscover: () => void; mobile?: boolean }) {
   return <section aria-labelledby="recent-heading">
     <h2 id="recent-heading" className="section-heading pb-3 text-base">{mobile ? '接着上次的故事' : '最近聊天'}<span className="text-xs font-normal text-muted">{m.recent?.length ?? '—'}</span></h2>
-    {m.conversations.isPending ? <p role="status" className="py-4 text-sm text-muted">正在加载聊天…</p> : m.recent?.length ? <ul className={mobile ? 'divide-y divide-line/60' : 'grid gap-1'}>{m.recent.map(match => <li key={match.id}><Link href={`/chat/${match.id}`} scroll={false} onClick={m.prepareChat} className="flex min-w-0 items-center gap-4 rounded-control px-2 py-5 transition-colors hover:bg-surface-soft"><Avatar identity={match.identity} large={mobile} /><span className="min-w-0"><span className="block truncate text-base font-medium">{match.identity.name}</span><span className="mt-2 block text-xs text-muted">继续你们的对话</span></span><ChevronRight aria-hidden="true" size={18} className="ml-auto shrink-0 text-faint" /></Link></li>)}</ul> : !m.conversations.error && <div className="py-10"><MessageCircle aria-hidden="true" className="mb-5 size-9 text-accent" /><p className="text-lg text-ink">你们的故事，从这里开始</p><p className="mt-3 text-sm leading-7 text-muted">和一位朋友打个招呼，之后就能在这里找到你们的聊天。</p><button type="button" className="btn-secondary mt-6" onClick={onDiscover}>认识朋友</button></div>}
+    {!m.isLoggedIn ? <div className="py-10"><MessageCircle aria-hidden="true" className="mb-5 size-9 text-accent" /><p className="text-lg text-ink">先认识一位朋友</p><p className="mt-3 text-sm leading-7 text-muted">登录后开始聊天，在这里继续你们的故事。</p><Link href="/login" className="btn-secondary mt-6">登录后聊天</Link></div> : m.conversations.isPending ? <p role="status" className="py-4 text-sm text-muted">正在加载聊天…</p> : m.recent?.length ? <ul className={mobile ? 'divide-y divide-line/60' : 'grid gap-1'}>{m.recent.map(match => <li key={match.id}><Link href={`/chat/${match.id}`} scroll={false} onClick={m.prepareChat} className="flex min-w-0 items-center gap-4 rounded-control px-2 py-5 transition-colors hover:bg-surface-soft"><Avatar identity={match.identity} large={mobile} /><span className="min-w-0"><span className="block truncate text-base font-medium">{match.identity.name}</span><span className="mt-2 block text-xs text-muted">继续你们的对话</span></span><ChevronRight aria-hidden="true" size={18} className="ml-auto shrink-0 text-faint" /></Link></li>)}</ul> : !m.conversations.error && <div className="py-10"><MessageCircle aria-hidden="true" className="mb-5 size-9 text-accent" /><p className="text-lg text-ink">你们的故事，从这里开始</p><p className="mt-3 text-sm leading-7 text-muted">和一位朋友打个招呼，之后就能在这里找到你们的聊天。</p><button type="button" className="btn-secondary mt-6" onClick={onDiscover}>认识朋友</button></div>}
     <div className="mt-6 border-t border-line pt-5"><p className="text-xs text-muted">也可以换一种方式放松</p><div className="mt-3 flex gap-5"><Link href="/live" className="link-muted inline-flex min-h-11 items-center">看看直播</Link><Link href="/novels" className="link-muted inline-flex min-h-11 items-center">读本小说</Link></div></div>
   </section>;
 }

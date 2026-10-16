@@ -1,6 +1,30 @@
 @import "tailwindcss" source("../");
 @import "./theme.css";
 
+/* Scoped to closing auth; normal route changes keep their existing behavior. */
+@keyframes auth-view-out {
+  to { opacity: 0; transform: translateY(-12px) scale(.975); }
+}
+@keyframes auth-view-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Keep the destination and its fixed navigation at their final geometry. */
+html[data-auth-exit="native"]::view-transition-group(root) { animation: none; }
+html[data-auth-exit="native"]::view-transition-old(root) {
+  animation: auth-view-out 280ms cubic-bezier(.4, 0, .2, 1) both;
+  mix-blend-mode: normal;
+}
+html[data-auth-exit="native"]::view-transition-new(root) {
+  animation: auth-view-in 380ms cubic-bezier(.2, .7, .2, 1) both;
+  mix-blend-mode: normal;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-auth-exit="native"]::view-transition-group(root),
+  html[data-auth-exit="native"]::view-transition-old(root),
+  html[data-auth-exit="native"]::view-transition-new(root) { animation: none; }
+}
+
 @layer base {
   * { box-sizing: border-box; }
   html { min-height: 100%; color-scheme: dark; scroll-padding-top: 76px; }
@@ -68,7 +92,10 @@
     .primary-nav .nav-item-active { @apply bg-surface-soft bg-nav-active text-ink; }
     .nav-footer { display: block; flex-shrink: 0; margin-top: auto; padding: 24px 16px 32px; }
     .nav-identity-link { @apply flex min-h-11 items-center gap-3 rounded-control px-3 py-2 transition-colors hover:bg-surface-hover; }
-    .nav-privacy { @apply mt-1 flex min-h-11 items-center gap-2 rounded-control px-3 text-xs text-muted transition-colors hover:text-ink; }
+    .nav-footer-row { @apply flex w-full items-center gap-4 px-5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus; }
+    .nav-auth-link { @apply min-h-12 rounded-full py-2.5 text-sm font-medium text-ink hover:bg-surface-soft; }
+    .nav-privacy { @apply ml-16 mt-1 flex min-h-11 w-fit items-center rounded-sm text-xs text-muted transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus; }
+    .nav-privacy-icon { @apply hidden; }
     .site-nav[data-collapsed="true"] .nav-collapse-label { display: none; }
     .site-nav[data-collapsed="true"] .site-brand { @apply justify-center px-0; }
     .site-nav[data-collapsed="true"] .primary-nav { @apply px-3; }
@@ -76,7 +103,9 @@
     .site-nav[data-collapsed="true"] .nav-footer { @apply flex flex-col items-center px-0 pb-8 pt-6; }
     .site-nav[data-collapsed="true"] .nav-identity-card { @apply flex flex-col items-center gap-1 rounded-none border-0 bg-transparent p-0; }
     .site-nav[data-collapsed="true"] .nav-identity-link { @apply m-0 size-11 justify-center gap-0 rounded-full border-0 bg-transparent p-0 hover:bg-transparent; }
-    .site-nav[data-collapsed="true"] .nav-privacy { @apply mt-3 size-11 justify-center rounded-full bg-transparent p-0 text-muted transition-colors duration-150 hover:bg-transparent hover:text-ink focus-visible:text-ink; }
+    .site-nav[data-collapsed="true"] .nav-footer-row { @apply size-11 min-h-11 justify-center gap-0 p-0; }
+    .site-nav[data-collapsed="true"] .nav-privacy { @apply ml-0 size-11 justify-center; }
+    .site-nav[data-collapsed="true"] .nav-privacy-icon { @apply grid size-7 place-items-center; }
     .chat-layout { height: 100dvh; }
     .chat-layout > header, .chat-layout > footer { padding-inline: clamp(24px, 5vw, 96px); }
     .chat-history { padding-inline: clamp(24px, 5vw, 96px); }

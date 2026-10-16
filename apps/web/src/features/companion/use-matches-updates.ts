@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { MatchesConnection } from '@/services/matches-connection';
 
-export function useMatchesUpdates(accountId: string, paused: boolean) {
+export function useMatchesUpdates(accountId: string | null, paused: boolean) {
   const client = useQueryClient();
   useEffect(() => {
     if (paused || !accountId) return;

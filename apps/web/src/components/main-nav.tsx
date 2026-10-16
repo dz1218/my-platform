@@ -4,12 +4,14 @@ import {
   BookOpen,
   Info,
   MessageCircle,
+  LogIn,
   LogOut,
   Sparkles,
   TvMinimalPlay,
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/features/identity/avatar";
+import { AuthExitTransition, useAuthExit } from "@/features/auth/auth-exit-transition";
 import { logoutAction } from "@/lib/actions";
 import { SubmitButton } from "./submit-button";
 import { InteractionNoticeDialog, InteractionNoticeTrigger } from "./interaction-notice-dialog";
@@ -20,6 +22,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import {
   Suspense,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -75,8 +78,7 @@ export function AppShell({
 }) {
   const path = usePathname();
   // Auth has its own persistent layout, including while search params hydrate.
-  if (path === "/login" || path === "/register") return children;
-  return (
+  return <AuthExitTransition>{path === "/login" || path === "/register" ? children : (
     <Suspense
       fallback={
         <div className="app-shell">
@@ -86,7 +88,7 @@ export function AppShell({
     >
       <AppFrame user={user}>{children}</AppFrame>
     </Suspense>
-  );
+  )}</AuthExitTransition>;
 }
 
 function AppFrame({
@@ -99,7 +101,9 @@ function AppFrame({
   const path = usePathname();
   const params = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => {
+  const [layoutReady, setLayoutReady] = useState(false);
+  const { onHomeReady } = useAuthExit();
+  useLayoutEffect(() => {
     try {
       setCollapsed(
         localStorage.getItem("radio-friday:sidebar-collapsed") === "true",
@@ -107,7 +111,11 @@ function AppFrame({
     } catch {
       /* Storage may be unavailable. */
     }
+    setLayoutReady(true);
   }, []);
+  useLayoutEffect(() => {
+    if (layoutReady && path === "/companion") onHomeReady();
+  }, [layoutReady, path, onHomeReady]);
   function toggleSidebar() {
     const next = !collapsed;
     setCollapsed(next);
@@ -150,11 +158,13 @@ function AppFrame({
 function NavigationLinks({
   path,
   desktop = false,
+  showAccount = true,
 }: {
   path: string;
   desktop?: boolean;
+  showAccount?: boolean;
 }) {
-  return links.map(({ label, href, icon: Icon, glyph }) => {
+  return links.filter(link => showAccount || link.href !== '/me').map(({ label, href, icon: Icon, glyph }) => {
     const active =
       path.startsWith(href) ||
       (href === "/companion" && path.startsWith("/chat")) ||
@@ -381,19 +391,27 @@ export function MainNav({
         </Link>
       </div>
       <nav id="desktop-navigation" aria-label="主导航" className="primary-nav">
-        <NavigationLinks path={path} desktop />
+        <NavigationLinks path={path} desktop showAccount={!!user} />
       </nav>
       <div className="nav-footer">
         {user ? (
           <div className="nav-identity-card">
             <AccountMenu user={user} collapsed={collapsed} />
           </div>
-        ) : (
-          <InteractionNoticeTrigger aria-label="平台互动说明" className="nav-privacy">
-            <Info aria-hidden="true" className="size-[18px] shrink-0" />
+        ) : <>
+          <Link href="/login" aria-label="登录 / 注册" title={collapsed ? '登录 / 注册' : undefined} className="nav-footer-row nav-auth-link">
+            <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center">
+              <LogIn className="size-5" strokeWidth={1.75} />
+            </span>
+            <span className="nav-collapse-label">登录 / 注册</span>
+          </Link>
+          <InteractionNoticeTrigger aria-label="平台互动说明" title={collapsed ? '平台互动说明' : undefined} className="nav-privacy">
+            <span aria-hidden="true" className="nav-privacy-icon">
+              <Info className="size-3.5" strokeWidth={1.75} />
+            </span>
             <span className="nav-collapse-label">平台互动说明</span>
           </InteractionNoticeTrigger>
-        )}
+        </>}
       </div>
     </header>
   );

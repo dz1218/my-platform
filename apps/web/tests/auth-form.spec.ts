@@ -72,6 +72,11 @@ test('phone login errors clear on refresh and a subsequent login succeeds', asyn
   await expectCompanion();
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '我的', exact: true }).click();
   await page.getByRole('button', { name: '退出登录' }).click();
+  await expect(page).toHaveURL('/companion');
+  await expect(page.getByRole('button', { name: '和登录测试朋友打个招呼' })).toBeEnabled();
+  await expect(page.getByRole('link', { name: '登录后聊天', exact: true })).toBeVisible();
+  expect((await page.context().cookies()).some(cookie => cookie.name === 'companion_session')).toBe(false);
+  await page.getByRole('link', { name: '登录 / 注册', exact: true }).click();
   await expect(page).toHaveURL('/login');
   await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138000');
   await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');

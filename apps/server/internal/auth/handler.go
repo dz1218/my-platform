@@ -59,6 +59,19 @@ func (h Handler) Logout(c *gin.Context) {
 	c.SetCookie(CookieName, "", -1, "/", "", h.SecureCookie, true)
 	c.Status(204)
 }
+
+// Optional keeps public browsing available without a valid session while
+// preserving account-specific catalog filtering for signed-in users.
+func (h Handler) Optional(c *gin.Context) {
+	raw, _ := c.Cookie(CookieName)
+	if v := c.GetHeader("Authorization"); strings.HasPrefix(v, "Bearer ") {
+		raw = strings.TrimPrefix(v, "Bearer ")
+	}
+	if id, err := h.Service.Verify(raw); err == nil {
+		c.Set("userID", id)
+	}
+	c.Next()
+}
 func (h Handler) Require(c *gin.Context) {
 	raw, _ := c.Cookie(CookieName)
 	if v := c.GetHeader("Authorization"); strings.HasPrefix(v, "Bearer ") {

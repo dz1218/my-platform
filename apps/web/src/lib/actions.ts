@@ -54,7 +54,7 @@ export async function verifyCodeAction(phone: string, code: string) { return pho
 export async function logoutAction() {
   const store = await cookies();
   store.delete(sessionCookie); store.delete('mp_auth'); store.delete('mp_nickname');
-  redirect('/login');
+  redirect('/companion');
 }
 // Form adapters only. Validation, ownership checks and persistence live in Go.
 const field = (form: FormData, name: string) => String(form.get(name) ?? '');

@@ -191,6 +191,10 @@ func TestCatalogPagesFiltersSelectionAndPrivateFields(t *testing.T) {
 	if p.Items[0].ID != "catalog_a" || p.Items[1].ID != "catalog_b" {
 		t.Fatal("unstable ordering", p.Items)
 	}
+	guest, err := r.DiscoverPage(f.ctx, "", filters)
+	if err != nil || guest.Total != 7 || len(guest.Items) != 2 || guest.Items[0].ID != "identity_linwan" {
+		t.Fatal("guests should see the public catalog including inherited roles", guest, err)
+	}
 	filters.Page = 2
 	p2, err := r.DiscoverPage(f.ctx, "operator", filters)
 	if err != nil || p2.Items[0].ID != "catalog_c" {

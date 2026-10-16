@@ -9,7 +9,8 @@ import { useMatchesUpdates } from './use-matches-updates';
 import type { Identity, Match } from '@/types/companion';
 
 export type CardContext = { known: Map<string, Match>; busy: boolean; pendingId?: string; meet: (id: string) => void; prepareChat: () => void };
-export function useCompanionHome(accountId: string, inheritedIdentity?: Identity | null) {
+export function useCompanionHome(accountId: string | null, inheritedIdentity?: Identity | null) {
+  const isLoggedIn = !!accountId;
   const router = useRouter();
   const client = useQueryClient();
   const { paused, prepareChat } = useCompanionNavigation();
@@ -24,7 +25,7 @@ export function useCompanionHome(accountId: string, inheritedIdentity?: Identity
   });
   // Account updates keep the visible list live. HTTP is still a fallback on
   // mount/focus/reconnect, including a quick return within the global cache TTL.
-  const conversations = useQuery({ queryKey: ['matches', accountId], queryFn: ({ signal }) => matches(signal), enabled: !paused, staleTime: 0 });
+  const conversations = useQuery({ queryKey: ['matches', accountId], queryFn: ({ signal }) => matches(signal), enabled: isLoggedIn && !paused, staleTime: 0 });
   useMatchesUpdates(accountId, paused);
   useEffect(() => {
     if (paused) { void client.cancelQueries({ queryKey: catalogKey }); void client.cancelQueries({ queryKey: ['matches', accountId] }); }
@@ -38,8 +39,11 @@ export function useCompanionHome(accountId: string, inheritedIdentity?: Identity
   const friends = useMemo(() => [...new Map((identities.data?.pages.flatMap(page => page.items) ?? []).filter(identity => identity.id !== inheritedIdentity?.id).map(identity => [identity.id, identity])).values()], [identities.data, inheritedIdentity?.id]);
   const recent = conversations.data?.items.filter(match => match.identity.id !== inheritedIdentity?.id);
   const known = useMemo(() => new Map(conversations.data?.items.map(match => [match.identity.id, match])), [conversations.data]);
-  const meetIdentity = useCallback((id: string) => mutation.mutate(id), [mutation.mutate]);
-  const cardContext = useMemo<CardContext>(() => ({ known, busy: mutation.isPending || conversations.isPending || !!conversations.error, pendingId: mutation.isPending ? mutation.variables : undefined, meet: meetIdentity, prepareChat }), [known, mutation.isPending, mutation.variables, conversations.isPending, conversations.error, meetIdentity, prepareChat]);
+  const meetIdentity = useCallback((id: string) => {
+    if (!isLoggedIn) { router.push('/login'); return; }
+    mutation.mutate(id);
+  }, [isLoggedIn, router, mutation.mutate]);
+  const cardContext = useMemo<CardContext>(() => ({ known, busy: mutation.isPending || (isLoggedIn && (conversations.isPending || !!conversations.error)), pendingId: mutation.isPending ? mutation.variables : undefined, meet: meetIdentity, prepareChat }), [known, isLoggedIn, mutation.isPending, mutation.variables, conversations.isPending, conversations.error, meetIdentity, prepareChat]);
   const loadMore = useCallback(() => { if (!paused && !identities.isFetching) void identities.fetchNextPage(); }, [paused, identities.isFetching, identities.fetchNextPage]);
   const error = (!identities.data ? identities.error : null) ?? conversations.error ?? mutation.error;
   const page = identities.data?.pages[0];
@@ -48,7 +52,7 @@ export function useCompanionHome(accountId: string, inheritedIdentity?: Identity
     setFilters(next);
     heading.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
   };
-  const retry = () => { void identities.refetch(); void conversations.refetch(); mutation.reset(); };
-  return { paused, prepareChat, filters, applyFilters, heading, identities, conversations, friends, recent, cardContext, loadMore, error, page, retry };
+  const retry = () => { void identities.refetch(); if (isLoggedIn) void conversations.refetch(); mutation.reset(); };
+  return { isLoggedIn, paused, prepareChat, filters, applyFilters, heading, identities, conversations, friends, recent, cardContext, loadMore, error, page, retry };
 }
 export type CompanionModel = ReturnType<typeof useCompanionHome>;
