@@ -9,9 +9,7 @@ export default async function ChapterReadPage({
   params: Promise<{ id: string; chapterId: string }>;
 }) {
   const { id, chapterId } = await params;
-  const userId = await getAuthUserId();
-
-  const chapter = await getChapter(id, chapterId);
+  const [userId, chapter] = await Promise.all([getAuthUserId(), getChapter(id, chapterId)]);
 
   if (!chapter || chapter.novel.id !== id) notFound();
 

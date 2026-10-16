@@ -42,11 +42,11 @@ async function authenticate(kind: 'register' | 'login', formData: FormData): Pro
 }
 export async function registerAction(_state: AuthFormState, formData: FormData) { return authenticate('register', formData); }
 export async function loginAction(_state: AuthFormState, formData: FormData) { return authenticate('login', formData); }
-async function phoneVerification(path: string, body: object): Promise<{ error?: string; ticket?: string }> {
+async function phoneVerification(path: string, body: object): Promise<{ error?: string; ticket?: string; retryAfter?: number }> {
   try {
     const result = await serverFetch(`/auth/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await result.json();
-    return result.ok ? data : { error: data.error?.code ?? 'unavailable' };
+    return result.ok ? data : { error: data.error?.code ?? 'unavailable', retryAfter: data.retryAfter };
   } catch { return { error: 'unavailable' }; }
 }
 export async function sendCodeAction(phone: string) { return phoneVerification('code', { phone }); }

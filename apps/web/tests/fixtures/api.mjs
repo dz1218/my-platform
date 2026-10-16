@@ -6,6 +6,9 @@ const inheritedIdentity = {
   id: 'inheritance-chennian', name: '陈念', age: 24, gender: 'FEMALE', avatarUrl: '',
 };
 const failedRegistrations = new Set();
+// Test-only controls include SSR requests, which browser routing cannot delay.
+let performanceConfig = { delays: {}, failures: {}, rooms: undefined };
+let performanceRequests = [];
 const inheritanceUser = (session) => session === 'inheritance-test-second' ? {
   id: 'inheritance-second-user', name: '第二测试用户', email: 'inheritance-second@example.invalid',
   gender: 'FEMALE', onboardingCompleted: true, inheritedIdentity: null,
@@ -20,6 +23,24 @@ createServer(async (request, response) => {
   response.setHeader('Content-Type', 'application/json');
   response.setHeader('Cache-Control', 'no-store');
   if (request.url === '/health') return response.end('{}');
+  if (request.url === '/__performance') {
+    if (request.method === 'POST') {
+      let body = ''; for await (const part of request) body += part;
+      performanceConfig = { delays: {}, failures: {}, rooms: undefined, ...JSON.parse(body || '{}') };
+      performanceRequests = [];
+    }
+    return response.end(JSON.stringify({ requests: performanceRequests }));
+  }
+  const measured = { path: request.url, method: request.method, startedAt: Date.now(), finishedAt: null };
+  performanceRequests.push(measured);
+  performanceRequests = performanceRequests.slice(-500);
+  response.once('finish', () => { measured.finishedAt = Date.now(); });
+  const delay = performanceConfig.delays[request.url] ?? 0;
+  if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+  if (performanceConfig.failures[request.url]) {
+    response.statusCode = performanceConfig.failures[request.url];
+    return response.end(JSON.stringify({ error: { message: '测试接口暂时不可用' } }));
+  }
   // Voice browser tests exercise the real Go handlers against temporary LiveKit
   // rooms. Existing regressions keep their isolated fixtures and mocked joins.
   if (process.env.LIVEKIT_INTEGRATION === '1' && /^\/api\/v1\/rooms\/voice-e2e-[a-zA-Z0-9-]+\//.test(request.url ?? '')) {
@@ -47,6 +68,9 @@ createServer(async (request, response) => {
     const data = JSON.parse(body);
     if (data.phone === '13800138001') {
       response.statusCode = 409; return response.end(JSON.stringify({error:{code:'exists'}}));
+    }
+    if (request.url.endsWith('/code') && data.phone === '13800138009') {
+      response.statusCode = 429; return response.end(JSON.stringify({ error: { code: 'rate_limit' }, retryAfter: 3 }));
     }
     if (request.url.endsWith('/code')) return response.end(JSON.stringify({sent:true,retryAfter:60}));
     if (data.code !== '123456') { response.statusCode=400; return response.end(JSON.stringify({error:{code:'invalid_code'}})); }
@@ -106,8 +130,9 @@ createServer(async (request, response) => {
     if (request.url === '/api/v1/novels/design-novel/chapters/design-chapter') return response.end(JSON.stringify(chapter));
   }
   if (request.url === '/api/v1/rooms') {
-    return response.end(JSON.stringify({ items: [] }));
+    return response.end(JSON.stringify({ items: performanceConfig.rooms ?? [] }));
   }
+  if (request.url === '/api/v1/novels') return response.end(JSON.stringify({ items: [] }));
   response.statusCode = 401;
   response.end(JSON.stringify({ error: { message: '请先登录' } }));
 }).listen(18181, '127.0.0.1');

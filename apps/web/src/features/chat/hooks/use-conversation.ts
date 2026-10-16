@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand';
 import { autoReply, history, ChatConnection } from '@/services/chat';
+import { APIError } from '@/services/api/client';
 import { createConversationStore, conversationSelectors, mergeConversationMessages } from '@/stores/chat/conversation';
 import { useStoreInstance } from '@/stores/use-store-instance';
 
@@ -19,13 +20,16 @@ export function useConversation(conversationId: string) {
   const { setConnectionError, receivePage, receiveSettings, send } = ui.getState();
   const latest = useQuery({ queryKey: ['messages', conversationId], queryFn: ({ signal }) => history(conversationId, undefined, signal), enabled: !!conversationId });
   const settings = useQuery({ queryKey: ['auto-reply', conversationId], queryFn: ({ signal }) => autoReply(conversationId, signal) });
+  const accessError = [latest.error, settings.error].find(error => error instanceof APIError && [401, 403, 404].includes(error.status));
+  const accessDenied = !!accessError;
 
   // The effect owns the connection; actions own reconciliation and sending.
   useEffect(() => {
+    if (accessDenied) return;
     const socket = new ChatConnection(conversationId, receivePage, setConnectionError, receiveSettings);
     connection.current = socket;
     return () => { connection.current = null; socket.close(); };
-  }, [conversationId, receivePage, setConnectionError, receiveSettings]);
+  }, [conversationId, receivePage, setConnectionError, receiveSettings, accessDenied]);
   const older = useInfiniteQuery({
     queryKey: ['older-messages', conversationId], enabled: false, initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => history(conversationId, pageParam ?? latest.data?.nextCursor),
@@ -33,7 +37,7 @@ export function useConversation(conversationId: string) {
   });
   const messages = mergeConversationMessages(older.data?.pages ?? [], latest.data);
   return {
-    messages, typing: () => connection.current?.typing(), settings, latest, error, sending, send,
+    messages, typing: () => connection.current?.typing(), settings, latest, error, accessError, sending, send,
     outgoing: outgoing && !messages.some(message => message.requestId === outgoing.requestId) ? outgoing : null,
     hasOlder: older.data ? older.hasNextPage : !!latest.data?.nextCursor,
     loadingOlder: older.isFetchingNextPage, olderError: older.error, loadOlder: () => older.fetchNextPage(),

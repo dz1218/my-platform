@@ -1,6 +1,13 @@
 "use client";
 import Link from "next/link";
+import { useEffect, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAppUI } from '@/stores/provider';
 export default function ErrorPage({ reset }: { reset: () => void }) {
+  const cancelNavigation = useAppUI(s => s.cancelNavigation);
+  const router = useRouter();
+  const [retrying, startRetry] = useTransition();
+  useEffect(() => { cancelNavigation(); }, [cancelNavigation]);
   return (
     <main id="main-content" tabIndex={-1} className="page-shell page-content">
       <h1 className="page-title">暂时无法完成操作</h1>
@@ -8,8 +15,8 @@ export default function ErrorPage({ reset }: { reset: () => void }) {
         连接可能中断了。请稍后重试；填写中的内容请先保留。
       </p>
       <div className="mt-8 flex gap-3">
-        <button onClick={reset} className="btn-primary">
-          重试
+        <button disabled={retrying} onClick={() => startRetry(() => { router.refresh(); reset(); })} className="btn-primary">
+          {retrying ? '正在重试…' : '重试'}
         </button>
         <Link href="/companion" className="btn-secondary">
           返回陪伴

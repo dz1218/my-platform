@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { ListSkeleton } from '@/components/page-skeleton';
 import { useEffect } from 'react';
 import { SceneBanner } from '@/components/scene-banner';
 import { PageHeading } from '@/components/page-heading';
@@ -43,7 +44,7 @@ function LobbyDirectory({ model }: { model: LiveLobbyModel }) {
           <div className="live-search-actions"><label className="live-search"><LiveIcon name="search" size={16} /><input type="search" aria-label="搜索直播间" placeholder="搜索直播间" value={search} onChange={(event) => setSearch(event.target.value)} /></label><button type="button" className="live-icon-button" aria-label="刷新列表" title="刷新列表" disabled={roomsQuery.isFetching || isMutating} onClick={() => void roomsQuery.refetch()}><LiveIcon name="refresh" className={roomsQuery.isFetching ? 'live-spin' : undefined} /></button></div>
         </div>
         {roomsQuery.isError && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>直播间列表更新失败，{roomsQuery.error.message}。请刷新列表重试。</p></div>}
-        {roomsQuery.isPending ? <div role="status" className="live-empty"><LiveIcon name="refresh" size={28} className="live-spin" /><h3>正在加载直播间…</h3></div> : visibleRooms.length ? <div className="live-room-grid">
+        {roomsQuery.isPending ? <ListSkeleton label="正在加载直播间…" /> : visibleRooms.length ? <div className="live-room-grid">
           {visibleRooms.map((room) => <article className="live-room-card" key={room.id} aria-label={room.title}>
             <Link href={`/live/${encodeURIComponent(room.id)}`} className={`live-room-cover ${room.status === '直播中' ? 'is-live' : ''}`} tabIndex={-1} aria-hidden="true">
               <span className={`live-status ${room.status === '直播中' ? 'is-on' : ''}`}><i />{room.status}</span>

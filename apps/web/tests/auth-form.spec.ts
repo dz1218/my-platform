@@ -289,7 +289,8 @@ test('mobile auth is compact and desktop retains the scene layout', async ({ pag
     await expect(page.getByRole('heading', { name: width <= 760 ? '欢迎回来。' : '欢迎回到你的频率。' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (width <= 760) {
-      await expect(page.locator('.auth-story')).toBeHidden();
+      await expect(page.locator('.auth-mobile-background')).toBeVisible();
+      await expect(page.locator('.auth-story-bottom')).toBeHidden();
       await expect(page.getByRole('button', { name: '登录', exact: true })).toBeInViewport();
       expect((await page.locator('#auth-heading').boundingBox())!.y).toBeLessThan(300);
     } else {
@@ -347,6 +348,8 @@ test('story carousel rotates every five seconds without pause controls or hover 
 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.clock.runFor(5000);
+  await expect(scene('温暖陪伴')).toHaveAttribute('aria-pressed', 'true');
+  await scene('深夜电台').click();
   await expect(scene('深夜电台')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.auth-scene-progress')).toHaveCSS('animation-name', 'none');
   await expect(page.locator('.auth-scene.is-active')).toHaveCSS('transition-duration', '0s');
@@ -472,4 +475,14 @@ test('mobile login and registration show three loaded backgrounds and cycle auto
     await expect(page.getByRole('button', { name: route === '/login' ? '登录' : '验证并继续', exact: true })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
+});
+
+test('rate-limited SMS shows a disabled countdown and allows retry after it expires', async ({ page }) => {
+  await page.goto('/register');
+  await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138009');
+  await page.getByRole('button', { name: '获取验证码' }).click();
+  const resend = page.getByRole('button', { name: /s 后重发/ });
+  await expect(resend).toBeDisabled();
+  await expect(resend).toHaveText('3s 后重发');
+  await expect(page.getByRole('button', { name: '获取验证码' })).toBeEnabled({ timeout: 6000 });
 });

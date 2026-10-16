@@ -4,7 +4,7 @@ import type { AuthFormStore } from './store';
 import type { StateUpdate } from '@/stores/types';
 
 export type AuthFormServices = {
-  sendCode: (phone: string) => Promise<{ error?: string }>;
+  sendCode: (phone: string) => Promise<{ error?: string; retryAfter?: number }>;
   verifyCode: (phone: string, code: string) => Promise<{ error?: string; ticket?: string }>;
 };
 export type AuthFormActions = {
@@ -12,7 +12,7 @@ export type AuthFormActions = {
   verifyPhone: (code: string) => Promise<void>;
   credentialsMatch: (password: string, confirm: string) => boolean;
   beginSendCode: () => boolean;
-  finishSendCode: (version: number, error?: string) => void;
+  finishSendCode: (version: number, error?: string, retryAfter?: number) => void;
   beginVerification: () => boolean;
   finishVerification: (version: number, result: { error?: string; ticket?: string }) => void;
   tickCooldown: () => void;
@@ -34,7 +34,10 @@ export const createAuthActions = (services: AuthFormServices): Creator => (set, 
     const { phone, phoneVersion } = get();
     if (!/^1[3-9]\d{9}$/.test(phone)) { set({ localError: 'invalid_phone' }); return 'invalid_phone'; }
     if (!get().beginSendCode()) return 'done';
-    try { get().finishSendCode(phoneVersion, (await services.sendCode(phone)).error); }
+    try {
+      const result = await services.sendCode(phone);
+      get().finishSendCode(phoneVersion, result.error, result.retryAfter);
+    }
     catch { get().finishSendCode(phoneVersion, 'unavailable'); }
     return 'done';
   },
@@ -51,8 +54,10 @@ export const createAuthActions = (services: AuthFormServices): Creator => (set, 
     set({ sending: true, localError: '', notice: '' });
     return true;
   },
-  finishSendCode: (version, error) => set(s => ({
-    sending: false, cooldown: error ? s.cooldown : 60,
+  finishSendCode: (version, error, retryAfter) => set(s => ({
+    sending: false,
+    cooldown: Number.isFinite(retryAfter) && retryAfter! > 0
+      ? Math.ceil(retryAfter!) : !error || error === 'rate_limit' ? 60 : s.cooldown,
     ...(s.phoneVersion === version ? { localError: error ?? '', notice: error ? '' : '验证码已发送，5 分钟内有效。' } : {}),
   })),
   beginVerification: () => {

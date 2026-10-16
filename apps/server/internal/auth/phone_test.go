@@ -93,7 +93,12 @@ func TestPhoneRegistrationIntegration(t *testing.T) {
 	if err = s.SendCode(ctx, phone); err != nil {
 		t.Fatal(err)
 	}
-	requireCode(t, s.SendCode(ctx, phone), "rate_limit")
+	err = s.SendCode(ctx, phone)
+	requireCode(t, err, "rate_limit")
+	var limited *response.Error
+	if !errors.As(err, &limited) || limited.RetryAfter < 1 || limited.RetryAfter > 60 {
+		t.Fatalf("invalid cooldown: %v", err)
+	}
 	var stored string
 	if err = db.QueryRow(ctx, `SELECT code_hash FROM phone_verifications WHERE phone=$1`, phone).Scan(&stored); err != nil || stored == sender.code {
 		t.Fatal("code not protected", err)
@@ -173,7 +178,11 @@ func TestPhoneRegistrationIntegration(t *testing.T) {
 	if _, err = db.Exec(ctx, `UPDATE phone_verifications SET sent_at=now()-interval '61 seconds',daily_count=10 WHERE phone=$1`, phone); err != nil {
 		t.Fatal(err)
 	}
-	requireCode(t, s.SendCode(ctx, phone), "rate_limit")
+	err = s.SendCode(ctx, phone)
+	requireCode(t, err, "rate_limit")
+	if !errors.As(err, &limited) || limited.RetryAfter <= 60 || limited.RetryAfter > 86400 {
+		t.Fatalf("invalid daily cooldown: %v", err)
+	}
 	phone = "13800138003"
 	if err = s.SendCode(ctx, phone); err != nil {
 		t.Fatal(err)

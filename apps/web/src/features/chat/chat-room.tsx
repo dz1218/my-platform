@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { PageSkeleton, LoadingRegion, Skeleton } from '@/components/page-skeleton';
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -16,16 +17,15 @@ import "./chat-room.css";
 export function ChatRoom({ matchId, inheritedIdentityId, intercepted = false }: { matchId: string; inheritedIdentityId?: string; intercepted?: boolean }) {
   const match = useQuery({
     queryKey: ["match", matchId],
-    queryFn: () => getMatch(matchId),
+    queryFn: ({ signal }) => getMatch(matchId, signal),
   });
   if (match.isPending)
     return (
       <main
         id="main-content"
         tabIndex={-1}
-        className="p-12 text-center text-muted"
       >
-        正在打开聊天…
+        <PageSkeleton kind="chat" />
       </main>
     );
   if (!match.data)
@@ -93,6 +93,10 @@ export function Conversation({
       oldestLoading.current = false;
     });
   }
+  if (chat.accessError) return <main id="main-content" tabIndex={-1} className="p-12 text-center">
+    <p role="alert">{chat.accessError.message}</p>
+    <ChatBack intercepted={intercepted} operator={operator} className="btn-secondary mt-6">{operator ? '返回回复工作台' : '返回陪伴'}</ChatBack>
+  </main>;
   return (
     <main
       id="main-content"
@@ -174,9 +178,7 @@ export function Conversation({
           </p>
         )}
         {chat.latest.isPending ? (
-          <p className="text-center text-sm text-muted">
-            正在打开你们的对话…
-          </p>
+          <LoadingRegion label="正在打开你们的对话…" className="py-6"><div className="space-y-6"><Skeleton className="h-16 w-3/4" /><Skeleton className="ml-auto h-12 w-1/2" /></div></LoadingRegion>
         ) : (
           !chat.messages.length && (
             <p className="my-12 text-center text-sm text-muted">

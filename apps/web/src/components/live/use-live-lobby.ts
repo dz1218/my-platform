@@ -7,9 +7,9 @@ import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ApiRoomItem } from '@/lib/api';
 import { liveRoomService } from '@/services/live';
-export type LiveLobbyProps = { apiBaseUrl: string; initialRooms: ApiRoomItem[] | undefined; isLoggedIn: boolean; hostNickname: string };
+export type LiveLobbyProps = { apiBaseUrl: string; initialRooms: ApiRoomItem[] | undefined; initialRoomsUpdatedAt: number; isLoggedIn: boolean; hostNickname: string };
 export type Filter = '全部' | '直播中' | '准备中';
-export function useLiveLobby({ apiBaseUrl, initialRooms, isLoggedIn, hostNickname }: LiveLobbyProps) {
+export function useLiveLobby({ apiBaseUrl, initialRooms, initialRoomsUpdatedAt, isLoggedIn, hostNickname }: LiveLobbyProps) {
   const queryClient = useQueryClient();
   const service = liveRoomService(apiBaseUrl);
   const queryKey = ['live-rooms', apiBaseUrl];
@@ -17,10 +17,8 @@ export function useLiveLobby({ apiBaseUrl, initialRooms, isLoggedIn, hostNicknam
     queryKey,
     queryFn: ({ signal }) => service.list(signal),
     initialData: initialRooms,
-    initialDataUpdatedAt: 0,
-    staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: 'always',
+    initialDataUpdatedAt: initialRoomsUpdatedAt,
+    staleTime: 5_000,
     refetchInterval: 5_000,
   });
   const rooms = roomsQuery.data ?? [];

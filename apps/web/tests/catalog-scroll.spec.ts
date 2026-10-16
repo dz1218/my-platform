@@ -271,10 +271,12 @@ test('single and empty results handle age filters and keyboard chat returns focu
 
 test('an expired chat still returns to the retained list and leaving the area releases its scroll lock', async ({ page }) => {
   await setup(page);
-  await page.route('**/api/v1/matches/match-catalog-130', route => route.fulfill({ status: 401, json: { error: { message: '请先登录' } } }));
+  // The entry already knows the match; the message API still checks permission.
+  await page.route('**/api/v1/conversations/conversation-catalog-130/messages', route => route.fulfill({ status: 401, json: { error: { message: '请先登录' } } }));
   await page.goto('/companion');
   await page.getByRole('complementary', { name: '最近聊天' }).getByRole('link', { name: /朋友0130/ }).click();
   await expect(page.getByTestId('chat-overlay').getByRole('alert')).toHaveText('请先登录');
+  await expect(page.getByRole('textbox', { name: /发消息/ })).toHaveCount(0);
   await page.getByRole('button', { name: '返回陪伴', exact: true }).click();
   await expect(page).toHaveURL('/companion');
   await page.goForward();
@@ -288,11 +290,14 @@ test('an expired chat still returns to the retained list and leaving the area re
 test('the intercepted self-identity guard never opens a conversation, and reloading chat uses the standalone route', async ({ page }) => {
   await setup(page);
   await page.context().addCookies([{ name: 'companion_session', value: 'inheritance-test-inherited', domain: '127.0.0.1', path: '/' }]);
-  await page.route('**/api/v1/matches/match-catalog-130', route => route.fulfill({ json: { ...asMatch(identities[130]), identity: { ...identities[130], id: 'inheritance-chennian', name: '陈念' } } }));
+  const selfMatch = { ...asMatch(identities[130]), identity: { ...identities[130], id: 'inheritance-chennian', name: '陈念' } };
+  await page.route('**/api/v1/matches', route => route.fulfill({ json: route.request().method() === 'POST' ? selfMatch : { items: [] } }));
+  await page.route('**/api/v1/matches/match-catalog-130', route => route.fulfill({ json: selfMatch }));
   const conversationRequests: string[] = [];
   page.on('request', request => { if (request.url().includes('/conversations/')) conversationRequests.push(request.url()); });
   await page.goto('/companion');
-  await page.getByRole('complementary', { name: '最近聊天' }).getByRole('link', { name: /朋友0130/ }).click();
+  await page.getByRole('heading', { name: '这里的朋友' }).evaluate(element => element.scrollIntoView({ block: 'start' }));
+  await page.getByRole('button', { name: '和朋友0000打个招呼', exact: true }).click();
   await expect(page.getByTestId('chat-overlay')).toBeVisible();
   await expect(page.getByRole('heading', { name: '这是你继承的 AI 身份' })).toBeVisible();
   await page.getByRole('button', { name: '以本账户聊天', exact: true }).click();

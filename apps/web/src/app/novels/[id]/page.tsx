@@ -10,9 +10,7 @@ export default async function NovelDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const userId = await getAuthUserId();
-
-  const novel = await getNovel(id);
+  const [userId, novel] = await Promise.all([getAuthUserId(), getNovel(id)]);
 
   if (!novel) notFound();
 

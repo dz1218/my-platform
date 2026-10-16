@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -12,13 +13,19 @@ import (
 type Error struct {
 	Status        int
 	Code, Message string
+	RetryAfter    int
 }
 
 func (e *Error) Error() string { return e.Message }
 func Fail(c *gin.Context, err error) {
 	var e *Error
 	if errors.As(err, &e) {
-		c.JSON(e.Status, gin.H{"error": gin.H{"code": e.Code, "message": e.Message}})
+		body := gin.H{"error": gin.H{"code": e.Code, "message": e.Message}}
+		if e.RetryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(e.RetryAfter))
+			body["retryAfter"] = e.RetryAfter
+		}
+		c.JSON(e.Status, body)
 		return
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -28,4 +35,6 @@ func Fail(c *gin.Context, err error) {
 	slog.Error("request failed", "path", c.FullPath(), "error", err)
 	c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "internal", "message": "服务暂时不可用，请稍后重试"}})
 }
-func BadRequest(message string) error { return &Error{400, "invalid_request", message} }
+func BadRequest(message string) error {
+	return &Error{Status: 400, Code: "invalid_request", Message: message}
+}

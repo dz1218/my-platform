@@ -1,8 +1,12 @@
 'use client';
 import Link from 'next/link';
+import { MatchLink } from '@/features/chat/match-link';
+import { ListSkeleton } from '@/components/page-skeleton';
 import { ChevronRight, MessageCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useAuthExit } from '@/features/auth/auth-exit-transition';
+import { useAppUI } from '@/stores/provider';
 import { PageHeading } from '@/components/page-heading';
 import { SceneBanner } from '@/components/scene-banner';
 import { useViewport, ViewportSkeleton } from '@/components/use-viewport';
@@ -19,6 +23,13 @@ export function CompanionHome({ accountId, inheritedIdentity }: { accountId: str
   // The controller is intentionally above both presentations and survives resizing.
   const model = useCompanionHome(accountId, inheritedIdentity);
   const viewport = useViewport();
+  const layoutReady = useAppUI(s => s.layoutReady);
+  const { onHomeReady } = useAuthExit();
+  useLayoutEffect(() => {
+    // A route loading boundary can commit before this page mounts. The auth
+    // transition needs the actual heading and final viewport/sidebar layout.
+    if (viewport && layoutReady && !model.paused) onHomeReady();
+  }, [viewport, layoutReady, model.paused, onHomeReady]);
   const params = useSearchParams();
   const requested = params.get('view');
   const { initialTab, initializeTab } = model;
@@ -67,7 +78,7 @@ function Discovery({ model: m, mobile = false }: { model: CompanionModel; mobile
   return <section aria-labelledby="discover-heading" className="min-w-0">
     <div ref={m.heading} className="section-heading"><h2 id="discover-heading" className="text-base font-semibold">这里的朋友</h2><span className="text-xs font-normal text-muted">{m.page ? `${m.page.total} 位朋友` : '按自己的节奏来'}</span></div>
     <Filters value={m.filters} occupations={m.page?.occupations ?? []} onChange={m.applyFilters} />
-    {m.identities.isPending && <p role="status" className="surface p-8 text-sm text-muted">正在寻找可以认识的人…</p>}
+    {m.identities.isPending && <ListSkeleton label="正在寻找可以认识的人…" />}
     {!m.identities.isPending && !m.identities.error && m.friends.length === 0 && <p className="empty-state">没有找到符合条件的朋友，试试其他筛选条件。</p>}
     <IdentityMasonry items={m.friends} context={m.cardContext} ItemContent={FriendCard} paused={m.paused} singleColumn={mobile} hasNextPage={m.identities.hasNextPage} loading={m.identities.isFetchingNextPage} error={m.identities.data ? m.identities.error : null} loadMore={m.loadMore} />
     <p className="mt-6 max-w-prose text-xs leading-6 text-muted">这里的 AI 身份可能由真实用户参与互动。<Link href="/privacy" className="ml-1 text-accent hover:text-ink">了解互动方式</Link></p>
@@ -77,7 +88,7 @@ function Discovery({ model: m, mobile = false }: { model: CompanionModel; mobile
 function RecentConversations({ model: m, onDiscover, mobile = false }: { model: CompanionModel; onDiscover: () => void; mobile?: boolean }) {
   return <section aria-labelledby="recent-heading">
     <h2 id="recent-heading" className="section-heading pb-3 text-base">{mobile ? '接着上次的故事' : '最近聊天'}<span className="text-xs font-normal text-muted">{m.recent?.length ?? '—'}</span></h2>
-    {!m.isLoggedIn ? <div className="py-10"><MessageCircle aria-hidden="true" className="mb-5 size-9 text-accent" /><p className="text-lg text-ink">先认识一位朋友</p><p className="mt-3 text-sm leading-7 text-muted">登录后开始聊天，在这里继续你们的故事。</p><Link href="/login" className="btn-secondary mt-6">登录后聊天</Link></div> : m.conversations.isPending ? <p role="status" className="py-4 text-sm text-muted">正在加载聊天…</p> : m.recent?.length ? <ul className={mobile ? 'divide-y divide-line/60' : 'grid gap-1'}>{m.recent.map(match => <li key={match.id}><Link href={`/chat/${match.id}`} scroll={false} onClick={m.prepareChat} className="flex min-w-0 items-center gap-4 rounded-control px-2 py-5 transition-colors hover:bg-surface-soft"><Avatar identity={match.identity} large={mobile} /><span className="min-w-0"><span className="block truncate text-base font-medium">{match.identity.name}</span><span className="mt-2 block text-xs text-muted">继续你们的对话</span></span><ChevronRight aria-hidden="true" size={18} className="ml-auto shrink-0 text-faint" /></Link></li>)}</ul> : !m.conversations.error && <div className="py-10"><MessageCircle aria-hidden="true" className="mb-5 size-9 text-accent" /><p className="text-lg text-ink">你们的故事，从这里开始</p><p className="mt-3 text-sm leading-7 text-muted">和一位朋友打个招呼，之后就能在这里找到你们的聊天。</p><button type="button" className="btn-secondary mt-6" onClick={onDiscover}>认识朋友</button></div>}
+    {!m.isLoggedIn ? <div className="py-10"><MessageCircle aria-hidden="true" className="mb-5 size-9 text-accent" /><p className="text-lg text-ink">先认识一位朋友</p><p className="mt-3 text-sm leading-7 text-muted">登录后开始聊天，在这里继续你们的故事。</p><Link href="/login" className="btn-secondary mt-6">登录后聊天</Link></div> : m.conversations.isPending ? <ListSkeleton count={3} label="正在加载聊天…" /> : m.recent?.length ? <ul className={mobile ? 'divide-y divide-line/60' : 'grid gap-1'}>{m.recent.map(match => <li key={match.id}><MatchLink match={match} scroll={false} onClick={m.prepareChat} className="flex min-w-0 items-center gap-4 rounded-control px-2 py-5 transition-colors hover:bg-surface-soft"><Avatar identity={match.identity} large={mobile} /><span className="min-w-0"><span className="block truncate text-base font-medium">{match.identity.name}</span><span className="mt-2 block text-xs text-muted">继续你们的对话</span></span><ChevronRight aria-hidden="true" size={18} className="ml-auto shrink-0 text-faint" /></MatchLink></li>)}</ul> : !m.conversations.error && <div className="py-10"><MessageCircle aria-hidden="true" className="mb-5 size-9 text-accent" /><p className="text-lg text-ink">你们的故事，从这里开始</p><p className="mt-3 text-sm leading-7 text-muted">和一位朋友打个招呼，之后就能在这里找到你们的聊天。</p><button type="button" className="btn-secondary mt-6" onClick={onDiscover}>认识朋友</button></div>}
     <div className="mt-6 border-t border-line pt-5"><p className="text-xs text-muted">也可以换一种方式放松</p><div className="mt-3 flex gap-5"><Link href="/live" className="link-muted inline-flex min-h-11 items-center">看看直播</Link><Link href="/novels" className="link-muted inline-flex min-h-11 items-center">读本小说</Link></div></div>
   </section>;
 }

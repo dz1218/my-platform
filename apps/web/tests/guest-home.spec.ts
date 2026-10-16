@@ -34,6 +34,9 @@ for (const width of [390, 1440]) {
     await expect(page).toHaveURL('/login');
     const close = page.getByRole('link', { name: '关闭并进入首页' });
     await expect(close).toBeVisible();
+    // The next image is mounted by a client effect. Animation requires hydrated
+    // handlers; the ordinary link remains usable before hydration without it.
+    await expect(page.locator('.auth-scene img').nth(1)).toBeAttached();
     await page.screenshot({ path: testInfo.outputPath(`login-close-${width}.png`), fullPage: true });
     await close.click();
     await expect(page).toHaveURL('/companion');

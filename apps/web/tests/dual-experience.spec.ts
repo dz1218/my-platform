@@ -150,9 +150,12 @@ test('mobile create-room sheet uses the same mutation and retains title across r
   await expect(page.getByRole('link', { name: '我的直播间', exact: true })).toBeVisible();
 });
 
+test.afterEach(async ({ request }) => { await request.post('http://127.0.0.1:18181/__performance', { data: {} }); });
+
 test('four-width page review, warm theme, long content and immersive route coverage', async ({ page }) => {
   test.setTimeout(180_000);
   await setup(page);
+  await page.request.post('http://127.0.0.1:18181/__performance', { data: { rooms: [{ id: 'design-room', title: '雨夜的电台，聊聊那些还没来得及说完的故事', status: '准备中', viewers: 0, canManage: false }] } });
   await mkdir('/tmp/radio-friday-review', { recursive: true });
   await page.route('**/api/v1/rooms/*/join', route => route.fulfill({ status: 503, json: { error: { message: '测试：暂时无法连接，请重试' } } }));
   await page.route('**/api/v1/rooms', route => route.fulfill({ json: { items: [{ id: 'design-room', title: '雨夜的电台，聊聊那些还没来得及说完的故事', status: '准备中', viewers: 0, canManage: false }] } }));

@@ -109,7 +109,6 @@
 .auth-notice-footer { flex-shrink: 0; padding: 16px 24px 24px; @apply border-t border-t-line; }
 .auth-notice-footer .auth-submit { margin-top: 0; }
 
-.auth-mobile-background { display: none; }
 @media (prefers-reduced-motion: reduce) { .auth-mobile-scene { transition: none; } }
 
 /* Mobile keeps the desktop night palette and photographic atmosphere. */
@@ -120,9 +119,10 @@
     justify-content: flex-start;
     color-scheme: dark; @apply bg-canvas text-ink;
   }
-  .auth-frame::before, .auth-page-caption, .auth-story, .auth-desktop-heading { display: none; }
+  .auth-frame::before, .auth-page-caption, .auth-desktop-heading { display: none; }
   .auth-ambient { display: none; }
-  .auth-mobile-background { display: block; position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .auth-story-top, .auth-story-bottom { display: none; }
+  .auth-mobile-background { border-radius: 0; display: block; position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
   .auth-mobile-scene { position: absolute; inset: 0; opacity: 0; transition: opacity 900ms ease; }
   .auth-mobile-scene.is-active { opacity: 1; }
   .auth-mobile-scene img { object-fit: cover; object-position: 58% top; }

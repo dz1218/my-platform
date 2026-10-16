@@ -1,4 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from 'react';
+import { cookies } from 'next/headers';
+import { sessionCookie } from '@/services/api/server';
+import { AppStartupSkeleton } from '@/components/page-skeleton';
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { AppShell } from "@/components/main-nav";
@@ -12,17 +16,24 @@ export const viewport: Viewport = { themeColor: "#1B1B19", viewportFit: "cover" 
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const user = await getCurrentUser();
+  // This local lookup avoids streaming an unnecessary bootstrap boundary for
+  // guests, including auth documents before hydration or with JavaScript off.
+  const hasSession = !!(await cookies()).get(sessionCookie)?.value;
   return (
     <html lang="zh-CN">
       <body>
         <a href="#main-content" className="skip-link">
           跳到主要内容
         </a>
-        <Providers key={user?.id ?? "guest"}>
-          <AppShell user={user}>{children}</AppShell>
-        </Providers>
+        {hasSession ? <Suspense fallback={<AppStartupSkeleton />}>
+          <AccountShell>{children}</AccountShell>
+        </Suspense> : <Providers key="guest"><AppShell user={null}>{children}</AppShell></Providers>}
       </body>
     </html>
   );
+}
+
+async function AccountShell({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser();
+  return <Providers key={user?.id ?? 'guest'}><AppShell user={user}>{children}</AppShell></Providers>;
 }

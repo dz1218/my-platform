@@ -1,5 +1,7 @@
 'use client';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { liveRoomService } from '@/services/live';
 import { LiveIcon } from './live-icon';
 import { LiveChat } from './live-chat';
 import { LiveVoiceControls, LiveVoicePanel, LiveViewerCall } from './live-voice';
@@ -14,7 +16,12 @@ function RoleBadge({ role }: { role: Role | 'AI助手' }) {
 
 export function LiveRoomClient(props: LiveRoomProps) {
   const viewport = useViewport();
-  const { roomTitle } = props;
+  const rooms = useQuery({
+    queryKey: ['live-rooms', props.apiBaseUrl],
+    queryFn: ({ signal }) => liveRoomService(props.apiBaseUrl).list(signal),
+    staleTime: 5_000,
+  });
+  const roomTitle = rooms.data?.find(room => room.id === props.roomId)?.title ?? '直播间';
   const { role, isHost, roomNotice, nickname, setNickname, participants, error, setError, isJoining, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, voice, joinRoom, toggleLocalMedia, dispatchAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen } = useLiveRoom(props);
   return <>
     <div className="live-room-nav"><Link href="/live"><LiveIcon name="back" size={17} />直播大厅</Link><span>{isHost ? '主播工作台' : '直播现场'}</span></div>

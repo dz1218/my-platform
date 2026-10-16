@@ -1,5 +1,6 @@
 "use client";
-import NextLink from "next/link";
+import NextLink, { useLinkStatus } from "next/link";
+import { PageSkeleton, skeletonForPath } from './page-skeleton';
 import {
   BookOpen,
   Info,
@@ -11,7 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/features/identity/avatar";
-import { AuthExitTransition, useAuthExit } from "@/features/auth/auth-exit-transition";
+import { AuthExitTransition } from "@/features/auth/auth-exit-transition";
 import { logoutAction } from "@/lib/actions";
 import { SubmitButton } from "./submit-button";
 import { InteractionNoticeDialog, InteractionNoticeTrigger } from "./interaction-notice-dialog";
@@ -34,10 +35,15 @@ import type { User } from "@/types/companion";
 
 function Link({
   href,
+  children,
   ...props
 }: Omit<ComponentProps<typeof NextLink>, "href" | "onNavigate"> & {
   href: string;
 }) {
+  const pendingHref = useAppUI(s => s.pendingHref);
+  const beginNavigation = useAppUI(s => s.beginNavigation);
+  const cancelNavigation = useAppUI(s => s.cancelNavigation);
+  const ticket = useRef<number | null>(null);
   return (
     <NextLink
       {...props}
@@ -46,12 +52,34 @@ function Link({
         // Next refreshes dynamic server data when navigating to the current URL.
         // Navigation chrome should simply return to the top of that page.
         if (new URL(href, window.location.href).href === window.location.href) {
-          event.preventDefault();
+          // A click back to the committed page also supersedes an in-flight route.
+          if (!pendingHref) event.preventDefault();
+          cancelNavigation();
           window.scrollTo({ top: 0, behavior: "instant" });
+          return;
         }
+        ticket.current = beginNavigation(href);
       }}
-    />
+    >
+      <LinkPending ticket={ticket} />
+      {children}
+    </NextLink>
   );
+}
+
+function LinkPending({ ticket }: { ticket: React.RefObject<number | null> }) {
+  const { pending } = useLinkStatus();
+  const finish = useAppUI(s => s.finishNavigation);
+  const observed = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (pending) observed.current = ticket.current;
+    else if (observed.current !== null) {
+      finish(observed.current);
+      observed.current = null;
+    }
+  }, [pending, finish, ticket]);
+  useEffect(() => () => { if (ticket.current !== null) finish(ticket.current); }, [finish, ticket]);
+  return null;
 }
 
 const links = [
@@ -79,6 +107,12 @@ export function AppShell({
   user: User | null;
 }) {
   const path = usePathname();
+  const cancelNavigation = useAppUI(s => s.cancelNavigation);
+  useLayoutEffect(() => { cancelNavigation(); }, [path, cancelNavigation]);
+  useEffect(() => {
+    window.addEventListener('popstate', cancelNavigation);
+    return () => window.removeEventListener('popstate', cancelNavigation);
+  }, [cancelNavigation]);
   // Auth has its own persistent layout, including while search params hydrate.
   return <AuthExitTransition>{path === "/login" || path === "/register" ? children : (
     <Suspense
@@ -102,15 +136,11 @@ function AppFrame({
 }) {
   const path = usePathname();
   const params = useSearchParams();
+  const pendingHref = useAppUI(s => s.pendingHref);
   const collapsed = useAppUI(appSelectors.collapsed);
-  const layoutReady = useAppUI(appSelectors.layoutReady);
   const hydrateSidebar = useAppUI(s => s.hydrateSidebar);
   const toggleSidebar = useAppUI(s => s.toggleSidebar);
-  const { onHomeReady } = useAuthExit();
   useLayoutEffect(() => { hydrateSidebar(); }, [hydrateSidebar]);
-  useLayoutEffect(() => {
-    if (layoutReady && path === "/companion") onHomeReady();
-  }, [layoutReady, path, onHomeReady]);
   const immersive =
     path.startsWith("/chat/") ||
     /^\/live\/[^/]+$/.test(path) ||
@@ -132,7 +162,12 @@ function AppFrame({
         {!immersive && (
           <div aria-hidden="true" className="shell-ambient" />
         )}
-        {children}
+        <div inert={!!pendingHref} aria-hidden={pendingHref ? true : undefined} className={pendingHref ? 'invisible' : undefined}>
+          {children}
+        </div>
+        {pendingHref && <div data-navigation-pending={pendingHref} className="fixed inset-0 z-20 overflow-y-auto bg-canvas pb-20 md:left-[var(--nav-width)] md:bg-shell-content md:pb-0">
+          <PageSkeleton kind={skeletonForPath(pendingHref)} />
+        </div>}
       </div>
       <nav aria-label="手机主导航" className="mobile-nav">
         <NavigationLinks path={path} />
@@ -150,6 +185,7 @@ function NavigationLinks({
   desktop?: boolean;
   showAccount?: boolean;
 }) {
+  const pendingHref = useAppUI(s => s.pendingHref);
   return links.filter(link => showAccount || link.href !== '/me').map(({ label, href, icon: Icon, glyph }) => {
     const active =
       path.startsWith(href) ||
@@ -162,7 +198,9 @@ function NavigationLinks({
         aria-label={label}
         title={desktop ? label : undefined}
         aria-current={active ? "page" : undefined}
-        className={cn("nav-item", active && "nav-item-active")}
+        aria-busy={pendingHref === href || undefined}
+        data-pending={pendingHref === href || undefined}
+        className={cn("nav-item", (pendingHref ? pendingHref.split('?')[0] === href : active) && "nav-item-active")}
       >
         {desktop ? (
           <NavigationGlyph name={glyph} />

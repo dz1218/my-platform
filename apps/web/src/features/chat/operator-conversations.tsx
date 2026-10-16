@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { ListSkeleton } from "@/components/page-skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { PageHeading } from "@/components/page-heading";
@@ -57,7 +58,7 @@ export function OperatorConversations({ identity }: { identity: Identity }) {
           </div>
         )}
         {list.data && params.get("id") && !selected && <p role="alert" className="operator-notice">你当前不能以这个 AI 身份回复此会话，请选择其他会话。</p>}
-        {list.isPending && !list.error && <div className="operator-loading" role="status"><OperatorIcon name="refresh" className="operator-spinning" /><p>正在加载会话…</p></div>}
+        {list.isPending && !list.error && <ListSkeleton count={3} label="正在加载会话…" />}
         {list.data?.items.length === 0 && (
           <div className="operator-empty">
             <div className="operator-empty-art" aria-hidden="true">

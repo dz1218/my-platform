@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
-import Image, { getImageProps } from "next/image";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { getImageProps } from "next/image";
 import { RadioMark } from "@/components/radio-mark";
 
 const scenes = [
@@ -11,55 +11,45 @@ const scenes = [
 ];
 const interval = 5000;
 
-const mobileImages = scenes.map(item => getImageProps({
-  src: `/images/radio-friday/${item.mobileImage}`, alt: "", fill: true, sizes: "(max-width: 480px) 100vw, 432px",
-}).props);
+const images = scenes.map((item, index) => ({
+  mobile: getImageProps({ src: `/images/radio-friday/${index === 0 ? 'conversation.jpg' : item.image}`, alt: '', fill: true, sizes: '(max-width: 480px) 100vw, 480px' }).props,
+  desktop: getImageProps({ src: `/images/radio-friday/${item.image}`, alt: '', fill: true, sizes: '55vw' }).props,
+}));
 
 export function AuthStory() {
-  const [desktop, setDesktop] = useState(false);
-  useEffect(() => {
-    const viewport = window.matchMedia("(min-width: 761px)");
-    const syncViewport = () => setDesktop(viewport.matches);
-    syncViewport();
-    viewport.addEventListener("change", syncViewport);
-    return () => viewport.removeEventListener("change", syncViewport);
-  }, []);
-  return desktop ? <DesktopAuthStory /> : <MobileAuthBackground />;
-}
-
-function MobileAuthBackground() {
-  const [scene, setScene] = useState(0);
-  useEffect(() => {
-    const timer = window.setInterval(() => setScene(current => (current + 1) % scenes.length), interval);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  return <div className="auth-mobile-background" aria-hidden="true">
-    {scenes.map((item, index) => <div key={item.image} className={`auth-mobile-scene ${scene === index ? "is-active" : ""}`}>
-      <Image src={`/images/radio-friday/${index === 0 ? "conversation.jpg" : item.image}`} alt="" fill
-        priority={index === 0} loading={index === 0 ? undefined : "eager"} sizes="(max-width: 480px) 100vw, 480px" />
-    </div>)}
-    <div className="auth-mobile-background-shade" />
-  </div>;
-}
-
-function DesktopAuthStory() {
   const [scene, setScene] = useState(0);
   const [restart, setRestart] = useState(0);
+  const [requested, setRequested] = useState([0]);
+  const [loaded, setLoaded] = useState<number[]>([]);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const markLoaded = useCallback((index: number) => {
+    setLoaded(previous => previous.includes(index) ? previous : [...previous, index]);
+  }, []);
   useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
+    if (reducedMotion) return;
     const timer = window.setTimeout(() => setScene(current => (current + 1) % scenes.length), interval);
     return () => window.clearTimeout(timer);
-  }, [scene, restart]);
+  }, [scene, restart, reducedMotion]);
+  useEffect(() => {
+    // Decode the current image before requesting the next one. Off-screen
+    // preload completion must not cascade into downloading the whole carousel.
+    const next = [scene, ...(loaded.includes(scene) && !reducedMotion ? [(scene + 1) % scenes.length] : [])];
+    setRequested(previous => next.every(index => previous.includes(index)) ? previous : [...new Set([...previous, ...next])]);
+  }, [scene, loaded, reducedMotion]);
 
-  return <aside className="auth-story" aria-label="发现 Radio Friday" aria-roledescription="轮播" style={{ "--scene-duration": `${interval}ms` } as CSSProperties}>
+  return <aside className="auth-story auth-mobile-background" aria-label="发现 Radio Friday" aria-roledescription="轮播" style={{ "--scene-duration": `${interval}ms` } as CSSProperties}>
     <div className="auth-story-visual">
-      {scenes.map((item, index) => <div key={item.image} className={`auth-scene ${scene === index ? "is-active" : ""}`} aria-hidden={scene !== index}>
-        <picture>
-          <source media="(max-width: 760px)" srcSet={mobileImages[index].srcSet} sizes={mobileImages[index].sizes} />
-          <Image src={`/images/radio-friday/${item.image}`} alt="" fill priority={index === 0} sizes="(max-width: 760px) 100vw, 55vw" />
-        </picture>
+      {scenes.map((item, index) => <div key={item.image} className={`auth-scene auth-mobile-scene ${scene === index ? "is-active" : ""}`} aria-hidden={scene !== index}>
+        {requested.includes(index) && <SceneImage index={index} active={index === scene} onLoaded={markLoaded} />}
       </div>)}
-      <div className="auth-story-shade" />
+      <div className="auth-story-shade auth-mobile-background-shade" />
     </div>
     <div className="auth-story-top"><span className="auth-frequency"><RadioMark /> 此刻，同频</span><span className="auth-edition">Friday, every day.</span></div>
     <div className="auth-story-bottom">
@@ -69,4 +59,15 @@ function DesktopAuthStory() {
       </div>
     </div>
   </aside>;
+}
+
+function SceneImage({ index, active, onLoaded }: { index: number; active: boolean; onLoaded: (index: number) => void }) {
+  const imageRef = useCallback((image: HTMLImageElement | null) => {
+    if (image?.complete && image.naturalWidth) onLoaded(index);
+  }, [index, onLoaded]);
+  return <picture>
+    <source media="(min-width: 761px)" srcSet={images[index].desktop.srcSet} sizes={images[index].desktop.sizes} />
+    <img {...images[index].mobile} alt="" loading="eager" fetchPriority={active ? 'high' : 'low'}
+      ref={imageRef} onLoad={() => onLoaded(index)} />
+  </picture>;
 }

@@ -1,12 +1,16 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 const room = { id: 'room-regression', title: '无需刷新直播间', status: '准备中', viewers: 0, canManage: true };
+const fixture = 'http://127.0.0.1:18181/__performance';
+test.beforeEach(async ({ request }) => { await request.post(fixture, { data: {} }); });
+test.afterEach(async ({ request }) => { await request.post(fixture, { data: {} }); });
 
 async function login(context: BrowserContext) {
   await context.addCookies([{ name: 'companion_session', value: 'live-test-host', domain: '127.0.0.1', path: '/' }]);
 }
 
 async function lobby(page: Page, items: typeof room[] = []) {
+  await page.request.post(fixture, { data: { rooms: items } });
   await page.route('**/api/v1/rooms', async (route) => {
     await route.fulfill({ json: { items } });
   });
@@ -150,6 +154,7 @@ test('failed create preserves the title; Chinese composition does not submit', a
 });
 
 test('guests see errors and can retry without a misleading empty state', async ({ page }) => {
+  await page.request.post(fixture, { data: { failures: { '/api/v1/rooms': 503 } } });
   await page.route('**/api/v1/rooms', (route) => route.fulfill({ status: 503, json: { error: { message: '直播服务暂不可用' } } }));
   await page.goto('/live');
   await expect(page.getByRole('main').getByRole('alert')).toContainText('直播服务暂不可用');
@@ -161,14 +166,14 @@ test('guests see errors and can retry without a misleading empty state', async (
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 });
 
-test('returning to the lobby refreshes its cached list', async ({ page }) => {
+test('returning to the lobby keeps cached data until its next scheduled refresh', async ({ page }) => {
   const items = [room];
   await lobby(page, items);
   await page.getByRole('link', { name: '观看', exact: true }).click();
   await expect(page).toHaveURL(`/live/${room.id}`);
   items.pop();
   await page.getByRole('link', { name: '直播大厅' }).click();
-  await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
+  await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible({ timeout: 8_000 });
 });
 
 test('join errors allow retry and leaving cancels an unfinished join', async ({ page }) => {

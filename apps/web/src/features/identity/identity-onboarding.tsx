@@ -31,6 +31,7 @@ import { GenderSelect } from "@/features/auth/gender-select";
 import type { Identity } from "@/types/companion";
 import { Avatar } from "./avatar";
 import { Sheet } from "@/components/sheet";
+import { ListSkeleton } from "@/components/page-skeleton";
 import { ResponsiveCatalogFilters } from "@/features/catalog/catalog-filters";
 import { IdentityMasonry } from "@/features/catalog/identity-masonry";
 import { emptyCatalogFilters } from "@/services/catalog";
@@ -280,9 +281,7 @@ export function IdentityOnboarding({
           </div>
         )}
         {state.isPending && (
-          <p role="status" className="surface p-8 text-sm text-muted">
-            正在查看可以继承的身份…
-          </p>
+          <ListSkeleton label="正在查看可以继承的身份…" />
         )}
         {state.data &&
           (inherited ? (
@@ -449,12 +448,7 @@ export function IdentityOnboarding({
                       />
                     )}
                     {options.isPending && (
-                      <p
-                        role="status"
-                        className="surface p-6 text-sm text-muted"
-                      >
-                        正在加载身份…
-                      </p>
+                      <ListSkeleton label="正在加载身份…" />
                     )}
                     {!options.isPending &&
                     !options.error &&

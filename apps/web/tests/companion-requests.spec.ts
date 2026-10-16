@@ -60,6 +60,20 @@ async function setup(page: Page) {
   };
 }
 
+test('chat intent warms HTTP data without connecting and reuses the known match on entry', async ({ page }) => {
+  const state = await setup(page);
+  const sockets: string[] = [];
+  page.on('websocket', socket => { if (socket.url().includes('/ws/conversations/')) sockets.push(socket.url()); });
+  state.requests.length = 0;
+  const link = page.getByRole('link', { name: /继续聊天\s*，和林晚/ });
+  await link.hover();
+  await expect.poll(() => state.requests.some(url => url.includes('/conversations/request-conversation/messages'))).toBe(true);
+  expect(sockets).toEqual([]);
+  await link.click();
+  await expect(page.getByRole('textbox', { name: '给林晚发消息' })).toBeVisible();
+  expect(state.requests.filter(url => new URL(url).pathname === '/api/v1/matches/request-match')).toEqual([]);
+});
+
 test('idle companion does not poll, but returning to the window refreshes stale matches', async ({ page }) => {
   await page.clock.install();
   const state = await setup(page);

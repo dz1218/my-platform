@@ -24,7 +24,6 @@ type JoinResponse = {
 export type LiveRoomProps = {
   apiBaseUrl: string;
   roomId: string;
-  roomTitle: string;
   isLoggedIn: boolean;
   hostNickname: string;
 };
@@ -80,7 +79,7 @@ async function readApiError(response: Response) {
   return `请求失败: ${response.status}`;
 }
 
-export function useLiveRoom({ apiBaseUrl, roomId, roomTitle, isLoggedIn, hostNickname }: LiveRoomProps) {
+export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: LiveRoomProps) {
   const ui = useStoreInstance(() => createLiveRoomStore(isLoggedIn ? hostNickname : '', { dispatch: async () => {
     const response = await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}/agent/dispatch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     if (!response.ok) throw new Error(await readApiError(response));

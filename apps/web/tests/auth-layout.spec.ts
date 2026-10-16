@@ -45,7 +45,8 @@ for (const width of [390, 1440]) {
 
     await page.getByRole('link', { name: '手机号注册', exact: true }).click();
     await expect(page).toHaveURL('/register');
-    await expect(page.getByLabel('短信验证码', { exact: true })).toBeVisible();
+    // Streaming introduces React's reveal scheduling; advance its clock too.
+    await expect.poll(async () => { await page.clock.runFor(50); return page.getByLabel('短信验证码', { exact: true }).isVisible(); }).toBe(true);
     await expect(story).toHaveAttribute('data-persisted', 'true');
     await expect(activeScene).toHaveClass(/is-active/);
     await page.clock.runFor(2100);
@@ -53,11 +54,12 @@ for (const width of [390, 1440]) {
 
     await page.getByRole('link', { name: '返回登录', exact: true }).click();
     await expect(page).toHaveURL('/login');
+    await expect.poll(async () => { await page.clock.runFor(50); return page.getByLabel('密码', { exact: true }).isVisible(); }).toBe(true);
     await expect(page.getByLabel('密码', { exact: true })).toHaveAttribute('type', 'password');
     await expect(story).toHaveAttribute('data-persisted', 'true');
     await page.goBack();
     await expect(page).toHaveURL('/register');
-    await expect(page.getByLabel('短信验证码', { exact: true })).toBeVisible();
+    await expect.poll(async () => { await page.clock.runFor(50); return page.getByLabel('短信验证码', { exact: true }).isVisible(); }).toBe(true);
     await expect(story).toHaveAttribute('data-persisted', 'true');
     await page.goForward();
     await expect(page).toHaveURL('/login');

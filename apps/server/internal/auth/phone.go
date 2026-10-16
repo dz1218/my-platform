@@ -73,7 +73,15 @@ func (s Service) SendCode(ctx context.Context, rawPhone string) error {
 		return err
 	}
 	if tag.RowsAffected() != 1 {
-		return &response.Error{Status: 429, Code: "rate_limit", Message: "发送太频繁，请稍后再试"}
+		var retryAfter int
+		err = s.Repo.DB.QueryRow(ctx, `SELECT GREATEST(1, CEIL(EXTRACT(EPOCH FROM GREATEST(
+ sent_at + interval '60 seconds',
+ CASE WHEN daily_count >= 10 THEN day_start + interval '24 hours' ELSE sent_at END
+ ) - now())))::int FROM phone_verifications WHERE phone=$1`, phone).Scan(&retryAfter)
+		if err != nil {
+			return err
+		}
+		return &response.Error{Status: 429, Code: "rate_limit", Message: "发送太频繁，请稍后再试", RetryAfter: retryAfter}
 	}
 	// On delivery errors keep the reservation: retrying an uncertain send can duplicate SMS.
 	return s.SMS.Send(ctx, phone, code)

@@ -1,31 +1,30 @@
 export const dynamic = "force-dynamic";
 import Link from "next/link";
+import { Suspense } from "react";
+import { ListSkeleton } from "@/components/page-skeleton";
 import { SceneBanner } from '@/components/scene-banner';
 import { BookCover } from '@/features/novels/book-cover';
 import { PageHeading } from "@/components/page-heading";
 import { listNovels } from "@/services/novels";
 import { isAuthenticated } from "@/lib/auth";
 
-export default async function NovelListPage() {
-  const [novels, loggedIn] = await Promise.all([
-    listNovels().then((result) => result.items),
-    isAuthenticated(),
-  ]);
+export default function NovelListPage() {
+  return <main id="main-content" tabIndex={-1} className="page-shell page-content">
+    <PageHeading title="小说" description="找一本小说，慢慢读。" actions={<Suspense fallback={null}><CreateNovelAction /></Suspense>} />
+    <SceneBanner scene="reading" title="翻开一页，走进另一种生活。" description="读几页书，让想象慢下来。下一段故事，从此刻开始。" />
+    <Suspense fallback={<ListSkeleton books label="正在加载书架…" />}><NovelShelf /></Suspense>
+  </main>;
+}
 
-  return (
-    <main id="main-content" tabIndex={-1} className="page-shell page-content">
-      <PageHeading
-        title="小说"
-        description="找一本小说，慢慢读。"
-        actions={
-          loggedIn ? (
-            <Link href="/novels/create" className="btn-primary">
-              创建小说
-            </Link>
-          ) : undefined
-        }
-      />
-      <SceneBanner scene="reading" title="翻开一页，走进另一种生活。" description="读几页书，让想象慢下来。下一段故事，从此刻开始。" />
+async function CreateNovelAction() {
+  return await isAuthenticated() ? <Link href="/novels/create" className="btn-primary">创建小说</Link> : null;
+}
+
+async function NovelShelf() {
+  const [novels, loggedIn] = await Promise.all([
+    listNovels().then(result => result.items), isAuthenticated(),
+  ]);
+  return <>
       <div className="section-heading">
         <h2>书架</h2>
         <span className="text-xs font-normal text-muted">
@@ -69,6 +68,5 @@ export default async function NovelListPage() {
           </Link>)}
         </div>
       )}
-    </main>
-  );
+  </>;
 }
