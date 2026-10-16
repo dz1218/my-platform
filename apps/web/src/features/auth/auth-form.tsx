@@ -2,15 +2,12 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Eye, EyeClosed, X } from "lucide-react";
-import { AuthStory } from "./auth-story";
 import Link from "next/link";
 import { loginAction, registerAction, sendCodeAction, verifyCodeAction } from "@/lib/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { InteractionNotice } from "@/components/interaction-notice";
-import { RadioMark } from "@/components/radio-mark";
 import { GenderSelect } from "./gender-select";
 import { GenderHelp } from "./gender-help";
-import "./auth.css";
 
 const errors: Record<string, string> = {
   unavailable: "暂时连接不上，请稍后再试。", internal: "服务暂时不可用，请稍后再试。",
@@ -87,12 +84,8 @@ export function AuthForm({ register = false }: { register?: boolean }) {
     finally { setVerifying(false); }
   }
 
-  return <main id="main-content" tabIndex={-1} className="auth-page" data-auth-mode={register ? passwordStep ? "profile" : "register" : "login"}>
-    <div className="auth-ambient" aria-hidden="true" />
-    <div className="auth-frame">
-      <header className="auth-brand-bar"><Link href="/login" className="auth-brand"><RadioMark /><span>Radio Friday</span></Link></header>
-      <AuthStory />
-      <section className="auth-panel" aria-labelledby="auth-heading">
+  return <>
+      <section className="auth-panel" aria-labelledby="auth-heading" data-auth-mode={register ? passwordStep ? "profile" : "register" : "login"}>
         <div className="auth-form-content">
           {register && <ol className="auth-mobile-progress" aria-label="注册进度">
             <li aria-current={!passwordStep ? "step" : undefined} data-complete={passwordStep}><span>1</span>验证手机</li>
@@ -126,11 +119,10 @@ export function AuthForm({ register = false }: { register?: boolean }) {
               <SubmitButton pendingLabel={register ? "正在处理…" : "正在登录…"} className="auth-submit">{register ? passwordStep ? "完成注册" : "验证并继续" : "登录"}</SubmitButton>
             </fieldset>
           </form>
-          <p className="auth-switch">{register ? "已经有账号？" : "第一次来到这里？"}<Link href={register ? "/login" : "/register"}>{register ? "返回登录" : "手机号注册"}</Link></p>
+          <p className="auth-switch">{register ? "已经有账号？" : "第一次来到这里？"}<Link href={register ? "/login" : "/register"} scroll={false}>{register ? "返回登录" : "手机号注册"}</Link></p>
         </div>
         <footer className="auth-footer"><span>让每一次相遇，都有回音。</span><button type="button" aria-haspopup="dialog" onClick={() => setNoticeOpen(true)}>隐私与互动说明</button></footer>
       </section>
-    </div>
     <dialog ref={noticeDialog} className="auth-notice-dialog" aria-labelledby="auth-notice-title" onClose={() => setNoticeOpen(false)} onClick={event => {
       if (event.target !== event.currentTarget) return;
       const bounds = event.currentTarget.getBoundingClientRect();
@@ -143,6 +135,5 @@ export function AuthForm({ register = false }: { register?: boolean }) {
       <div className="auth-notice-content"><InteractionNotice /></div>
       <footer className="auth-notice-footer"><button type="button" className="auth-submit" onClick={() => noticeDialog.current?.close()}>我知道了</button></footer>
     </dialog>
-    <p className="auth-page-caption">Radio Friday <span>你的日常，有人听见。</span></p>
-  </main>;
+  </>;
 }

@@ -10,7 +10,7 @@ import (
 )
 
 func TestInheritanceRoutesRequireAuthenticatedAccount(t *testing.T) {
-	router := New(config.Config{JWTSecret: strings.Repeat("test-secret", 4), WebOrigin: "http://localhost:3011"}, nil, nil, behavior.Catalog{})
+	router := New(config.Config{JWTSecret: strings.Repeat("test-secret", 4), WebOrigin: "http://localhost:3011"}, nil, nil, behavior.Catalog{}, nil)
 	for _, request := range []struct {
 		method string
 		path   string

@@ -189,7 +189,7 @@ export function Conversation({
             暂时连接不上，正在尝试恢复。
             <button
               onClick={() => void chat.latest.refetch()}
-              className="ml-3 underline"
+              className="ml-3 hover:text-danger-hover"
             >
               重试
             </button>

@@ -1,5 +1,35 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test('login and registration links work when client route requests are unavailable', async ({ page }) => {
+  const pageErrors: string[] = [];
+  const clientRouteRequests: string[] = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
+  // Next falls back to document navigation if the client router cannot fetch RSC data.
+  await page.route('**/*', route => {
+    if (route.request().headers()['rsc'] === '1') {
+      clientRouteRequests.push(route.request().url());
+      return route.abort();
+    }
+    return route.continue();
+  });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/login');
+    // Confirm hydration before clicking, so this exercises the client-side behavior.
+    await page.getByRole('button', { name: '显示密码' }).click();
+    await expect(page.getByLabel('密码', { exact: true })).toHaveAttribute('type', 'text');
+    await page.getByRole('link', { name: '手机号注册', exact: true }).click();
+    await expect(page).toHaveURL('/register');
+    await expect(page.getByLabel('短信验证码', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '获取验证码', exact: true })).toBeEnabled();
+    await page.getByRole('link', { name: '返回登录', exact: true }).click();
+    await expect(page).toHaveURL('/login');
+    await expect(page.getByLabel('密码', { exact: true })).toHaveAttribute('type', 'password');
+  }
+  expect(pageErrors).toEqual([]);
+  expect(clientRouteRequests.length).toBeGreaterThan(0);
+});
+
 async function verifyPhone(page: Page) {
   await page.goto('/register');
   await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138002');

@@ -9,6 +9,7 @@ import (
 	"companion/server/internal/identity"
 	"companion/server/internal/livekit"
 	"companion/server/internal/matching"
+	"companion/server/internal/matchupdates"
 	"companion/server/internal/novel"
 	"companion/server/pkg/response"
 	"context"
@@ -20,7 +21,7 @@ import (
 	"time"
 )
 
-func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies behavior.Catalog) *gin.Engine {
+func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies behavior.Catalog, updates *matchupdates.Hub) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	_ = r.SetTrustedProxies(nil)
@@ -92,6 +93,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 	api.GET("/discover", identity.Handler{Repo: ids}.Discover)
 	api.GET("/matches", mh.List)
 	api.POST("/matches", mh.Create)
+	api.GET("/matches/socket", rateLimit(cache, "matches-connect", 60, true), matchesSocket(matching.Repository{DB: db}, updates, cfg.WebOrigin))
 	api.GET("/matches/:id", mh.Get)
 	api.GET("/conversations/:id/messages", func(c *gin.Context) {
 		conv, err := messages.Accessible(c.Request.Context(), auth.UserID(c), c.Param("id"))

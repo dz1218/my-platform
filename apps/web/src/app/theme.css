@@ -1,5 +1,8 @@
 /* Radio Friday — the single source of truth for the Tailwind design system. */
 @theme inline {
+  --background-image-shell-ambient: linear-gradient(125deg, transparent 10%, var(--rf-ambient-soft) 38%, var(--rf-ambient-glow) 65%, var(--rf-ambient-soft) 88%, transparent);
+  --background-image-shell-content: linear-gradient(to right, var(--rf-canvas), var(--rf-content-canvas) 160px);
+  --background-image-nav-active: radial-gradient(ellipse at 50% 130%, var(--rf-nav-glow), transparent 65%);
   --color-canvas: var(--rf-canvas);
   --color-bg: var(--rf-canvas);
   --color-surface: var(--rf-surface);
@@ -57,6 +60,32 @@
     --mobile-nav-height: 64px;
     @apply theme-night;
   }
+}
+
+@utility theme-graphite {
+    --rf-content-canvas: #161616;
+    --rf-ambient-glow: #79649c12;
+    --rf-ambient-soft: #69568108;
+    --rf-nav-glow: #ffffff1f;
+    --rf-canvas: #111111;
+    --rf-surface: #181818;
+    --rf-surface-soft: #242424;
+    --rf-surface-hover: #2c2c2c;
+    --rf-surface-selected: #343434;
+    --rf-ink: #f5f5f5;
+    --rf-muted: #a3a3a3;
+    --rf-faint: #a3a3a3;
+    --rf-line: #383838;
+    --rf-control: #737373;
+    --rf-action: #f5f5f5;
+    --rf-action-hover: #dedede;
+    --rf-on-action: #181818;
+    --rf-accent: #f5f5f5;
+    --rf-accent-soft: #242424;
+    --rf-accent-line: #484848;
+    --rf-focus: #f5f5f5;
+    --rf-reading: #181818;
+    color-scheme: dark;
 }
 
 @utility theme-night {

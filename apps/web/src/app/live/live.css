@@ -1,8 +1,11 @@
 @reference "../globals.css";
 /* Shared Tailwind semantics; preserve the mobile media scene. */
 .live-page {
+  padding-block: 40px; font-size: 14px; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; @apply text-ink;
+}
+.live-room-page {
   width: 100%; max-width: 1440px; margin-inline: auto;
-  padding: 40px clamp(16px, 3vw, 48px) 40px; font-size: 14px; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; @apply text-ink;
+  padding-inline: clamp(16px, 3vw, 48px);
 }
 .live-page h1, .live-page h2, .live-page h3, .live-page p { margin: 0; }
 .live-page a { text-decoration: none; }

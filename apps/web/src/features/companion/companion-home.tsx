@@ -38,7 +38,7 @@ export function CompanionHome({ accountId, inheritedIdentity }: { accountId: str
   return <main id={model.paused ? undefined : 'main-content'} tabIndex={-1} className="page-shell page-content">
     <PageHeading title={viewport === 'mobile' ? '陪伴' : '今天想和谁聊聊？'} description="认识一位新朋友，或继续上次没聊完的话题。" />
     {inheritedIdentity && <IdentityModeSwitch identity={inheritedIdentity} />}
-    {model.error && <div role="alert" className="mb-6 flex items-center justify-between gap-4 rounded-control border border-danger-line bg-danger-soft p-4 text-sm text-danger"><span>{model.error.message}</span><button className="min-h-11 shrink-0 underline" onClick={model.retry}>重试</button></div>}
+    {model.error && <div role="alert" className="mb-6 flex items-center justify-between gap-4 rounded-control border border-danger-line bg-danger-soft p-4 text-sm text-danger"><span>{model.error.message}</span><button className="min-h-11 shrink-0 hover:text-danger-hover" onClick={model.retry}>重试</button></div>}
     {!viewport ? <ViewportSkeleton /> : viewport === 'desktop' ? <DesktopCompanion model={model} /> : <MobileCompanion model={model} tab={tab} chooseTab={chooseTab} />}
   </main>;
 }
@@ -70,7 +70,7 @@ function Discovery({ model: m, mobile = false }: { model: CompanionModel; mobile
     {m.identities.isPending && <p role="status" className="surface p-8 text-sm text-muted">正在寻找可以认识的人…</p>}
     {!m.identities.isPending && !m.identities.error && m.friends.length === 0 && <p className="empty-state">没有找到符合条件的朋友，试试其他筛选条件。</p>}
     <IdentityMasonry items={m.friends} context={m.cardContext} ItemContent={FriendCard} paused={m.paused} singleColumn={mobile} hasNextPage={m.identities.hasNextPage} loading={m.identities.isFetchingNextPage} error={m.identities.data ? m.identities.error : null} loadMore={m.loadMore} />
-    <p className="mt-6 max-w-prose text-xs leading-6 text-muted">这里的 AI 身份可能由真实用户参与互动。<Link href="/privacy" className="ml-1 underline underline-offset-4 hover:text-accent">了解互动方式</Link></p>
+    <p className="mt-6 max-w-prose text-xs leading-6 text-muted">这里的 AI 身份可能由真实用户参与互动。<Link href="/privacy" className="ml-1 text-accent hover:text-ink">了解互动方式</Link></p>
   </section>;
 }
 

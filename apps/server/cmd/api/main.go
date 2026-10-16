@@ -6,6 +6,7 @@ import (
 	"companion/server/internal/config"
 	"companion/server/internal/httpapi"
 	"companion/server/internal/livekit"
+	"companion/server/internal/matchupdates"
 	"companion/server/migrations"
 	"companion/server/pkg/database"
 	"context"
@@ -60,7 +61,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	router := httpapi.New(cfg, db, cache, policies)
+	updates := matchupdates.New()
+	updatesCtx, stopUpdates := context.WithCancel(context.Background())
+	updatesDone := make(chan struct{})
+	go func() {
+		defer close(updatesDone)
+		updates.Run(updatesCtx, db.Config().ConnConfig)
+	}()
+	defer func() { stopUpdates(); <-updatesDone }()
+	router := httpapi.New(cfg, db, cache, policies, updates)
 	voiceCtx, stopVoice := context.WithCancel(context.Background())
 	voiceDone := make(chan struct{})
 	go func() {

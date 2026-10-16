@@ -7,3 +7,5 @@
 - Prefer Tailwind utilities in JSX. Reusable component styles may use `@apply`; feature stylesheets must `@reference` the global Tailwind entry. Keep custom CSS for behavior such as complex media layouts, masks, animations, and browser autofill.
 - Reuse existing shared components and styles. Keep colors out of individual components; use the shared scene tokens for dark surfaces.
 - Preserve existing authentication and identity flows when making visual changes.
+
+- Never use underlines for hover states anywhere in the UI. Use semantic text/background/border color changes and preserve visible keyboard focus instead.

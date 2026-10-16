@@ -17,7 +17,9 @@ Go → WebSocket message.created + history 快照 → 整条消息出现
 
 浏览器不再定时轮询，通过同源 `/ws/conversations/:id` 连接 Go；Next.js 外部 rewrite 转发 WebSocket upgrade。历史初始化和翻页仍使用 HTTP。Go 每秒检查持久化历史变化，有变化才推送最新 50 条快照，并每 20 秒发送心跳。连接中断后自动退避重连并同步最新快照，发送确认丢失时沿用 requestId 手动重试。连接最长一小时，重连时重新验证登录与会话归属。
 
-生产反向代理需允许 `/ws/` 的 WebSocket upgrade，空闲超时应大于 20 秒；`WEB_ORIGIN` 必须与浏览器来源一致。当前服务端仍查询数据库检测变化，尚未使用发布订阅。
+首页通过同源 `/ws/matches` 订阅当前登录账户的最近聊天列表。会话创建、排序变化和身份继承变化在 PostgreSQL 事务提交后发出通知，API 用一个独立的 `LISTEN` 连接接收通知，再将完整列表推送给对应账户的页面。通知本身不包含消息正文。首次连接、WebSocket 重连和数据库监听恢复都会重新同步列表，浏览器无需定时请求 `/matches`。切回窗口及网络恢复时仍允许 HTTP 校准，首页列表不沿用全局 15 秒缓存新鲜期；推送到达时会取消旧 HTTP 请求，避免旧结果覆盖最新顺序。
+
+生产反向代理需允许 `/ws/` 的 WebSocket upgrade，空闲超时应大于 20 秒；`WEB_ORIGIN` 必须与浏览器来源一致。`DATABASE_URL` 应使用 PostgreSQL 直连或 session pooling，以保持 `LISTEN` 会话；transaction pooling 不适用于这个监听连接。API 启动时自动执行新增通知触发器的迁移。具体聊天的 `/ws/conversations/:id` 仍由服务端每秒查询数据库检测变化，账户列表通知不依赖这个查询循环。
 等待对方回复期间可继续发送。没有虚假的在线、已读或“AI 正在思考”状态。
 浏览器关闭不影响生成和投递。刷新历史时能看到已经投递的回复。
 

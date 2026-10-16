@@ -77,7 +77,14 @@ test('empty conversations default to discover and an explicit tab stays selected
   await expect(page.getByRole('button', { name: '发现朋友', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: '最近聊天', exact: true }).click();
   state.setRecent(true);
-  await page.clock.runFor(11_000);
+  await page.clock.runFor(16_000);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
+  });
+  await expect(page.getByRole('link', { name: /林晚/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: '接着上次的故事' })).toBeVisible();
   await expect(page.getByRole('button', { name: '最近聊天', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });

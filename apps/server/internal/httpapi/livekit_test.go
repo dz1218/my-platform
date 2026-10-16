@@ -11,7 +11,7 @@ import (
 )
 
 func TestLiveKitRoutesAndCORS(t *testing.T) {
-	router := New(config.Config{WebOrigin: "http://localhost:3011", LiveKit: livekit.Config{URL: "ws://localhost:7880", APIKey: "key", APISecret: "secret"}}, nil, nil, behavior.Catalog{})
+	router := New(config.Config{WebOrigin: "http://localhost:3011", LiveKit: livekit.Config{URL: "ws://localhost:7880", APIKey: "key", APISecret: "secret"}}, nil, nil, behavior.Catalog{}, nil)
 	for _, prefix := range []string{"", "/api/v1"} {
 		req := httptest.NewRequest("OPTIONS", prefix+"/rooms/room-test", nil)
 		req.Header.Set("Origin", "http://localhost:3011")

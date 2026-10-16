@@ -5,6 +5,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { discover, matches, meet } from '@/services/companion';
 import { emptyCatalogFilters, type CatalogFilters as Filters } from '@/services/catalog';
 import { useCompanionNavigation } from './companion-navigation';
+import { useMatchesUpdates } from './use-matches-updates';
 import type { Identity, Match } from '@/types/companion';
 
 export type CardContext = { known: Map<string, Match>; busy: boolean; pendingId?: string; meet: (id: string) => void; prepareChat: () => void };
@@ -21,7 +22,10 @@ export function useCompanionHome(accountId: string, inheritedIdentity?: Identity
     getNextPageParam: page => page.nextPage ?? undefined,
     enabled: !paused, staleTime: Infinity, refetchOnWindowFocus: false, refetchOnReconnect: false,
   });
-  const conversations = useQuery({ queryKey: ['matches', accountId], queryFn: matches, enabled: !paused, refetchInterval: paused ? false : 10_000 });
+  // Account updates keep the visible list live. HTTP is still a fallback on
+  // mount/focus/reconnect, including a quick return within the global cache TTL.
+  const conversations = useQuery({ queryKey: ['matches', accountId], queryFn: ({ signal }) => matches(signal), enabled: !paused, staleTime: 0 });
+  useMatchesUpdates(accountId, paused);
   useEffect(() => {
     if (paused) { void client.cancelQueries({ queryKey: catalogKey }); void client.cancelQueries({ queryKey: ['matches', accountId] }); }
   }, [paused, client, catalogKey, accountId]);

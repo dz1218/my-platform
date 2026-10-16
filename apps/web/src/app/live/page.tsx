@@ -10,7 +10,7 @@ export default async function LiveLobbyPage() {
   ]);
 
   return (
-    <main id="main-content" tabIndex={-1} className="live-page">
+    <main id="main-content" tabIndex={-1} className="page-shell live-page">
       <LiveLobbyClient
         apiBaseUrl="/api/v1"
         initialRooms={rooms}
