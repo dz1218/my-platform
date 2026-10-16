@@ -85,6 +85,52 @@ async function mockInheritance(page: Page, session: Session = 'female', authenti
   };
 }
 
+for (const session of ['female', 'legacy'] as const) {
+  for (const width of [390, 1440]) {
+    test(`companion navigation works before identity onboarding for ${session} at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      // The development toolbar covers the mobile navigation's first link.
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const style = document.createElement('style');
+          style.textContent = 'nextjs-portal { display: none !important; }';
+          document.head.append(style);
+        });
+      });
+      const mock = await mockInheritance(page, session);
+      const pageErrors: string[] = [];
+      page.on('pageerror', error => pageErrors.push(error.message));
+      const navigation = page.getByRole('navigation', { name: width < 768 ? '手机主导航' : '主导航', exact: true });
+      const greet = page.getByRole('button', { name: '和林晚打个招呼', exact: true });
+
+      await page.goto('/choose-identity');
+      await expect(page.getByRole('heading', { name: '要继承一个 AI 身份吗？' })).toBeVisible();
+      await navigation.getByRole('link', { name: '陪伴', exact: true }).click();
+      await expect(page).toHaveURL('/companion');
+      await expect(greet).toBeEnabled();
+      await expect(navigation.getByRole('link', { name: '陪伴', exact: true })).toHaveAttribute('aria-current', 'page');
+      await page.reload();
+      await expect(page).toHaveURL('/companion');
+      await expect(greet).toBeEnabled();
+
+      await navigation.getByRole('link', { name: '我的', exact: true }).click();
+      await page.getByRole('link', { name: '认识新朋友', exact: true }).click();
+      await expect(page).toHaveURL('/companion?view=discover');
+      await expect(greet).toBeEnabled();
+
+      await navigation.getByRole('link', { name: '我的', exact: true }).click();
+      await page.getByRole('tab', { name: 'AI 身份', exact: true }).click();
+      await page.getByRole('link', { name: '选择 AI 身份', exact: true }).click();
+      await expect(page).toHaveURL('/choose-identity');
+      await expect(page.getByRole('heading', { name: '要继承一个 AI 身份吗？' })).toBeVisible();
+      expect(mock.skipped).toEqual([]);
+      expect(mock.claims).toEqual([]);
+      expect(mock.state.onboardingCompleted).toBe(false);
+      expect(pageErrors).toEqual([]);
+    });
+  }
+}
+
 test('registration collects gender and opens the identity choice before regular chat', async ({ page }) => {
   await mockInheritance(page, 'female', false);
   await page.goto('/register');
