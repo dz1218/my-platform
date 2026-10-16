@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useStore } from 'zustand';
+import { createLiveStageStore } from '@/stores/live/stage';
+import { useStoreInstance } from '@/stores/use-store-instance';
 import { ParticipantKind, RoomEvent, Track, type Participant, type Room } from 'livekit-client';
 import { LiveIcon } from './live-icon';
 import type { VoiceSlot } from './use-live-voice';
@@ -41,7 +44,9 @@ function CameraVideo({ camera, label }: { camera: Camera; label: string }) {
 
 export function LiveStageMedia({ room, isHost, slot, cameraDisabled, onEnableCamera }: Props) {
   const [cameras, setCameras] = useState<{ host: Camera | null; caller: Camera | null }>({ host: null, caller: null });
-  const [focusedCall, setFocusedCall] = useState<string | null>(null);
+  const ui = useStoreInstance(createLiveStageStore);
+  const focusedCall = useStore(ui, s => s.focusedCall);
+  const { setFocusedCall } = ui.getState();
   const call = room && slot?.status === 'approved' ? slot : null;
   const callerIsMain = !!call && focusedCall === call.requestId;
   const ownCall = !!call && call.identity === room?.localParticipant.identity;

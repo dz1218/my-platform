@@ -1,13 +1,15 @@
 'use client';
+import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
+import { useStoreInstance } from '@/stores/use-store-instance';
+import { createLiveVoiceStore, liveVoiceSelectors } from '@/stores/live/voice';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { ConnectionState, createLocalAudioTrack, createLocalVideoTrack, ParticipantKind, Room, RoomEvent, Track, type LocalTrack, type Participant } from 'livekit-client';
 
 const ATTRIBUTE = 'live.voice';
-export type VoiceSlot = { requestId: string; participantSid: string; status: 'pending' | 'approved'; requestedAt: number; identity: string; name: string };
-type VoiceState = { slot: VoiceSlot | null; hasHost: boolean };
-type Action = 'request' | 'cancel' | 'approve' | 'reject' | 'end';
-type Device = 'microphone' | 'camera';
+import type { VoiceSlot, VoiceState, Device, VoiceAction } from '@/stores/live/voice';
+export type { VoiceSlot } from '@/stores/live/voice';
 
 function participantRequest(participant: Participant): VoiceSlot | null {
   try {
@@ -23,20 +25,12 @@ async function apiError(response: Response) {
 }
 
 export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room: Room | null; token: string; apiBaseUrl: string; roomId: string; isHost: boolean }) {
-  const [state, setState] = useState<VoiceState>({ slot: null, hasHost: false });
-  const [ready, setReady] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [mediaBusy, setMediaBusy] = useState<Device | null>(null);
-  const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
-  const [cameraEnabled, setCameraEnabled] = useState(false);
-  const [cameraTrack, setCameraTrack] = useState<LocalTrack | null>(null);
-  const [speakerEnabled, setSpeakerEnabled] = useState(false);
-  const [error, setError] = useState('');
+  const ui = useStoreInstance(createLiveVoiceStore);
+  const { state, ready, busy, mediaBusy, microphoneEnabled, cameraEnabled, speakerEnabled, error } = useStore(ui, useShallow(liveVoiceSelectors.view));
+  const { setState, setReady, setMediaBusy, setMicrophoneEnabled, setCameraEnabled, setSpeakerEnabled, setError } = ui.getState();
   const sessionRef = useRef<Room | null>(null);
-  const stateRef = useRef(state);
   const generationRef = useRef(0);
   const versionRef = useRef(0);
-  const busyRef = useRef(false);
   const mediaBusyRef = useRef<Device | null>(null);
   const tracksRef = useRef<Record<Device, LocalTrack | null>>({ microphone: null, camera: null });
   const deviceGenerationRef = useRef<Record<Device, number>>({ microphone: 0, camera: 0 });
@@ -46,9 +40,9 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
   const base = `${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}/voice`;
 
   function allowed(current: Room, device: Device = 'microphone') {
-    const slot = stateRef.current.slot;
+    const slot = ui.getState().state.slot;
     const permissions = current.localParticipant.permissions;
-    return sessionRef.current === current && current.state === ConnectionState.Connected && stateRef.current.hasHost &&
+    return sessionRef.current === current && current.state === ConnectionState.Connected && ui.getState().state.hasHost &&
       slot?.identity === current.localParticipant.identity && slot.participantSid === current.localParticipant.sid && slot.status === 'approved' &&
       !!permissions?.canPublish && permissions.canPublishSources.includes(device === 'camera' ? 1 : 2);
   }
@@ -71,7 +65,7 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
       }
     }
     if (sessionRef.current === current) {
-      if (device === 'camera') { setCameraEnabled(false); setCameraTrack(null); }
+      if (device === 'camera') { setCameraEnabled(false); }
       else setMicrophoneEnabled(false);
     }
   }
@@ -83,35 +77,24 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
 
   useEffect(() => {
     sessionRef.current = room;
-    stateRef.current = { slot: null, hasHost: false };
-    setState(stateRef.current);
-    setReady(false);
-    setError('');
-    setBusy(false);
-    setMediaBusy(null);
-    setMicrophoneEnabled(false);
-    setCameraEnabled(false);
-    setCameraTrack(null);
-    setSpeakerEnabled(false);
-    busyRef.current = false;
+    ui.getState().resetSession();
     mediaBusyRef.current = null;
     generationRef.current++;
     if (!room || !token) return;
     const controller = new AbortController();
     lifetimeRef.current = controller;
 
-    function apply(next: VoiceState) {
-      const previous = stateRef.current.slot;
-      stateRef.current = next;
-      setState(next);
-      if (previous?.requestId !== next.slot?.requestId || (previous?.status === 'approved' && next.slot?.status !== 'approved')) generationRef.current++;
+    const unsubscribePermissions = ui.subscribe(s => s.state, (next, previous) => {
+      if (previous.slot?.requestId !== next.slot?.requestId || (previous.slot?.status === 'approved' && next.slot?.status !== 'approved')) generationRef.current++;
       if (!isHost) {
         if (!allowed(room!, 'microphone')) stopDevice(room!, 'microphone');
         if (!allowed(room!, 'camera')) stopDevice(room!, 'camera');
       }
+    });
+    function apply(next: VoiceState) {
+      setState(next);
       setMicrophoneEnabled(room!.localParticipant.isMicrophoneEnabled);
       setCameraEnabled(room!.localParticipant.isCameraEnabled);
-      setCameraTrack(room!.localParticipant.getTrackPublication(Track.Source.Camera)?.track || null);
       const speaker = next.slot?.identity === room!.localParticipant.identity ? room!.localParticipant : room!.remoteParticipants.get(next.slot?.identity || '');
       setSpeakerEnabled(!!speaker?.isMicrophoneEnabled);
     }
@@ -157,6 +140,7 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
     void refresh();
     const timer = window.setInterval(() => void refresh(), 5000);
     return () => {
+      unsubscribePermissions();
       controller.abort();
       window.clearInterval(timer);
       events.forEach((event) => room.off(event, sync));
@@ -168,33 +152,23 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
     };
   }, [room, token, base, isHost]);
 
-  async function act(action: Action) {
+  function act(action: VoiceAction) {
     const current = sessionRef.current;
-    if (!current || current.state !== ConnectionState.Connected || busyRef.current) return;
-    const slot = stateRef.current.slot;
-    const requestId = action === 'request' ? crypto.randomUUID() : slot?.requestId;
-    if (!requestId) return;
-    if (action === 'end' && !isHost) stopDevices(current);
     const controller = lifetimeRef.current;
-    busyRef.current = true;
-    setBusy(true);
-    setError('');
-    try {
-      const suffix = action === 'request' || action === 'cancel' ? '/request' : action === 'end' ? '/end' : `/requests/${encodeURIComponent(requestId)}/${action}`;
-      const response = await fetch(`${base}${suffix}`, {
-        method: action === 'cancel' ? 'DELETE' : 'POST', headers: { 'Content-Type': 'application/json', 'X-Live-Voice-Token': token },
-        body: JSON.stringify({ requestId }), signal: controller?.signal,
-      });
-      if (!response.ok) throw new Error(await apiError(response));
-    } catch (err) {
-      if (sessionRef.current === current && !controller?.signal.aborted) setError(err instanceof Error ? err.message : '连线操作失败，请重试');
-    } finally {
-      if (sessionRef.current === current && !controller?.signal.aborted) {
-        await refreshRef.current();
-        busyRef.current = false;
-        setBusy(false);
-      }
-    }
+    if (!current || !controller || current.state !== ConnectionState.Connected) return;
+    return ui.getState().act(action, isHost, {
+      isCurrent: () => sessionRef.current === current && !controller.signal.aborted,
+      stopDevices: () => stopDevices(current),
+      refresh: () => refreshRef.current(),
+      request: async (requestedAction, requestId) => {
+        const suffix = requestedAction === 'request' || requestedAction === 'cancel' ? '/request' : requestedAction === 'end' ? '/end' : `/requests/${encodeURIComponent(requestId)}/${requestedAction}`;
+        const response = await fetch(`${base}${suffix}`, {
+          method: requestedAction === 'cancel' ? 'DELETE' : 'POST', headers: { 'Content-Type': 'application/json', 'X-Live-Voice-Token': token },
+          body: JSON.stringify({ requestId }), signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(await apiError(response));
+      },
+    });
   }
 
   async function toggleDevice(device: Device) {
@@ -224,7 +198,7 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
         await current.localParticipant.unpublishTrack(track, true);
         return;
       }
-      if (device === 'camera') { setCameraEnabled(true); setCameraTrack(track); }
+      if (device === 'camera') { setCameraEnabled(true); }
       else setMicrophoneEnabled(true);
     } catch (err) {
       track?.stop();
@@ -239,7 +213,7 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
   }
 
   const own = !!room && state.slot?.identity === room.localParticipant.identity;
-  return { ...state, own, ready, busy, mediaBusy, microphoneEnabled, cameraEnabled, cameraTrack, speakerEnabled, error, act,
+  return { ...state, own, ready, busy, mediaBusy, microphoneEnabled, cameraEnabled, speakerEnabled, error, act,
     toggleMicrophone: () => toggleDevice('microphone'), toggleCamera: () => toggleDevice('camera'),
     canOpenMicrophone: !!room && allowed(room), canOpenCamera: !!room && allowed(room, 'camera'), dismissError: () => setError('') };
 }

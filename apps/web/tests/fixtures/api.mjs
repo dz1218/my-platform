@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 const inheritedIdentity = {
   id: 'inheritance-chennian', name: '陈念', age: 24, gender: 'FEMALE', avatarUrl: '',
 };
+const failedRegistrations = new Set();
 const inheritanceUser = (session) => session === 'inheritance-test-second' ? {
   id: 'inheritance-second-user', name: '第二测试用户', email: 'inheritance-second@example.invalid',
   gender: 'FEMALE', onboardingCompleted: true, inheritedIdentity: null,
@@ -77,6 +78,13 @@ createServer(async (request, response) => {
     if (!/^1[3-9]\d{9}$/.test(data.phone ?? '') || data.ticket !== 'browser-test-phone-proof' || !['FEMALE', 'MALE'].includes(data.gender)) {
       response.statusCode = 400;
       return response.end(JSON.stringify({ error: { code: 'invalid_request', message: '测试注册信息不完整' } }));
+    }
+    // Fail once for each retry scenario without touching the real auth service.
+    const retryKey = `${data.phone}:${data.name}`;
+    if (data.phone === '13800138003' && !failedRegistrations.has(retryKey)) {
+      failedRegistrations.add(retryKey);
+      response.statusCode = 503;
+      return response.end(JSON.stringify({ error: { code: 'unavailable' } }));
     }
     const registeredSession = data.gender === 'MALE' ? 'inheritance-test-male' : 'inheritance-test-female';
     response.setHeader('Set-Cookie', `companion_session=${registeredSession}; HttpOnly; Path=/; SameSite=Lax`);

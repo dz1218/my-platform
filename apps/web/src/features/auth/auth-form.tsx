@@ -1,6 +1,11 @@
 "use client";
+import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
+import { useStoreInstance } from '@/stores/use-store-instance';
+import { subscribeAuthCooldown } from '@/stores/auth/subscriptions';
+import { createAuthFormStore, authFormSelectors } from '@/stores/auth';
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { startTransition, useActionState, useEffect, useRef, type FormEvent } from "react";
 import { Eye, EyeClosed, X } from "lucide-react";
 import Link from "next/link";
 import { loginAction, registerAction, sendCodeAction, verifyCodeAction } from "@/lib/actions";
@@ -22,31 +27,26 @@ const errors: Record<string, string> = {
 
 export function AuthForm({ register = false }: { register?: boolean }) {
   const [state, formAction, pending] = useActionState(register ? registerAction : loginAction, {});
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [ticket, setTicket] = useState("");
-  const [localError, setLocalError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [verifying, setVerifying] = useState(false);
-  const [sending, setSending] = useState(false);
+  const ui = useStoreInstance(() => createAuthFormStore({ sendCode: sendCodeAction, verifyCode: verifyCodeAction }));
+  const { name, gender, consent, phone, code, ticket, password, confirm, confirmTouched, localError, notice, verifying, sending, cooldown, showPassword, noticeOpen } = useStore(ui, useShallow(authFormSelectors.view));
+  const { setPhone, setCode, setPassword, setConfirm, setConfirmTouched, setShowPassword, setNoticeOpen, setName, setGender, setConsent, verifyPhone, credentialsMatch } = ui.getState();
+  const confirmRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
-  const currentPhone = useRef(phone);
-  currentPhone.current = phone;
-  const [cooldown, setCooldown] = useState(0);
-  const [showPassword, setShowPassword] = useState(false);
-  const [noticeOpen, setNoticeOpen] = useState(false);
   const noticeDialog = useRef<HTMLDialogElement>(null);
   const stepHeading = useRef<HTMLHeadingElement>(null);
   const passwordStep = register && !!ticket;
   const error = localError || state.error;
   const phoneError = !passwordStep && (error === "invalid_phone" || error === "exists") ? error : undefined;
   const codeError = register && !passwordStep && error === "invalid_code" ? error : undefined;
+  const confirmError = passwordStep && (confirmTouched || error === "mismatch") && confirm && password !== confirm ? "mismatch" : undefined;
+  useEffect(() => subscribeAuthCooldown(ui), [ui]);
   useEffect(() => {
-    if (!cooldown) return;
-    const timer = setTimeout(() => setCooldown(n => Math.max(0, n - 1)), 1000);
-    return () => clearTimeout(timer);
-  }, [cooldown]);
-  useEffect(() => { if (ticket) stepHeading.current?.focus(); }, [ticket]);
+    let frame = 0;
+    const unsubscribe = ui.subscribe(s => s.ticket, ticket => {
+      if (ticket) frame = requestAnimationFrame(() => stepHeading.current?.focus());
+    });
+    return () => { unsubscribe(); cancelAnimationFrame(frame); };
+  }, [ui]);
 
   useEffect(() => {
     if (!noticeOpen) return;
@@ -61,27 +61,23 @@ export function AuthForm({ register = false }: { register?: boolean }) {
   }, [noticeOpen]);
 
   async function sendCode() {
-    if (sending || cooldown > 0 || verifying) return;
-    if (!/^1[3-9]\d{9}$/.test(phone)) { setLocalError("invalid_phone"); phoneRef.current?.focus(); return; }
-    const requestedPhone = phone;
-    setSending(true); setLocalError(""); setNotice("");
-    try {
-      const result = await sendCodeAction(phone);
-      if (!result.error) setCooldown(60);
-      if (currentPhone.current !== requestedPhone) return;
-      if (result.error) setLocalError(result.error);
-      else { setNotice("验证码已发送，5 分钟内有效。"); }
-    } catch { if (currentPhone.current === requestedPhone) setLocalError("unavailable"); }
-    finally { setSending(false); }
+    if (await ui.getState().sendCode() === 'invalid_phone') phoneRef.current?.focus();
   }
-  async function verify(form: FormData) {
-    setVerifying(true); setLocalError("");
-    try {
-      const result = await verifyCodeAction(phone, String(form.get("code") ?? ""));
-      if (result.error) setLocalError(result.error);
-      else if (result.ticket) { setTicket(result.ticket); setNotice(""); }
-    } catch { setLocalError("unavailable"); }
-    finally { setVerifying(false); }
+  const verify = (form: FormData) => verifyPhone(String(form.get('code') ?? ''));
+
+  function submitCredentials(event: FormEvent<HTMLFormElement>) {
+    if (register && !passwordStep) return;
+    event.preventDefault();
+    if (pending) return;
+    const form = new FormData(event.currentTarget);
+    if (passwordStep) {
+      if (!credentialsMatch(String(form.get("password") ?? ""), String(form.get("confirm") ?? ""))) {
+        confirmRef.current?.focus();
+        return;
+      }
+    }
+    // Dispatch explicitly: a returned error must not trigger React's automatic form reset.
+    startTransition(() => formAction(form));
   }
 
   return <>
@@ -94,28 +90,33 @@ export function AuthForm({ register = false }: { register?: boolean }) {
           <h1 id="auth-heading" ref={stepHeading} tabIndex={-1}><span className="auth-desktop-heading">{register ? passwordStep ? "为相遇，设置一把钥匙。" : "从一句你好开始。" : "欢迎回到你的频率。"}</span><span className="auth-mobile-heading">{register ? passwordStep ? "认识一下你。" : "从一句你好开始。" : "欢迎回来。"}</span></h1>
           {passwordStep && <p className="auth-mobile-profile-intro">最后一步，设置你的资料和登录密码。</p>}
           {!passwordStep && <p className="auth-intro">{register ? "留一点时间，听听彼此的日常。" : "登录 Radio Friday，接着上次没聊完的故事。"}</p>}
-          <form action={register && !passwordStep ? verify : formAction} className="auth-form" key={passwordStep ? "password" : "phone"}>
+          <form action={register && !passwordStep ? verify : formAction} onSubmit={submitCredentials} className="auth-form" key={passwordStep ? "password" : "phone"}>
             <fieldset disabled={pending || verifying}>
               {passwordStep ? <><input type="hidden" name="phone" value={phone} /><input type="hidden" name="ticket" value={ticket} /></> :
-                <div className="auth-label"><label htmlFor="auth-phone">手机号</label><div className="auth-phone-field"><span>+86</span><input ref={phoneRef} aria-invalid={!!phoneError} aria-describedby={phoneError ? "auth-phone-error" : undefined} id="auth-phone" name="phone" type="tel" inputMode="tel" autoComplete="tel-national" required pattern="1[3-9][0-9]{9}" maxLength={11} placeholder="请输入手机号" value={phone} onChange={e => { currentPhone.current = e.target.value.replace(/\D/g, ""); setPhone(currentPhone.current); setLocalError(""); setNotice(""); }} /></div>{phoneError && <p id="auth-phone-error" role="alert" className="auth-field-error">{errors[phoneError]}</p>}</div>}
+                <div className="auth-label"><label htmlFor="auth-phone">手机号</label><div className="auth-phone-field"><span>+86</span><input ref={phoneRef} aria-invalid={!!phoneError} aria-describedby={phoneError ? "auth-phone-error" : undefined} id="auth-phone" name="phone" type="tel" inputMode="tel" autoComplete="tel-national" required pattern="1[3-9][0-9]{9}" maxLength={11} placeholder="请输入手机号" value={phone} onChange={e => setPhone(e.target.value)} /></div>{phoneError && <p id="auth-phone-error" role="alert" className="auth-field-error">{errors[phoneError]}</p>}</div>}
               {register && !passwordStep ? <>
-                <div className="auth-label"><label htmlFor="auth-code">短信验证码</label><div className="auth-code-field"><input aria-invalid={!!codeError} aria-describedby={codeError ? "auth-code-error" : notice ? "auth-code-notice" : undefined} id="auth-code" name="code" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9]{6}" maxLength={6} placeholder="输入 6 位验证码" value={code} onChange={e => { setCode(e.target.value.replace(/\D/g, "")); if (localError === "invalid_code") setLocalError(""); }} /><button type="button" disabled={sending || cooldown > 0} aria-busy={sending} onClick={() => { void sendCode(); }}>{sending ? "发送中…" : cooldown > 0 ? `${cooldown}s 后重发` : "获取验证码"}</button></div>{codeError && <p id="auth-code-error" role="alert" className="auth-field-error">{errors[codeError]}</p>}</div>
+                <div className="auth-label"><label htmlFor="auth-code">短信验证码</label><div className="auth-code-field"><input aria-invalid={!!codeError} aria-describedby={codeError ? "auth-code-error" : notice ? "auth-code-notice" : undefined} id="auth-code" name="code" inputMode="numeric" autoComplete="one-time-code" required pattern="[0-9]{6}" maxLength={6} placeholder="输入 6 位验证码" value={code} onChange={e => setCode(e.target.value)} /><button type="button" disabled={sending || cooldown > 0} aria-busy={sending} onClick={() => { void sendCode(); }}>{sending ? "发送中…" : cooldown > 0 ? `${cooldown}s 后重发` : "获取验证码"}</button></div>{codeError && <p id="auth-code-error" role="alert" className="auth-field-error">{errors[codeError]}</p>}</div>
                 {notice && <p id="auth-code-notice" role="status" className="auth-code-notice">{notice}</p>}
               </> : <>
                 {passwordStep && <div className="auth-profile-fields">
-                  <label className="auth-label">昵称<input name="name" autoComplete="nickname" placeholder="怎么称呼你" required pattern={".*\\S.*"} title="请输入昵称，不能只填写空格" maxLength={40} className="auth-input" /></label>
+                  <label className="auth-label">昵称<input name="name" value={name} onChange={e => setName(e.target.value)} autoComplete="nickname" placeholder="怎么称呼你" required pattern={".*\\S.*"} title="请输入昵称，不能只填写空格" maxLength={40} className="auth-input" /></label>
                   <div className="auth-label">
                     <GenderHelp />
-                    <GenderSelect />
+                    <GenderSelect value={gender} onChange={setGender} />
                   </div>
                 </div>}
-                <div className="auth-label"><label htmlFor="auth-password">密码</label><div className="auth-password-field"><input id="auth-password" name="password" type={showPassword ? "text" : "password"} required minLength={register ? 8 : undefined} autoComplete={register ? "new-password" : "current-password"} placeholder={register ? "设置至少 8 位密码" : "请输入密码"} /><button type="button" aria-label={showPassword ? "隐藏密码" : "显示密码"} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeClosed size={19} strokeWidth={1.75} aria-hidden="true" /> : <Eye size={19} strokeWidth={1.75} aria-hidden="true" />}</button></div></div>
+                <div className="auth-label"><label htmlFor="auth-password">密码</label><div className="auth-password-field"><input id="auth-password" name="password" type={showPassword ? "text" : "password"} required minLength={register ? 8 : undefined} autoComplete={register ? "new-password" : "current-password"} placeholder={register ? "设置至少 8 位密码" : "请输入密码"} value={password} onChange={e => setPassword(e.target.value)} /><button type="button" aria-label={showPassword ? "隐藏密码" : "显示密码"} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeClosed size={19} strokeWidth={1.75} aria-hidden="true" /> : <Eye size={19} strokeWidth={1.75} aria-hidden="true" />}</button></div></div>
                 {passwordStep && <>
-                  <label className="auth-label" htmlFor="auth-confirm">确认密码<input id="auth-confirm" name="confirm" type="password" required autoComplete="new-password" placeholder="再次输入密码" className="auth-input" /></label>
-                  <label className="auth-consent"><input type="checkbox" name="consent" required /><span>我已阅读并同意<button type="button" aria-haspopup="dialog" onClick={() => setNoticeOpen(true)}>平台互动说明</button>，了解 AI 身份可能由真实用户参与互动。</span></label>
+                  <div className="auth-label">
+                    <label htmlFor="auth-confirm">确认密码</label>
+                    <input ref={confirmRef} id="auth-confirm" name="confirm" type="password" required autoComplete="new-password" placeholder="再次输入密码" className="auth-input" value={confirm} onChange={e => setConfirm(e.target.value)} onBlur={() => setConfirmTouched(true)} aria-invalid={!!confirmError} aria-describedby={confirmError ? "auth-confirm-error" : undefined} />
+                    {/* Reserve the error line so blur validation cannot move the consent checkbox during a click. */}
+                    <div className="min-h-5">{confirmError && <p id="auth-confirm-error" role="alert" className="auth-field-error">{errors[confirmError]}</p>}</div>
+                  </div>
+                  <label className="auth-consent"><input type="checkbox" name="consent" required checked={consent} onChange={e => setConsent(e.target.checked)} /><span>我已阅读并同意<button type="button" aria-haspopup="dialog" onClick={() => setNoticeOpen(true)}>平台互动说明</button>，了解 AI 身份可能由真实用户参与互动。</span></label>
                 </>}
               </>}
-              {error && !phoneError && !codeError && <p role="alert" className="auth-field-error">{errors[error] ?? "操作失败，请稍后再试。"}</p>}
+              {error && error !== "mismatch" && !phoneError && !codeError && <p role="alert" className="auth-field-error">{errors[error] ?? "操作失败，请稍后再试。"}</p>}
               <SubmitButton pendingLabel={register ? "正在处理…" : "正在登录…"} className="auth-submit">{register ? passwordStep ? "完成注册" : "验证并继续" : "登录"}</SubmitButton>
             </fieldset>
           </form>

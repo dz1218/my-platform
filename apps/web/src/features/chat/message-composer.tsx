@@ -1,7 +1,8 @@
 "use client";
 import { useRef } from "react";
 import { useViewport } from '@/components/use-viewport';
-import { useChatUI } from "@/stores/chat";
+import { useChatUI } from "@/stores/provider";
+import { chatSelectors } from "@/stores/chat";
 export function MessageComposer({
   matchId,
   name,
@@ -18,8 +19,9 @@ export function MessageComposer({
   onSend: (content: string) => Promise<unknown>;
 }) {
   const viewport = useViewport();
-  const draft = useChatUI((state) => state.drafts[matchId] ?? "");
+  const draft = useChatUI(chatSelectors.draft(matchId));
   const setDraft = useChatUI((state) => state.setDraft);
+  const clearSentDraft = useChatUI((state) => state.clearSentDraft);
   const inFlight = useRef(false);
   async function submit() {
     if (inFlight.current || sending || disabled || !draft.trim()) return;
@@ -27,8 +29,7 @@ export function MessageComposer({
     const original = draft;
     try {
       await onSend(original.trim());
-      if (useChatUI.getState().drafts[matchId] === original)
-        setDraft(matchId, "");
+      clearSentDraft(matchId, original);
     } catch {
       /* The conversation hook renders the error and retains the request ID. */
     } finally {

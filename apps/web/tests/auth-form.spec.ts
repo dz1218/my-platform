@@ -30,9 +30,9 @@ test('login and registration links work when client route requests are unavailab
   expect(clientRouteRequests.length).toBeGreaterThan(0);
 });
 
-async function verifyPhone(page: Page) {
+async function verifyPhone(page: Page, phone = '13800138002') {
   await page.goto('/register');
-  await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138002');
+  await page.getByRole('textbox', { name: '手机号', exact: true }).fill(phone);
   await page.getByRole('textbox', { name: '短信验证码', exact: true }).fill('123456');
   await page.getByRole('button', { name: '验证并继续' }).click();
   await expect(page.getByRole('heading', { name: /为相遇，设置一把钥匙。|认识一下你。/ })).toBeVisible();
@@ -52,6 +52,8 @@ test('phone login errors clear on refresh and a subsequent login succeeds', asyn
   await page.getByLabel('密码', { exact: true }).fill('wrong-password');
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page.getByRole('main').getByRole('alert')).toHaveText('手机号或密码不正确，请重新输入。');
+  await expect(page.getByLabel('手机号', { exact: true })).toHaveValue('13800138000');
+  await expect(page.getByLabel('密码', { exact: true })).toHaveValue('wrong-password');
   await page.reload();
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
   await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138000');
@@ -71,7 +73,8 @@ test('phone login errors clear on refresh and a subsequent login succeeds', asyn
   await page.reload();
   await expectCompanion();
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '我的', exact: true }).click();
-  await page.getByRole('button', { name: '退出登录' }).click();
+  await page.getByRole('button', { name: /账户与身份 ·/ }).click();
+  await page.getByRole('navigation', { name: '账户与身份', exact: true }).getByRole('button', { name: '退出登录' }).click();
   await expect(page).toHaveURL('/companion');
   await expect(page.getByRole('button', { name: '和登录测试朋友打个招呼' })).toBeEnabled();
   await expect(page.getByRole('link', { name: '登录后聊天', exact: true })).toBeVisible();
@@ -177,13 +180,107 @@ test('password step validates confirmation and gender, then completes registrati
   await expect(gender).toHaveText('男');
   await page.getByRole('button', { name: '完成注册' }).click();
   await expect(page.getByRole('main').getByRole('alert')).toHaveText('两次输入的密码不一致。');
-  await nickname.fill('测试听友');
-  await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');
+  await expect(nickname).toHaveValue('测试听友');
+  await expect(gender).toHaveText('男');
+  await expect(page.getByLabel('密码', { exact: true })).toHaveValue('only-for-browser-test');
+  await expect(page.getByRole('checkbox')).toBeChecked();
   await page.getByLabel('确认密码', { exact: true }).fill('only-for-browser-test');
-  await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: '完成注册' }).click();
   await expect(page).toHaveURL('/choose-identity');
 });
+
+for (const width of [390, 1440]) {
+  test(`password mismatch is shown before submission and blocks click and Enter at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await verifyPhone(page);
+    const nickname = page.getByLabel('昵称', { exact: true });
+    const gender = page.getByRole('combobox', { name: '性别', exact: true });
+    const password = page.getByLabel('密码', { exact: true });
+    const confirm = page.getByLabel('确认密码', { exact: true });
+    const mismatch = page.locator('#auth-confirm-error');
+    const consent = page.getByRole('checkbox');
+    const submissions: string[] = [];
+    page.on('request', request => {
+      if (request.method() === 'POST' && new URL(request.url()).pathname === '/register') submissions.push(request.url());
+    });
+    await nickname.fill('测试听友');
+    await gender.click();
+    await page.getByRole('option', { name: '女', exact: true }).click();
+    await consent.check();
+    await password.fill('only-for-browser-test');
+    await confirm.fill('different-password');
+    await expect(mismatch).toHaveCount(0);
+    // Enter submits without blurring the confirmation field first.
+    await confirm.press('Enter');
+    await expect(mismatch).toHaveText('两次输入的密码不一致。');
+    await expect(confirm).toBeFocused();
+    await expect(confirm).toHaveAttribute('aria-invalid', 'true');
+    await expect(confirm).toHaveAttribute('aria-describedby', 'auth-confirm-error');
+    await page.getByRole('button', { name: '完成注册' }).click();
+    await expect(confirm).toBeFocused();
+    await expect(nickname).toHaveValue('测试听友');
+    await expect(gender).toHaveText('女');
+    await expect(password).toHaveValue('only-for-browser-test');
+    await expect(confirm).toHaveValue('different-password');
+    await expect(consent).toBeChecked();
+    await confirm.fill('only-for-browser-test');
+    await expect(mismatch).toHaveCount(0);
+    await expect(confirm).toHaveAttribute('aria-invalid', 'false');
+    await password.fill('changed-password');
+    await expect(mismatch).toBeVisible();
+    await password.fill('only-for-browser-test');
+    await expect(mismatch).toHaveCount(0);
+    expect(submissions).toEqual([]);
+
+    // A fresh form also reports the mismatch on blur, before any submit attempt.
+    await verifyPhone(page);
+    await password.fill('only-for-browser-test');
+    await confirm.fill('different-password');
+    await confirm.press('Tab');
+    await expect(mismatch).toHaveText('两次输入的密码不一致。');
+    await expect(confirm).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  test(`registration retains every field after a server failure and retries at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    await verifyPhone(page, '13800138003');
+    const name = `重试听友-${width}-${testInfo.retry}`;
+    const nickname = page.getByLabel('昵称', { exact: true });
+    const gender = page.getByRole('combobox', { name: '性别', exact: true });
+    const password = page.getByLabel('密码', { exact: true });
+    const confirm = page.getByLabel('确认密码', { exact: true });
+    const consent = page.getByRole('checkbox');
+    await nickname.fill(name);
+    await gender.click();
+    await page.getByRole('option', { name: '男', exact: true }).click();
+    await password.fill('only-for-browser-test');
+    await confirm.fill('only-for-browser-test');
+    await consent.check();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/register', async route => {
+      if (route.request().method() === 'POST') await gate;
+      await route.continue();
+    });
+    try {
+      await page.getByRole('button', { name: '完成注册' }).click();
+      await expect(page.getByRole('button', { name: '正在处理…' })).toBeDisabled();
+      await expect(nickname).toBeDisabled();
+    } finally {
+      release();
+    }
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText('暂时连接不上，请稍后再试。');
+    await expect(nickname).toHaveValue(name);
+    await expect(gender).toHaveText('男');
+    await expect(password).toHaveValue('only-for-browser-test');
+    await expect(confirm).toHaveValue('only-for-browser-test');
+    await expect(consent).toBeChecked();
+    await expect(page.locator('input[name=phone]')).toHaveValue('13800138003');
+    await expect(page.locator('input[name=ticket]')).toHaveValue('browser-test-phone-proof');
+    await page.getByRole('button', { name: '完成注册' }).click();
+    await expect(page).toHaveURL('/choose-identity');
+  });
+}
 
 test('mobile auth is compact and desktop retains the scene layout', async ({ page }) => {
   for (const width of [320, 390, 1440]) {
@@ -351,7 +448,10 @@ test('SMS errors stay beside the field and sending only disables the send button
 
 test('mobile login and registration show three loaded backgrounds and cycle automatically', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.clock.install();
+  const clockStart = new Date('2026-01-01T00:00:00Z');
+  await page.clock.install({ time: clockStart });
+  // Screenshots and CSS transitions must not advance the next carousel timer.
+  await page.clock.pauseAt(new Date(clockStart.getTime() + 1000));
   for (const route of ['/login', '/register']) {
     await page.goto(route);
     const background = page.locator('.auth-mobile-background');

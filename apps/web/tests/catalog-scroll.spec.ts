@@ -92,7 +92,7 @@ async function visibleCard(page: Page) {
 test('1000 variable-height roles stay virtualized, finish loading once, and resize without overflow', async ({ page }) => {
   test.setTimeout(120_000);
   const mock = await setup(page);
-  await page.goto('/companion');
+  await page.goto('/companion?view=discover');
   await loadThrough(page, 1000);
   await expect(page.getByText('已经看到全部了', { exact: true })).toBeVisible();
   const count = await page.locator('[data-identity-id]').count();
@@ -120,14 +120,16 @@ for (const entry of ['new', 'continue', 'recent'] as const) {
     if (entry === 'recent') {
       identityId = await visibleCard(page);
     } else if (entry === 'continue') {
-      await page.evaluate(() => window.scrollBy(0, -700));
+      // Masonry columns have different heights, so the smallest rendered index
+      // cannot tell whether another column has scrolled past the target.
+      await page.evaluate(() => window.scrollTo(0, 0));
       await settle(page);
-      // Find the already known card by scrolling the measured range.
-      for (let attempt = 0; attempt < 30 && !await page.locator('[data-identity-id="catalog-130"]').count(); attempt++) {
-        const min = await page.locator('[data-identity-index]').evaluateAll(nodes => Math.min(...nodes.map(node => Number((node as HTMLElement).dataset.identityIndex))));
-        await page.evaluate(direction => window.scrollBy(0, direction * 400), min > 130 ? -1 : 1);
+      await expect.poll(async () => {
+        if (await page.locator('[data-identity-id="catalog-130"]').count()) return true;
+        await page.evaluate(() => window.scrollBy(0, window.innerHeight / 2));
         await settle(page);
-      }
+        return !!await page.locator('[data-identity-id="catalog-130"]').count();
+      }, { timeout: 30_000, intervals: [50, 100] }).toBe(true);
       identityId = 'catalog-130';
       await page.locator(`[data-identity-id="${identityId}"] a`).scrollIntoViewIfNeeded();
       await settle(page);
@@ -178,7 +180,8 @@ test('filters cancel stale results, survive a chat return, and expose retry for 
   await page.getByRole('searchbox', { name: '姓名' }).fill('朋友00');
   await page.getByRole('button', { name: '筛选', exact: true }).click();
   await page.getByRole('searchbox', { name: '姓名' }).fill('朋友01');
-  await page.getByRole('combobox', { name: '职业', exact: true }).selectOption('teacher');
+  await page.getByRole('combobox', { name: '职业', exact: true }).click();
+  await page.getByRole('option', { name: '教师', exact: true }).click();
   await page.getByRole('button', { name: '筛选', exact: true }).click();
   await expect(page.locator('[data-identity-id]').first()).toContainText('朋友01');
   await expect.poll(() => page.locator('[data-identity-id]').evaluateAll(nodes => nodes.every(node => node.textContent?.includes('教师') && node.textContent.includes('朋友01')))).toBe(true);
@@ -187,7 +190,7 @@ test('filters cancel stale results, survive a chat return, and expose retry for 
   await expect(page.getByTestId('chat-overlay')).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('searchbox', { name: '姓名' })).toHaveValue('朋友01');
-  await expect(page.getByRole('combobox', { name: '职业', exact: true })).toHaveValue('teacher');
+  await expect(page.getByRole('combobox', { name: '职业', exact: true })).toHaveText('教师');
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await expect(page.getByRole('button', { name: '重试加载', exact: true })).toBeVisible();
   mock.fail(0);
@@ -199,7 +202,7 @@ test('mobile chat locks background scroll, preserves anchor on resize, and stand
   test.setTimeout(90_000);
   await setup(page);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/companion');
+  await page.goto('/companion?view=discover');
   await loadThrough(page, 144);
   const id = await visibleCard(page);
   expect(id).toBeTruthy();
@@ -216,7 +219,7 @@ test('mobile chat locks background scroll, preserves anchor on resize, and stand
   expect(await page.evaluate(() => window.scrollY)).toBe(y);
   await page.setViewportSize({ width: 1000, height: 900 });
   await page.goBack();
-  await expect(page).toHaveURL('/companion');
+  await expect(page).toHaveURL('/companion?view=discover');
   await settle(page);
   await expect.poll(() => page.evaluate(saved => { const card = document.querySelector(`[data-identity-id="${saved.id}"]`); return card ? Math.abs(card.getBoundingClientRect().top - saved.top) : 9999; }, anchor), { timeout: 10_000 }).toBeLessThanOrEqual(2);
   await page.goto('/chat/match-catalog-130');
@@ -232,7 +235,12 @@ test('inheritance selection survives card unmount and light polling refreshes av
   const first = page.getByRole('button', { name: '选择朋友0000', exact: true });
   await first.click();
   await expect(page.getByRole('button', { name: '确认继承朋友0000', exact: true })).toBeVisible();
+  // The confirmation is now a modal; explicitly move the background list to
+  // exercise virtual unmount rather than relying on the old inline panel scroll.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.clock.runFor(250);
   await expect(page.locator('[data-identity-id="catalog-0"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '确认继承朋友0000', exact: true })).toBeVisible();
   const optionReads = mock.requests.length;
   mock.claimSelected();
   await page.clock.runFor(20_100);

@@ -329,7 +329,9 @@ test('same-tab logout and login cannot reuse another account’s cached inherite
   const initialDocument = await page.evaluate(() => performance.timeOrigin);
   await expect(page.getByRole('heading', { name: '现在，你有两个身份' })).toBeVisible();
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '我的', exact: true }).click();
-  await page.getByRole('button', { name: '退出登录', exact: true }).click();
+  await expect(page).toHaveURL('/me');
+  await page.getByRole('button', { name: /账户与身份 ·/ }).click();
+  await page.getByRole('navigation', { name: '账户与身份', exact: true }).getByRole('button', { name: '退出登录', exact: true }).click();
   await expect(page).toHaveURL('/companion');
   await expect(page.getByRole('link', { name: '以陈念的身份回复', exact: true })).toHaveCount(0);
   await page.getByRole('link', { name: '登录 / 注册', exact: true }).click();
@@ -354,6 +356,7 @@ test('same-tab logout and login cannot reuse another account’s cached inherite
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page).toHaveURL('/companion');
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '我的', exact: true }).click();
+  await page.getByRole('tab', { name: 'AI 身份', exact: true }).click();
   await page.getByRole('link', { name: '选择 AI 身份', exact: true }).click();
   await expect(page).toHaveURL('/choose-identity');
   try {
@@ -399,3 +402,85 @@ test('an unavailable inheritance feature stops polling and recovers after manual
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
   expect(reads).toBe(2);
 });
+
+for (const width of [320, 390, 768, 1440]) {
+  test(`occupation picker stays themed across reopen, filtering and reload at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockInheritance(page);
+    const queries: string[] = [];
+    const occupations = [
+      { code: 'accessibility', name: '数字无障碍测试员' },
+      { code: 'accountant', name: '会计' },
+      { code: 'gardener', name: '农艺师' },
+      { code: 'pilot', name: '民航飞行员' },
+      ...Array.from({ length: 80 }, (_, index) => ({ code: `occupation-${index}`, name: `测试职业${index}` })),
+    ];
+    const names = ['林知夏', '吴知夏', '余以宁', '袁清禾', '陈念', '林晚'];
+    const items = names.map((name, index) => ({
+      ...chenNian, id: `picker-review-${index}`, name, age: 23 + index * 3,
+      city: ['重庆', '珠海', '福州', '南京', '上海', '杭州'][index], available: true,
+      occupation: '数字无障碍测试员', occupationCode: 'accessibility',
+      background: '听见有趣的生活小故事会记很久。闲下来喜欢参观博物馆和烘焙，也愿意听你分享平凡的一天。',
+    }));
+    await page.route('**/api/v1/identity-inheritance/options?*', route => {
+      queries.push(new URL(route.request().url()).search);
+      return route.fulfill({ json: { items, total: 6, availableTotal: 6, page: 1, nextPage: null, occupations } });
+    });
+    await page.goto('/choose-identity');
+    await expect(page.getByRole('button', { name: '选择林知夏', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `/tmp/radio-friday-review/identity-${width}.png`, fullPage: true });
+
+    const mobile = width < 768;
+    const openFilters = async () => { if (mobile) await page.getByRole('button', { name: /^筛选朋友/ }).click(); };
+    const picker = page.getByRole('combobox', { name: '职业', exact: true });
+    const search = page.getByRole('searchbox', { name: '搜索职业', exact: true });
+    const list = page.getByRole('listbox', { name: '职业', exact: true });
+    await openFilters();
+    expect(await picker.evaluate(node => node.tagName)).toBe('BUTTON');
+    await picker.click();
+    await expect(search).toBeFocused();
+    await expect(list).toBeVisible();
+    const menu = page.locator('.select-popover:popover-open');
+    const bounds = await menu.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(900);
+    expect(await list.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
+    await page.screenshot({ path: `/tmp/radio-friday-review/occupation-${width}.png`, fullPage: true });
+    await search.fill('不存在的职业');
+    await expect(page.getByText('没有找到匹配的选项')).toBeVisible();
+    await search.press('Enter');
+    await expect(list).toBeVisible();
+    await search.fill('数字无障碍');
+    await search.press('Enter');
+    await expect(picker).toHaveText('数字无障碍测试员');
+    await expect(picker).toBeFocused();
+    await picker.click();
+    await expect(list.getByRole('option', { name: '数字无障碍测试员', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await search.press('Escape');
+    await expect(list).toBeHidden();
+    if (mobile) await expect(page.getByRole('dialog', { name: '筛选朋友' })).toBeVisible();
+    await page.getByRole('button', { name: mobile ? '应用' : '筛选', exact: true }).click();
+    await expect.poll(() => queries.at(-1)).toContain('occupationCode=accessibility');
+
+    await openFilters();
+    await expect(picker).toHaveText('数字无障碍测试员');
+    await picker.click();
+    await expect(list).toBeVisible();
+    await search.fill('会计');
+    await page.getByRole('option', { name: '会计', exact: true }).click();
+    await expect(picker).toHaveText('会计');
+    await picker.click();
+    await search.press('Tab');
+    await expect(list).toBeHidden();
+    await page.getByRole('button', { name: '重置', exact: true }).click();
+    await expect(picker).toHaveText('全部职业');
+    if (mobile) await page.getByRole('button', { name: '关闭筛选朋友' }).click();
+    await page.reload();
+    await openFilters();
+    await picker.click();
+    await expect(list).toBeVisible();
+    await expect(list.getByRole('option', { name: '全部职业', exact: true })).toHaveAttribute('aria-selected', 'true');
+  });
+}

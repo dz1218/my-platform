@@ -1,20 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
+import { useStoreInstance } from '@/stores/use-store-instance';
+import { createPreferencesStore, preferencesSelectors } from '@/stores/chat/preferences';
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api/client";
 
-type Preferences = {
-  userOptIn: boolean;
-  allowProactiveAI: boolean;
-  timezone: string;
-  quietStart: number;
-  quietEnd: number;
-  maxBatchesPer24h: number;
-  minGapMinutes: number;
-  version: number;
-  automationEnabled: boolean;
-  memoryOptIn: boolean;
-};
+import type { Preferences, DailyState } from '@/stores/chat/preferences/initial-state';
+import { dailyDraftFor } from '@/stores/chat/preferences/store';
 
 // Mounted only after the server confirms this account's identity assignment.
 export function CompanionPreferences({ id }: { id: string }) {
@@ -24,23 +17,10 @@ export function CompanionPreferences({ id }: { id: string }) {
     queryKey: ["preferences", id],
     queryFn: () => api<Preferences>(`${base}/preferences`),
   });
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [busy, setBusy] = useState(false);
-  async function write(path: string, body: unknown, method = "POST") {
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      await api(`${base}${path}`, { method, body: JSON.stringify(body) });
-      await client.invalidateQueries({ queryKey: ["preferences", id] });
-      setNotice("已保存");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "保存失败");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const ui = useStoreInstance(() => createPreferencesStore({ id, client }));
+  const { error, notice, busy } = useStore(ui, useShallow(preferencesSelectors.view));
+  const { savePolicy, setAllowProactiveAI } = ui.getState();
+  const policyDraft = useStore(ui, s => s.policyDraft);
   const p = preferences.data;
   return (
     <details
@@ -63,19 +43,15 @@ export function CompanionPreferences({ id }: { id: string }) {
             className="chat-settings-fields"
             onSubmit={(e) => {
               e.preventDefault();
-              const f = new FormData(e.currentTarget);
-              void write(
-                "/proactive-policy",
-                { ...p, allowProactiveAI: f.has("allow") },
-                "PATCH",
-              );
+              void savePolicy();
             }}
           >
             <label className="chat-settings-checkbox">
               <input
                 type="checkbox"
                 name="allow"
-                defaultChecked={p.allowProactiveAI}
+                checked={policyDraft?.version === p.version ? policyDraft.allow : p.allowProactiveAI}
+                onChange={e => setAllowProactiveAI(e.target.checked)}
                 disabled={busy}
               />
               <span>真人托管时允许 AI 主动联系<span className="chat-settings-help block">仍需用户授权</span></span>
@@ -85,53 +61,30 @@ export function CompanionPreferences({ id }: { id: string }) {
             </button>
           </form>
         )}
-        <DailyStateEditor id={id} busy={busy} write={write} />
+        <DailyStateEditor id={id} busy={busy} ui={ui} />
         {error && <p role="alert" className="mt-2 text-danger">{error}</p>}
         {notice && <p role="status" className="mt-2 text-muted">{notice}</p>}
       </div>
     </details>
   );
 }
-function DailyStateEditor({
-  id,
-  busy,
-  write,
-}: {
-  id: string;
-  busy: boolean;
-  write: (path: string, body: unknown, method?: string) => Promise<void>;
-}) {
+function DailyStateEditor({ id, busy, ui }: { id: string; busy: boolean; ui: ReturnType<typeof createPreferencesStore> }) {
+  const storedDraft = useStore(ui, s => s.dailyDraft);
+  const { editDailyState, saveDailyState } = ui.getState();
   const state = useQuery({
     queryKey: ["daily-state", id],
     queryFn: () =>
-      api<{
-        version: number;
-        currentActivity: string;
-        mood: string;
-        paused: boolean;
-      }>(`/conversations/${encodeURIComponent(id)}/daily-state`),
+      api<DailyState>(`/conversations/${encodeURIComponent(id)}/daily-state`),
     retry: false,
   });
+  const draft = dailyDraftFor(storedDraft, state.data);
   return (
     <form
       className="chat-settings-fields chat-daily-settings"
       key={state.data?.version ?? 0}
       onSubmit={async (e) => {
         e.preventDefault();
-        const f = new FormData(e.currentTarget);
-        await write(
-          "/daily-state",
-          {
-            fictional: true,
-            currentActivity: f.get("activity"),
-            mood: f.get("mood"),
-            paused: f.has("paused"),
-            version: state.data?.version ?? 0,
-            expiresAt: new Date(Date.now() + 24 * 3600000).toISOString(),
-          },
-          "PATCH",
-        );
-        await state.refetch();
+        await saveDailyState();
       }}
     >
       <h3 className="text-sm font-medium">虚拟日常</h3>
@@ -142,7 +95,8 @@ function DailyStateEditor({
         虚拟活动
         <input
           name="activity"
-          defaultValue={state.data?.currentActivity ?? ""}
+          value={draft.currentActivity}
+          onChange={e => editDailyState({ currentActivity: e.target.value })}
           required
           maxLength={300}
           className="input-field"
@@ -152,7 +106,8 @@ function DailyStateEditor({
         虚拟心情
         <input
           name="mood"
-          defaultValue={state.data?.mood ?? ""}
+          value={draft.mood}
+          onChange={e => editDailyState({ mood: e.target.value })}
           maxLength={80}
           className="input-field"
         />
@@ -161,7 +116,8 @@ function DailyStateEditor({
         <input
           name="paused"
           type="checkbox"
-          defaultChecked={state.data?.paused}
+          checked={draft.paused}
+          onChange={e => editDailyState({ paused: e.target.checked })}
         />
         <span>暂停此虚拟设定</span>
       </label>

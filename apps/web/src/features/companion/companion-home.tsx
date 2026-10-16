@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { ChevronRight, MessageCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { PageHeading } from '@/components/page-heading';
 import { SceneBanner } from '@/components/scene-banner';
 import { useViewport, ViewportSkeleton } from '@/components/use-viewport';
@@ -21,11 +21,11 @@ export function CompanionHome({ accountId, inheritedIdentity }: { accountId: str
   const viewport = useViewport();
   const params = useSearchParams();
   const requested = params.get('view');
-  const [initialTab, setInitialTab] = useState<Tab | null>(null);
+  const { initialTab, initializeTab } = model;
   const lastTab = useRef<Tab>('recent');
   useEffect(() => {
-    if (!initialTab && model.conversations.data) setInitialTab(model.recent?.length ? 'recent' : 'discover');
-  }, [initialTab, model.conversations.data, model.recent?.length]);
+    if (!initialTab && model.conversations.data) initializeTab(model.recent?.length ?? 0);
+  }, [initialTab, model.conversations.data, model.recent?.length, initializeTab]);
   const selected = requested === 'discover' || requested === 'recent' ? requested : model.isLoggedIn ? initialTab : 'discover';
   if (!model.paused && selected) lastTab.current = selected;
   const tab = model.paused ? lastTab.current : selected;
@@ -46,7 +46,7 @@ export function CompanionHome({ accountId, inheritedIdentity }: { accountId: str
 function DesktopCompanion({ model }: { model: CompanionModel }) {
   return <>
     <SceneBanner scene="companion" title="窗外下着雨，心里有回音。" description="从一句问候开始，多一个愿意倾听的朋友。" />
-    <div className="companion-layout"><Discovery model={model} /><aside className="conversation-rail"><RecentConversations model={model} onDiscover={() => model.heading.current?.scrollIntoView({ behavior: 'smooth' })} /></aside></div>
+    <div className="companion-layout"><Discovery model={model} /><aside aria-label="最近聊天" className="conversation-rail"><RecentConversations model={model} onDiscover={() => model.heading.current?.scrollIntoView({ behavior: 'smooth' })} /></aside></div>
   </>;
 }
 

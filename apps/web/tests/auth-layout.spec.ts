@@ -27,11 +27,13 @@ test('auth documents keep their full width before hydration', async ({ browser, 
 for (const width of [390, 1440]) {
   test(`auth navigation preserves the scene and its timer at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
-    await page.clock.install();
+    // Pause before navigation at a known future instant. Comparing the browser's
+    // emulated clock with the test process's Date can fast-forward to the past.
+    await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+    await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
     await page.goto('/login');
     const story = page.locator(width > 760 ? '.auth-story' : '.auth-mobile-background');
     await expect(story).toBeVisible();
-    await page.clock.pauseAt(new Date());
     await story.evaluate(element => element.setAttribute('data-persisted', 'true'));
     await page.clock.runFor(8000);
     const activeScene = page.locator(width > 760 ? '.auth-scene' : '.auth-mobile-scene').nth(1);

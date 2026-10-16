@@ -15,6 +15,8 @@ import { AuthExitTransition, useAuthExit } from "@/features/auth/auth-exit-trans
 import { logoutAction } from "@/lib/actions";
 import { SubmitButton } from "./submit-button";
 import { InteractionNoticeDialog, InteractionNoticeTrigger } from "./interaction-notice-dialog";
+import { useAppUI } from '@/stores/provider';
+import { appSelectors } from '@/stores/app';
 import { RadioMark } from "./radio-mark";
 import { NavigationGlyph, type NavigationGlyphName } from "./navigation-glyph";
 import { cn } from "@/lib/utils";
@@ -100,31 +102,15 @@ function AppFrame({
 }) {
   const path = usePathname();
   const params = useSearchParams();
-  const [collapsed, setCollapsed] = useState(false);
-  const [layoutReady, setLayoutReady] = useState(false);
+  const collapsed = useAppUI(appSelectors.collapsed);
+  const layoutReady = useAppUI(appSelectors.layoutReady);
+  const hydrateSidebar = useAppUI(s => s.hydrateSidebar);
+  const toggleSidebar = useAppUI(s => s.toggleSidebar);
   const { onHomeReady } = useAuthExit();
-  useLayoutEffect(() => {
-    try {
-      setCollapsed(
-        localStorage.getItem("radio-friday:sidebar-collapsed") === "true",
-      );
-    } catch {
-      /* Storage may be unavailable. */
-    }
-    setLayoutReady(true);
-  }, []);
+  useLayoutEffect(() => { hydrateSidebar(); }, [hydrateSidebar]);
   useLayoutEffect(() => {
     if (layoutReady && path === "/companion") onHomeReady();
   }, [layoutReady, path, onHomeReady]);
-  function toggleSidebar() {
-    const next = !collapsed;
-    setCollapsed(next);
-    try {
-      localStorage.setItem("radio-friday:sidebar-collapsed", String(next));
-    } catch {
-      /* The toggle still works without persistence. */
-    }
-  }
   const immersive =
     path.startsWith("/chat/") ||
     /^\/live\/[^/]+$/.test(path) ||

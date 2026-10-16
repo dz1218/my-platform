@@ -1,0 +1,26 @@
+import { ConnectionState } from 'livekit-client';
+import type { LiveRoomStore } from './store';
+export const liveRoomSelectors = {
+  view: (s: LiveRoomStore) => ({
+    role: s.role,
+    roomNotice: s.roomNotice,
+    nickname: s.nickname,
+    connectionState: s.connectionState,
+    participants: s.participants,
+    error: s.error,
+    isJoining: s.isJoining,
+    isDispatchingAgent: s.isDispatchingAgent,
+    agentRequested: s.agentRequested,
+    sideTab: s.sideTab,
+    voiceToken: s.voiceToken,
+    notice: s.notice,
+    mediaBusy: s.mediaBusy,
+    cameraEnabled: s.cameraEnabled,
+    microphoneEnabled: s.microphoneEnabled,
+    audioBlocked: s.audioBlocked,
+    isFullscreen: s.isFullscreen,
+  }),
+  isConnected: (s: LiveRoomStore) => s.connectionState === ConnectionState.Connected,
+  isReconnecting: (s: LiveRoomStore) => s.connectionState === ConnectionState.Reconnecting || s.connectionState === ConnectionState.SignalReconnecting,
+  hasAgent: (s: LiveRoomStore) => s.participants.some(p => p.role === 'AI助手'),
+};

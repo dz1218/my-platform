@@ -138,7 +138,9 @@ html[data-auth-exit="native"]::view-transition-new(root) {
   .select-trigger[aria-expanded="true"] { @apply border-focus; }
   .select-trigger[aria-invalid="true"] { @apply border-danger; }
   .select-menu { @apply absolute inset-x-0 z-30 rounded-control border border-line bg-panel p-1 text-base text-ink shadow-popover sm:text-sm; }
-  .select-option { @apply flex min-h-10 cursor-pointer items-center justify-between rounded-md px-2 py-2; }
+  .select-popover { @apply fixed inset-auto m-0 overflow-hidden p-0; }
+  .select-popover:popover-open { @apply flex flex-col; }
+  .select-option { @apply flex min-h-11 cursor-pointer items-center justify-between rounded-md px-3 py-2; }
   .select-option[data-active="true"] { @apply bg-surface-soft; }
   .select-option[aria-selected="true"] { @apply font-medium text-accent; }
   .btn-primary { @apply btn-solid border border-action bg-action text-on-action enabled:hover:border-action-hover enabled:hover:bg-action-hover enabled:active:bg-action; }

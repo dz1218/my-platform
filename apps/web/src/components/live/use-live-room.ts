@@ -1,16 +1,15 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
+import { useStoreInstance } from '@/stores/use-store-instance';
+import { createLiveRoomStore, liveRoomSelectors } from '@/stores/live/room';
+import { useEffect, useRef } from 'react';
 import { ConnectionState, ParticipantKind, Room, RoomEvent, Track } from 'livekit-client';
+import { subscribeRoomNotice } from '@/stores/live/room/subscriptions';
 import { useLiveVoice } from './use-live-voice';
 
-export type Role = '主播' | '观众';
-
-type ParticipantItem = {
-  identity: string;
-  displayName: string;
-  role: Role | 'AI助手';
-  isLocal: boolean;
-};
+import type { Role, ParticipantItem } from '@/stores/live/room';
+export type { Role } from '@/stores/live/room';
 
 type JoinResponse = {
   token: string;
@@ -82,32 +81,17 @@ async function readApiError(response: Response) {
 }
 
 export function useLiveRoom({ apiBaseUrl, roomId, roomTitle, isLoggedIn, hostNickname }: LiveRoomProps) {
-  const [role, setRole] = useState<Role | null>(null);
+  const ui = useStoreInstance(() => createLiveRoomStore(isLoggedIn ? hostNickname : '', { dispatch: async () => {
+    const response = await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}/agent/dispatch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!response.ok) throw new Error(await readApiError(response));
+  } }));
+  const { role, roomNotice, nickname, connectionState, participants, error, isJoining, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, voiceToken, notice, isFullscreen } = useStore(ui, useShallow(liveRoomSelectors.view));
+  const { dispatchAgent, setRole, setRoomNotice, setNickname, setConnectionState, setParticipants, setError, setIsJoining, setCameraEnabled, setMicrophoneEnabled, setAudioBlocked, setSideTab, setVoiceToken, setNotice, setIsFullscreen } = ui.getState();
   const isHost = role === '主播';
-  const [roomNotice, setRoomNotice] = useState('');
 
-  const [nickname, setNickname] = useState(() =>
-    isLoggedIn ? hostNickname : ''
-  );
-  const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
-  const [participants, setParticipants] = useState<ParticipantItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [isJoining, setIsJoining] = useState(true);
-  const [isDispatchingAgent, setIsDispatchingAgent] = useState(false);
-  const [agentRequested, setAgentRequested] = useState(false);
-  const [mediaBusy, setMediaBusy] = useState<'camera' | 'microphone' | null>(null);
-  const [cameraEnabled, setCameraEnabled] = useState(false);
-  const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
-  const [audioBlocked, setAudioBlocked] = useState(false);
-  const [sideTab, setSideTab] = useState<'chat' | 'people' | 'voice'>('chat');
-  const [voiceToken, setVoiceToken] = useState('');
-  const [notice, setNotice] = useState('');
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
 
   const joinRequestRef = useRef<AbortController | null>(null);
-  const mediaBusyRef = useRef(false);
-  const dispatchBusyRef = useRef(false);
   const localIdentityRef = useRef('');
   const roomRef = useRef<Room | null>(null);
   const remoteAudioRef = useRef<HTMLDivElement>(null);
@@ -239,71 +223,22 @@ export function useLiveRoom({ apiBaseUrl, roomId, roomTitle, isLoggedIn, hostNic
   }
 
   async function toggleLocalMedia(device: 'camera' | 'microphone') {
-    const room = roomRef.current;
-    if (!room || !isHost || !isConnected || mediaBusyRef.current) return;
-    mediaBusyRef.current = true;
-    setMediaBusy(device);
-    setError(null);
-    try {
-      if (device === 'camera') {
-        await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled);
-      } else {
-        await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled);
-      }
+    await ui.getState().toggleMedia(device, async () => {
+      const room = roomRef.current;
+      if (!room) return null;
+      if (device === 'camera') await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled);
+      else await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled);
       if (roomRef.current !== room) {
         for (const publication of room.localParticipant.trackPublications.values()) publication.track?.stop();
-        return;
+        return null;
       }
-      syncLocalMedia();
-    } catch (err) {
-      if (roomRef.current === room) {
-        const deviceName = device === 'camera' ? '摄像头' : '麦克风';
-        setError(err instanceof Error && err.name === 'NotAllowedError'
-          ? `未获得${deviceName}权限，请在浏览器地址栏的网站设置中允许访问后重试。`
-          : err instanceof Error && err.name === 'NotFoundError' ? `未找到${deviceName}，请连接设备后重试。` : `${deviceName}开启失败，请检查设备是否被其他应用占用。`);
-      }
-    } finally {
-      mediaBusyRef.current = false;
-      if (roomRef.current === room) setMediaBusy(null);
-    }
-  }
-
-  async function dispatchAgent() {
-    const room = roomRef.current;
-    if (!room || !isConnected || !isHost || dispatchBusyRef.current || agentRequested || hasAgent) return;
-    dispatchBusyRef.current = true;
-    setError(null);
-    setIsDispatchingAgent(true);
-    try {
-      const response = await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}/agent/dispatch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      if (!response.ok) throw new Error(await readApiError(response));
-      if (roomRef.current === room) setAgentRequested(true);
-    } catch (err) {
-      if (roomRef.current === room) setError(err instanceof Error ? err.message : '派发 AI 助手失败');
-    } finally {
-      dispatchBusyRef.current = false;
-      if (roomRef.current === room) setIsDispatchingAgent(false);
-    }
+      return { cameraEnabled: room.localParticipant.isCameraEnabled, microphoneEnabled: room.localParticipant.isMicrophoneEnabled };
+    });
   }
 
   function resetSession() {
-    setRole(null);
-    setSideTab('chat');
-    setRoomNotice('');
-    setVoiceToken('');
+    ui.getState().resetSession();
     localIdentityRef.current = '';
-    setParticipants([]);
-    setConnectionState(ConnectionState.Disconnected);
-    setCameraEnabled(false);
-    setMicrophoneEnabled(false);
-    setAudioBlocked(false);
-    setMediaBusy(null);
-    setIsDispatchingAgent(false);
-    setAgentRequested(false);
     clearContainer(remoteAudioRef);
   }
 
@@ -350,11 +285,7 @@ export function useLiveRoom({ apiBaseUrl, roomId, roomTitle, isLoggedIn, hostNic
     attachExistingRemoteTracks(roomRef.current);
   }, [isConnected, participants.length]);
 
-  useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(''), 4000);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
+  useEffect(() => subscribeRoomNotice(ui), [ui]);
 
   useEffect(() => {
     const update = () => setIsFullscreen(document.fullscreenElement === stageRef.current);

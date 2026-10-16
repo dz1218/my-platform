@@ -1,15 +1,25 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useMemo, type ReactNode } from 'react';
+import { useStore } from 'zustand';
+import { createAuthTransitionStore } from '@/stores/auth/transition';
+import { useStoreInstance } from '@/stores/use-store-instance';
 import { useRouter } from 'next/navigation';
 
-const AuthExitContext = createContext({ closing: false, dismiss: async () => {}, onHomeReady: () => {} });
-export const useAuthExit = () => useContext(AuthExitContext);
+type AuthExitScope = { store: ReturnType<typeof createAuthTransitionStore>; dismiss: () => Promise<void>; onHomeReady: () => void };
+const AuthExitContext = createContext<AuthExitScope | null>(null);
+export function useAuthExit() {
+  const scope = useContext(AuthExitContext);
+  if (!scope) throw new Error('AuthExitTransition is required');
+  const closing = useStore(scope.store, s => s.closing);
+  return { closing, dismiss: scope.dismiss, onHomeReady: scope.onHomeReady };
+}
 
 /** Stays mounted across the auth/home boundary so the animation can finish. */
 export function AuthExitTransition({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [closing, setClosing] = useState(false);
+  const store = useStoreInstance(createAuthTransitionStore);
+  const { setClosing } = store.getState();
   const running = useRef(false);
   const committed = useRef<(() => void) | null>(null);
   const transition = useRef<ViewTransition | null>(null);
@@ -79,7 +89,8 @@ export function AuthExitTransition({ children }: { children: ReactNode }) {
       running.current = false;
       setClosing(false);
     }
-  }, [router]);
+  }, [router, setClosing]);
 
-  return <AuthExitContext.Provider value={{ closing, dismiss, onHomeReady }}>{children}</AuthExitContext.Provider>;
+  const scope = useMemo(() => ({ store, dismiss, onHomeReady }), [store, dismiss, onHomeReady]);
+  return <AuthExitContext.Provider value={scope}>{children}</AuthExitContext.Provider>;
 }

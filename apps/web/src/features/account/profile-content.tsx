@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, type KeyboardEvent } from 'react';
+import { type KeyboardEvent } from 'react';
+import { useStore } from 'zustand';
+import { createAccountStore, accountSelectors } from '@/stores/account';
+import { useStoreInstance } from '@/stores/use-store-instance';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, MessageCircle, Plus } from 'lucide-react';
@@ -12,13 +15,10 @@ type Tab = 'recent' | 'identity';
 const tabs: { id: Tab; label: string }[] = [{ id: 'recent', label: '最近聊天' }, { id: 'identity', label: 'AI 身份' }];
 
 export function ProfileContent({ accountId, identity }: { accountId: string; identity: Identity | null }) {
-  const [tab, setTab] = useState<Tab>('recent');
-  const [indicatorMotion, setIndicatorMotion] = useState<'left' | 'right' | null>(null);
-  function selectTab(next: Tab) {
-    if (next === tab) return;
-    setIndicatorMotion(next === 'identity' ? 'right' : 'left');
-    setTab(next);
-  }
+  const ui = useStoreInstance(createAccountStore);
+  const tab = useStore(ui, accountSelectors.tab);
+  const indicatorMotion = useStore(ui, accountSelectors.indicatorMotion);
+  const { selectTab } = ui.getState();
   const conversations = useQuery({ queryKey: ['matches', accountId], queryFn: ({ signal }) => matches(signal), staleTime: 0 });
   const recent = conversations.data?.items.filter(match => match.identity.id !== identity?.id);
   function onTabKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {

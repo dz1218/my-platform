@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { SceneBanner } from '@/components/scene-banner';
 import { PageHeading } from '@/components/page-heading';
 import { Sheet } from '@/components/sheet';
@@ -11,8 +11,8 @@ import { useLiveLobby, type LiveLobbyProps, type LiveLobbyModel, type Filter } f
 export function LiveLobbyClient(props: LiveLobbyProps) {
   const model = useLiveLobby(props);
   const viewport = useViewport();
-  const [creating, setCreating] = useState(false);
-  useEffect(() => { if (viewport === 'desktop') setCreating(false); }, [viewport]);
+  const { creating, setCreating } = model;
+  useEffect(() => { if (viewport === 'desktop') setCreating(false); }, [viewport, setCreating]);
   return <>
     {!viewport ? <ViewportSkeleton /> : viewport === 'desktop' ? <DesktopLiveLobby model={model} /> : <MobileLiveLobby model={model} onCreate={() => setCreating(true)} />}
     <Sheet open={creating && viewport === 'mobile'} onClose={() => setCreating(false)} title="我的直播间"><CreateRoomPanel model={model} /></Sheet>
@@ -67,12 +67,12 @@ function LobbyDirectory({ model }: { model: LiveLobbyModel }) {
 }
 
 function CreateRoomPanel({ model }: { model: LiveLobbyModel }) {
-  const { roomsQuery, ownedRooms, ownedRoom, title, setTitle, isCreating, createdRoom, error, setError, titleRef, isMutating, createRoom, isLoggedIn } = model;
+  const { roomsQuery, ownedRooms, ownedRoom, title, setTitle, isCreating, createdRoomId, error, setError, titleRef, isMutating, createRoom, isLoggedIn } = model;
   return (      <aside className="live-create-panel">
         <div className="live-create-icon"><LiveIcon name="video" size={24} /></div>
         <h2>{ownedRoom ? '我的直播间' : '创建直播间'}</h2><p>{ownedRoom ? '每个账号同时只能保留一个直播间。' : '给房间起个名字，邀请大家来聊聊。'}</p>
         {ownedRoom ? <>
-          <div className="live-created" role="status"><span><LiveIcon name="check" size={16} />{createdRoom?.id === ownedRoom.id ? '直播间已创建' : '你已有直播间'}</span><strong>{ownedRoom.title}</strong></div>
+          <div className="live-created" role="status"><span><LiveIcon name="check" size={16} />{createdRoomId === ownedRoom.id ? '直播间已创建' : '你已有直播间'}</span><strong>{ownedRoom.title}</strong></div>
           <Link href={`/live/${encodeURIComponent(ownedRoom.id)}`} className="live-button live-button-primary live-create-button">进入我的直播间<LiveIcon name="arrow" size={16} /></Link>
           <p className="live-create-hint">{ownedRooms.length > 1 ? `你已有 ${ownedRooms.length} 个旧房间，请在列表中关闭多余房间。` : '关闭当前直播间后，才能创建新的房间。'}</p>
           {error && <p role="alert" className="live-form-error">{error}</p>}
