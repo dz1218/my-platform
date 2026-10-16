@@ -228,6 +228,8 @@
 .live-viewer-call-footnote svg { flex-shrink: 0; margin-top: 3px; }
 @media (max-width: 599px) {
   .live-viewer-call { padding: 15px; }
+  /* Reserve space for the host's camera action above the caller thumbnail. */
+  .live-stage:has(.live-stage-media.has-call .is-main .live-button-stage) { min-height: 390px; }
   .live-camera-pane.is-small { right: 10px; bottom: 10px; width: 120px; }
   .live-stage-media.has-call .live-camera-pane.is-main .live-stage-empty { bottom: 96px; }
   .live-stage-media.has-call .live-camera-pane.is-main .live-stage-symbol { width: 48px; height: 48px; margin-bottom: 12px; flex-shrink: 0; }

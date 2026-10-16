@@ -136,6 +136,7 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
         await caller.page.getByRole('button', { name: '切换大小画面', exact: true }).click();
       }
       await host.setViewportSize({ width: 390, height: 980 });
+      await host.getByRole('button', { name: '关闭连麦管理', exact: true }).click();
       await host.getByRole('button', { name: '关闭摄像头', exact: true }).click();
       const openCamera = host.getByRole('button', { name: '打开画面', exact: true });
       await expect(openCamera).toBeVisible();
@@ -153,6 +154,7 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
         await expect(pane(page, '主播画面').locator('video')).toBeVisible();
       }
       await caller.page.getByRole('button', { name: '申请连麦', exact: true }).click();
+      await host.getByRole('button', { name: /^连麦/ }).click();
       await host.getByRole('button', { name: '同意连麦', exact: true }).click();
       await expectMain(caller.page, '主播画面');
     } finally {

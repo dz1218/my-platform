@@ -250,14 +250,20 @@ test('collapsing the sidebar resizes the chat overlay without reconnecting or lo
 test('notice stays on the account page, restores scroll and adapts between modal and bottom sheet', async ({ page }, testInfo) => {
   for (const width of [320, 390, 768, 1440]) {
     const height = 844;
-    await page.setViewportSize({ width, height });
+    // The notice lives in the account menu. Open it on desktop, then verify
+    // that the same mounted dialog adapts to each viewport.
+    await page.setViewportSize({ width: 1440, height });
     await page.goto('/me');
-    const trigger = page.locator('#main-content').getByRole('button', { name: /平台互动说明/ });
-    await trigger.scrollIntoViewIfNeeded();
+    const trigger = page.getByRole('button', { name: /账户与身份 ·/ });
+    const openNotice = async () => {
+      await trigger.click();
+      await page.getByRole('navigation', { name: '账户与身份', exact: true }).getByRole('button', { name: '平台互动说明', exact: true }).click();
+    };
     const scroll = await page.evaluate(() => window.scrollY);
-    await trigger.click();
+    await openNotice();
     const dialog = page.getByRole('dialog', { name: '平台互动说明' });
     await expect(dialog).toBeVisible();
+    await page.setViewportSize({ width, height });
     await expect(page).toHaveURL('/me');
     await expect(dialog.getByRole('button', { name: '关闭平台互动说明' })).toBeFocused();
     await expect(dialog.getByRole('heading', { name: '继承者可以查看这个角色的聊天历史' })).toBeVisible();
@@ -303,15 +309,16 @@ test('notice stays on the account page, restores scroll and adapts between modal
       await page.keyboard.press('Tab');
     }
     await expect(dialog.getByRole('button', { name: '关闭平台互动说明' })).toBeFocused();
+    await page.setViewportSize({ width: 1440, height });
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
     expect(await page.evaluate(() => window.scrollY)).toBe(scroll);
-    await trigger.click();
+    await openNotice();
     await page.mouse.click(2, 2);
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
-    await trigger.click();
+    await openNotice();
     await dialog.getByRole('button', { name: '我知道了' }).click();
     await expect(dialog).toBeHidden();
   }
