@@ -9,7 +9,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useAuthExit } from '@/features/auth/auth-exit-transition';
 import { useAppUI } from '@/stores/provider';
 import { useBrowseNavigation } from '@/components/browse-navigation';
-import { CompanionHeading, CompanionScene, CompanionTabs, CompanionLoadingContent } from './companion-frame';
+import { CompanionHeading, CompanionScene, CompanionLoadingContent } from './companion-frame';
 import { RecentConversationsFrame } from './recent-conversations-frame';
 import { useViewport } from '@/components/use-viewport';
 import { Avatar } from '@/features/identity/avatar';
@@ -19,6 +19,8 @@ import { IdentityMasonry } from '@/features/catalog/identity-masonry';
 import { FriendCard } from './friend-card';
 import { useCompanionHome, type CompanionModel } from './use-companion-home';
 import type { Identity } from '@/types/companion';
+import { MobileCompanionHeading, MobileCompanionTabs, MobileRecentConversations, MobileConversationSummary, MobileConversationEmpty, MobileCatalogSkeleton } from '@my-platform/mobile-web/companion';
+import { MobileFriendCardAdapter } from './friend-card';
 
 type Tab = 'recent' | 'discover';
 export function CompanionHome({ accountId, inheritedIdentity }: { accountId: string | null; inheritedIdentity?: Identity | null }) {
@@ -56,7 +58,7 @@ export function CompanionHome({ accountId, inheritedIdentity }: { accountId: str
   };
   if (!viewport) return <main id={model.paused ? undefined : 'main-content'} tabIndex={-1} className="page-shell page-content"><CompanionLoadingContent tab={tab} /></main>;
   return <main id={model.paused ? undefined : 'main-content'} tabIndex={-1} className="page-shell page-content">
-    <CompanionHeading mobile={viewport === 'mobile'} actions={!model.isLoggedIn && viewport === 'mobile' && <Link href="/login" className="btn-secondary">登录 / 注册</Link>} />
+    {viewport === 'mobile' ? <MobileCompanionHeading actions={!model.isLoggedIn && <Link href="/login" className="btn-secondary">登录 / 注册</Link>} /> : <CompanionHeading />}
     {inheritedIdentity && <IdentityModeSwitch identity={inheritedIdentity} />}
     {model.error && <div role="alert" className="mb-6 flex items-center justify-between gap-4 rounded-control border border-danger-line bg-danger-soft p-4 text-sm text-danger"><span>{model.error.message}</span><button className="min-h-11 shrink-0 hover:text-danger-hover" onClick={model.retry}>重试</button></div>}
     {viewport === 'desktop' ? <DesktopCompanion model={model} /> : <MobileCompanion model={model} tab={tab} chooseTab={chooseTab} />}
@@ -72,11 +74,8 @@ function DesktopCompanion({ model }: { model: CompanionModel }) {
 
 function MobileCompanion({ model, tab, chooseTab }: { model: CompanionModel; tab: Tab | null; chooseTab: (tab: Tab) => void }) {
   return <>
-    <CompanionTabs tab={tab} onSelect={chooseTab} />
-    {!tab ? model.conversations.isError ? <p className="empty-state">暂时无法加载聊天，请重试或选择发现朋友。</p> : <ConversationSkeleton /> : tab === 'recent' ? <RecentConversations model={model} onDiscover={() => chooseTab('discover')} mobile /> : <>
-      <CompanionScene mobile />
-      <Discovery model={model} mobile />
-    </>}
+    <MobileCompanionTabs tab={tab} onSelect={chooseTab} />
+    {!tab ? model.conversations.isError ? <p className="empty-state">暂时无法加载聊天，请重试或选择发现朋友。</p> : <ConversationSkeleton /> : tab === 'recent' ? <MobileRecent model={model} onDiscover={() => chooseTab('discover')} /> : <Discovery model={model} mobile />}
   </>;
 }
 
@@ -87,11 +86,17 @@ function Discovery({ model: m, mobile = false }: { model: CompanionModel; mobile
     <div ref={m.heading} className="section-heading"><h2 id="discover-heading" className="text-base font-semibold">这里的朋友</h2><div className="flex items-center gap-3"><span className="text-xs font-normal text-muted">{m.page ? `${m.page.total} 位朋友` : '按自己的节奏来'}</span><button type="button" aria-label="刷新人物目录" title="刷新人物目录" disabled={m.identities.isFetching} onClick={() => void m.identities.refetch()} className="grid size-11 place-items-center rounded-control text-muted hover:bg-surface-hover hover:text-ink disabled:opacity-50"><RefreshCw aria-hidden="true" className={`size-4 ${m.identities.isFetching ? 'motion-safe:animate-spin' : ''}`} /></button></div></div>
     <Filters value={m.filters} occupations={m.page?.occupations ?? []} onChange={m.applyFilters} />
     {m.identities.isError && !m.identities.isFetchNextPageError && <div role="alert" className="my-4 flex items-center justify-between gap-4 rounded-control border border-danger-line bg-danger-soft p-4 text-sm text-danger"><span>{m.identities.data ? '人物目录更新失败，已保留上次内容。' : '人物目录暂时加载失败。'}{m.identities.error.message}</span><button type="button" disabled={m.identities.isFetching} className="min-h-11 shrink-0 hover:text-danger-hover disabled:opacity-50" onClick={() => void m.identities.refetch()}>重试</button></div>}
-    {m.identities.isPending && <CatalogSkeleton />}
+    {m.identities.isPending && (mobile ? <MobileCatalogSkeleton /> : <CatalogSkeleton />)}
     {!m.identities.isPending && !m.identities.error && m.friends.length === 0 && <p className="empty-state">没有找到符合条件的朋友，试试其他筛选条件。</p>}
-    <IdentityMasonry items={m.friends} context={m.cardContext} ItemContent={FriendCard} paused={m.paused} autoLoad={!restorationPending && !m.identities.isRefetchError} singleColumn={mobile} hasNextPage={m.identities.hasNextPage} loading={m.identities.isFetchingNextPage} error={m.identities.isFetchNextPageError ? m.identities.error : null} loadMore={m.loadMore} />
+    <IdentityMasonry items={m.friends} context={m.cardContext} ItemContent={mobile ? MobileFriendCardAdapter : FriendCard} paused={m.paused} autoLoad={!restorationPending && !m.identities.isRefetchError} singleColumn={mobile} hasNextPage={m.identities.hasNextPage} loading={m.identities.isFetchingNextPage} error={m.identities.isFetchNextPageError ? m.identities.error : null} loadMore={m.loadMore} />
     <p className="mt-6 max-w-prose text-xs leading-6 text-muted">这里的 AI 身份可能由真实用户参与互动。<Link href="/privacy" className="ml-1 text-accent hover:text-ink">了解互动方式</Link></p>
   </section>;
+}
+
+function MobileRecent({ model: m, onDiscover }: { model: CompanionModel; onDiscover: () => void }) {
+  return <MobileRecentConversations count={m.recent?.length} showRefresh={m.isLoggedIn} refreshing={m.conversations.isFetching} onRefresh={() => void m.conversations.refetch()} footer={<><Link href="/live" className="link-muted inline-flex min-h-11 items-center">看看直播</Link><Link href="/novels" className="link-muted inline-flex min-h-11 items-center">读本小说</Link></>}>
+    {!m.isLoggedIn ? <MobileConversationEmpty guest action={<Link href="/login" className="btn-secondary">登录后聊天</Link>} /> : m.conversations.isPending ? <ConversationSkeleton /> : m.recent?.length ? <ul className="divide-y divide-line">{m.recent.map(match => <li key={match.id} data-browse-anchor={`match:${match.id}`}><MatchLink match={match} scroll={false} onClick={m.prepareChat} className="flex min-w-0 items-center gap-3 rounded-control py-5 transition-colors hover:bg-surface-soft"><MobileConversationSummary identity={match.identity} /></MatchLink></li>)}</ul> : !m.conversations.error && <MobileConversationEmpty guest={false} action={<button type="button" className="btn-secondary" onClick={onDiscover}>认识朋友</button>} />}
+  </MobileRecentConversations>;
 }
 
 function RecentConversations({ model: m, onDiscover, mobile = false }: { model: CompanionModel; onDiscover: () => void; mobile?: boolean }) {

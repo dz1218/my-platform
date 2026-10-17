@@ -2,6 +2,12 @@ import { MatchLink } from '@/features/chat/match-link';
 import { Avatar } from '@/features/identity/avatar';
 import type { Identity } from '@/types/companion';
 import type { CardContext } from './use-companion-home';
+import { MobileFriendCard } from '@my-platform/mobile-web/companion';
+
+export function MobileFriendCardAdapter({ data: identity, index, context }: { data: Identity; index: number; context: CardContext }) {
+  const known = context.known.get(identity.id);
+  return <MobileFriendCard identity={identity} index={index} action={known ? <MatchLink match={known} scroll={false} onClick={context.prepareChat} className="btn-secondary">继续聊天<span className="sr-only">，和{identity.name}</span></MatchLink> : <button aria-label={`和${identity.name}打个招呼`} disabled={context.busy} onClick={() => context.meet(identity.id)} className="btn-primary">{context.pendingId === identity.id ? '正在连接…' : '打个招呼'}</button>} />;
+}
 
 export function FriendCard({ data: identity, index, context }: { data: Identity; index: number; context: CardContext }) {
   const known = context.known.get(identity.id);

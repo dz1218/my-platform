@@ -8,6 +8,9 @@ import { useCurrentAccount } from './use-current-account';
 import { useAccountLifecycle } from './account-lifecycle';
 import { ProfileContent } from './profile-content';
 import { ProfileFrame } from './profile-frame';
+import { InteractionNoticeTrigger } from '@/components/interaction-notice-dialog';
+import { SubmitButton } from '@/components/submit-button';
+import { logoutAction } from '@/lib/actions';
 
 export function ProfilePage() {
   const user = useCurrentAccount();
@@ -34,5 +37,9 @@ export function ProfilePage() {
     <p className="mt-1 text-xs leading-6 text-muted">{user.inheritedIdentity ? `AI 身份 · ${user.inheritedIdentity.name}` : '本账户'}</p>
   </>}>
     <ProfileContent accountId={user.id} identity={user.inheritedIdentity} />
+    <footer className="mt-6 flex items-center justify-between gap-3 border-t border-line/60 pt-4 md:hidden">
+      <InteractionNoticeTrigger className="inline-flex min-h-11 items-center rounded-control px-2 text-xs text-muted hover:bg-surface-soft hover:text-ink">平台互动说明</InteractionNoticeTrigger>
+      <form action={logoutAction}><SubmitButton pendingLabel="正在退出…" className="min-h-11 rounded-control px-3 text-xs text-muted hover:bg-surface-soft hover:text-ink">退出登录</SubmitButton></form>
+    </footer>
   </ProfileFrame>;
 }

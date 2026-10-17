@@ -49,6 +49,18 @@ importers:
 
   apps/web:
     dependencies:
+      '@my-platform/client-core':
+        specifier: workspace:*
+        version: link:../../packages/client-core
+      '@my-platform/mobile-web':
+        specifier: workspace:*
+        version: link:../../packages/mobile-web
+      '@my-platform/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@my-platform/web-ui':
+        specifier: workspace:*
+        version: link:../../packages/web-ui
       '@tanstack/react-query':
         specifier: ^5.90.2
         version: 5.90.2(react@19.1.1)
@@ -105,6 +117,34 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
 
+  packages/client-core:
+    dependencies:
+      '@my-platform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@tanstack/query-core':
+        specifier: ^5.90.2
+        version: 5.90.2
+      zustand:
+        specifier: ^5.0.12
+        version: 5.0.12(@types/react@19.2.13)(react@19.1.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.10.12
+      '@types/react':
+        specifier: ^19.1.10
+        version: 19.2.13
+      react:
+        specifier: 19.1.1
+        version: 19.1.1
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   packages/db:
     dependencies:
       '@prisma/client':
@@ -115,8 +155,67 @@ importers:
         specifier: 6.19.2
         version: 6.19.2(typescript@5.9.3)
 
+  packages/mobile-web:
+    dependencies:
+      '@my-platform/client-core':
+        specifier: workspace:*
+        version: link:../client-core
+      '@my-platform/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@my-platform/web-ui':
+        specifier: workspace:*
+        version: link:../web-ui
+      lucide-react:
+        specifier: ^1.57.0
+        version: 1.57.0(@types/react@19.2.13)(react@19.1.1)
+      react:
+        specifier: ^19.1.1
+        version: 19.1.1
+      react-dom:
+        specifier: ^19.1.1
+        version: 19.1.1(react@19.1.1)
+      zustand:
+        specifier: ^5.0.12
+        version: 5.0.12(@types/react@19.2.13)(react@19.1.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.1.10
+        version: 19.2.13
+      '@types/react-dom':
+        specifier: ^19.1.7
+        version: 19.2.3(@types/react@19.2.13)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   packages/shared:
     devDependencies:
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
+  packages/web-ui:
+    dependencies:
+      cn:
+        specifier: ^0.4.0
+        version: 0.4.0
+      lucide-react:
+        specifier: ^1.57.0
+        version: 1.57.0(@types/react@19.2.13)(react@19.1.1)
+      react:
+        specifier: ^19.1.1
+        version: 19.1.1
+      react-dom:
+        specifier: ^19.1.1
+        version: 19.1.1(react@19.1.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.1.10
+        version: 19.2.13
+      '@types/react-dom':
+        specifier: ^19.1.7
+        version: 19.2.3(@types/react@19.2.13)
       typescript:
         specifier: ^5.9.2
         version: 5.9.3

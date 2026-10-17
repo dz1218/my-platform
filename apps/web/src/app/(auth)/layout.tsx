@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MobileAuthMasthead } from "@my-platform/mobile-web/auth";
 import { RadioMark } from "@/components/radio-mark";
 import { AuthStory } from "@/features/auth/auth-story";
 import { AuthCloseButton } from "@/features/auth/auth-close-button";
@@ -9,7 +10,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="auth-ambient" aria-hidden="true" />
     <div className="auth-frame">
       <AuthCloseButton />
-      <header className="auth-brand-bar"><Link href="/login" className="auth-brand"><RadioMark /><span>Radio Friday</span></Link></header>
+      <MobileAuthMasthead><Link href="/login" className="auth-brand"><RadioMark /><span>Radio Friday</span></Link></MobileAuthMasthead>
       <AuthStory />
       {children}
     </div>

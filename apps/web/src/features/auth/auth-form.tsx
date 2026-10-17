@@ -1,4 +1,5 @@
 "use client";
+import { MobileAuthHeading } from "@my-platform/mobile-web/auth";
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { useStoreInstance } from '@/stores/use-store-instance';
@@ -83,12 +84,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
   return <>
       <section className="auth-panel" aria-labelledby="auth-heading" data-auth-mode={register ? passwordStep ? "profile" : "register" : "login"}>
         <div className="auth-form-content">
-          {register && <ol className="auth-mobile-progress" aria-label="注册进度">
-            <li aria-current={!passwordStep ? "step" : undefined} data-complete={passwordStep}><span>1</span>验证手机</li>
-            <li aria-current={passwordStep ? "step" : undefined}><span>2</span>完善资料</li>
-          </ol>}
-          <h1 id="auth-heading" ref={stepHeading} tabIndex={-1}><span className="auth-desktop-heading">{register ? passwordStep ? "为相遇，设置一把钥匙。" : "从一句你好开始。" : "欢迎回到你的频率。"}</span><span className="auth-mobile-heading">{register ? passwordStep ? "认识一下你。" : "从一句你好开始。" : "欢迎回来。"}</span></h1>
-          {passwordStep && <p className="auth-mobile-profile-intro">最后一步，设置你的资料和登录密码。</p>}
+          <h1 id="auth-heading" ref={stepHeading} tabIndex={-1}><span className="auth-desktop-heading">{register ? passwordStep ? "为相遇，设置一把钥匙。" : "从一句你好开始。" : "欢迎回到你的频率。"}</span><MobileAuthHeading register={register} passwordStep={passwordStep} /></h1>
           {!passwordStep && <p className="auth-intro">{register ? "留一点时间，听听彼此的日常。" : "登录 Radio Friday，接着上次没聊完的故事。"}</p>}
           <form action={register && !passwordStep ? verify : formAction} onSubmit={submitCredentials} className="auth-form" key={passwordStep ? "password" : "phone"}>
             <fieldset disabled={pending || verifying}>

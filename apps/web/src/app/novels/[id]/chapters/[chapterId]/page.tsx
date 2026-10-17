@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { MobileReadingNavigation } from "@my-platform/mobile-web/reading";
+import { ChevronLeft, ChevronRight, List } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getChapter } from "@/services/novels";
 import { getAuthUserId } from "@/lib/auth";
@@ -16,11 +18,12 @@ export default async function ChapterReadPage({
   const isAuthor = userId === chapter.novel.authorId;
   if (!chapter.published && !isAuthor) notFound();
 
-  const index = chapter.novel.chapters.findIndex(
+  const visibleChapters = isAuthor ? chapter.novel.chapters : chapter.novel.chapters.filter(item => item.published);
+  const index = visibleChapters.findIndex(
     (item) => item.id === chapterId,
   );
-  const prevChapter = chapter.novel.chapters[index - 1];
-  const nextChapter = chapter.novel.chapters[index + 1];
+  const prevChapter = visibleChapters[index - 1];
+  const nextChapter = visibleChapters[index + 1];
 
   // Split content into paragraphs
   const paragraphs = chapter.content
@@ -28,12 +31,12 @@ export default async function ChapterReadPage({
     .filter((line) => line.trim().length > 0);
 
   return (
-    <main id="main-content" tabIndex={-1} className="page-reading page-content min-h-dvh bg-reading">
+    <main id="main-content" tabIndex={-1} className="page-reading page-content min-h-dvh bg-reading pb-[calc(88px+env(safe-area-inset-bottom))] md:pb-12">
       {/* Header */}
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-8 flex items-center justify-between gap-4 md:mb-5">
         <Link
           href={`/novels/${id}`}
-          className="link-muted inline-flex min-h-11 items-center gap-1.5"
+          className="link-muted inline-flex min-h-11 min-w-0 items-center gap-1.5"
         >
           <svg
             aria-hidden="true"
@@ -48,13 +51,13 @@ export default async function ChapterReadPage({
           >
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
-          {chapter.novel.title}
+          <span className="truncate">{chapter.novel.title}</span>
         </Link>
 
         {isAuthor && (
           <Link
             href={`/novels/${id}/chapters/${chapterId}/edit`}
-            className="link-muted"
+            className="link-muted shrink-0"
           >
             编辑此章
           </Link>
@@ -62,7 +65,7 @@ export default async function ChapterReadPage({
       </div>
 
       {/* Chapter title */}
-      <div className="mb-10">
+      <div className="mb-10 pt-3 md:pt-0">
         <p className="mb-1.5 text-xs font-bold tracking-[0.08em] text-accent">
           第 {chapter.orderIndex} 章
         </p>
@@ -97,7 +100,7 @@ export default async function ChapterReadPage({
       </article>
 
       {/* Prev / Next navigation */}
-      <div className="sticky bottom-0 flex items-stretch gap-3 border-t border-line bg-reading py-4 pb-[max(16px,env(safe-area-inset-bottom))]">
+      <div className="sticky bottom-0 hidden items-stretch md:flex gap-3 border-t border-line bg-reading py-4 pb-[max(16px,env(safe-area-inset-bottom))]">
         {prevChapter ? (
           <Link
             href={`/novels/${id}/chapters/${prevChapter.id}`}
@@ -162,6 +165,11 @@ export default async function ChapterReadPage({
           <div className="flex-1" />
         )}
       </div>
+      <MobileReadingNavigation
+        previous={prevChapter && <Link href={`/novels/${id}/chapters/${prevChapter.id}`}><ChevronLeft aria-hidden="true" className="size-4" />上一章</Link>}
+        contents={<Link href={`/novels/${id}#chapters`}><List aria-hidden="true" className="size-4" />目录</Link>}
+        next={nextChapter && <Link href={`/novels/${id}/chapters/${nextChapter.id}`}>下一章<ChevronRight aria-hidden="true" className="size-4" /></Link>}
+      />
     </main>
   );
 }

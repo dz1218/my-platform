@@ -130,7 +130,7 @@ test('other conversations update recent order while home stays visible without H
   await expect(page).toHaveURL('/companion');
   const connections = state.accountConnections();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('section[aria-labelledby="recent-heading"] li').first()).toContainText('苏禾');
+  await expect(page.getByRole('region', { name: '接着上次的故事', exact: true }).getByRole('listitem').first()).toContainText('苏禾');
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(recent.first()).toContainText('苏禾');
   expect(state.accountConnections()).toBe(connections);

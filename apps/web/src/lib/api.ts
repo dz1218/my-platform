@@ -1,13 +1,8 @@
 import { serverFetch } from '@/services/api/server';
 import { check } from '@/services/api/client';
 
-export type ApiRoomItem = {
-  id: string;
-  title: string;
-  status: '直播中' | '准备中';
-  viewers: number;
-  canManage: boolean;
-};
+import type { ApiRoomItem } from '@my-platform/shared';
+export type { ApiRoomItem } from '@my-platform/shared';
 
 export async function fetchRooms() {
   try {

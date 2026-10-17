@@ -6,6 +6,10 @@ import { useViewport } from '@/components/use-viewport';
 import { LiveIcon } from './live-icon';
 import { useLiveLobby, type LiveLobbyProps, type LiveLobbyModel } from './use-live-lobby';
 import { DesktopLiveLobbyFrame, MobileLiveLobbyFrame, LiveDirectoryFrame, LiveCreatePanelFrame, LiveLobbyLoadingContent, LiveDirectorySkeleton } from './live-lobby-frame';
+import { MobileLiveDirectory, MobileCreateRoomPanel } from '@my-platform/mobile-web/live-lobby';
+import type { ReactNode } from 'react';
+
+const renderMobileLink = (href: string, children: ReactNode, className: string) => <Link href={href} className={className}>{children}</Link>;
 
 export function LiveLobbyClient(props: LiveLobbyProps) {
   const model = useLiveLobby(props);
@@ -14,7 +18,7 @@ export function LiveLobbyClient(props: LiveLobbyProps) {
   useEffect(() => { if (viewport === 'desktop') setCreating(false); }, [viewport, setCreating]);
   return <>
     {!viewport ? <LiveLobbyLoadingContent /> : viewport === 'desktop' ? <DesktopLiveLobby model={model} /> : <MobileLiveLobby model={model} onCreate={() => setCreating(true)} />}
-    <Sheet open={creating && viewport === 'mobile'} onClose={() => setCreating(false)} title="我的直播间"><CreateRoomPanel model={model} /></Sheet>
+    <Sheet open={creating && viewport === 'mobile'} onClose={() => setCreating(false)} title="我的直播间"><MobileCreateRoomPanel ownedRoom={model.ownedRoom} ownedCount={model.ownedRooms.length} createdRoomId={model.createdRoomId} title={model.title} onTitle={value => { model.setTitle(value); model.setError(null); }} inputRef={model.titleRef} isLoggedIn={model.isLoggedIn} pending={model.roomsQuery.isPending} failed={model.roomsQuery.isError} isMutating={model.isMutating} isCreating={model.isCreating} error={model.error} onCreate={() => void model.createRoom()} renderLink={renderMobileLink} /></Sheet>
     <CloseRoomDialog model={model} />
   </>;
 }
@@ -22,8 +26,8 @@ function DesktopLiveLobby({ model }: { model: LiveLobbyModel }) {
   return <DesktopLiveLobbyFrame directory={<LobbyDirectory model={model} />} roomPanel={<CreateRoomPanel model={model} />} />;
 }
 function MobileLiveLobby({ model, onCreate }: { model: LiveLobbyModel; onCreate: () => void }) {
-  return <MobileLiveLobbyFrame liveCount={model.liveCount} actions={model.ownedRoom ? <Link href={`/live/${encodeURIComponent(model.ownedRoom.id)}`} className="btn-primary">我的直播间</Link> : model.isLoggedIn ? <button type="button" onClick={onCreate} className="btn-primary">开播</button> : <Link href="/login" className="btn-secondary">登录开播</Link>}>
-    <LobbyDirectory model={model} />
+  return <MobileLiveLobbyFrame liveCount={model.roomsQuery.isPending ? undefined : model.liveCount} actions={model.roomsQuery.isPending ? <button type="button" className="btn-primary" disabled>我的直播间</button> : model.ownedRoom ? <Link href={`/live/${encodeURIComponent(model.ownedRoom.id)}`} className="btn-primary">我的直播间</Link> : model.isLoggedIn ? <button type="button" onClick={onCreate} className="btn-primary">开播</button> : <Link href="/login" className="btn-secondary">登录开播</Link>}>
+    <MobileLiveDirectory rooms={model.visibleRooms} total={model.rooms.length} liveCount={model.roomsQuery.isPending ? undefined : model.liveCount} search={model.search} filter={model.filter} loading={model.roomsQuery.isPending} refreshing={model.roomsQuery.isFetching} refreshDisabled={model.isMutating} error={model.roomsQuery.error?.message} isLoggedIn={model.isLoggedIn} isMutating={model.isMutating} onSearch={model.setSearch} onFilter={model.setFilter} onRefresh={() => void model.roomsQuery.refetch()} onCloseRoom={room => { model.setCloseError(null); model.setRoomToClose(room); }} renderLink={renderMobileLink} />
   </MobileLiveLobbyFrame>;
 }
 

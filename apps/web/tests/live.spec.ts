@@ -246,13 +246,23 @@ for (const { host, status } of entryScenarios) {
 test('room cards fit mobile and desktop widths', async ({ page, context }) => {
   await login(context);
   await lobby(page, [{ ...room, title: '一段很长的直播间标题'.repeat(5) }]);
+  const waitForPresentation = async (width: number) => {
+    // The viewport event commits a different presentation; the old article can
+    // still be visible for one frame immediately after setViewportSize.
+    await expect(page.getByRole('heading', { name: width < 768 ? '直播' : '直播大厅', exact: true, level: 1 })).toBeVisible();
+  };
   for (const width of [375, 844, 1440]) {
     await page.setViewportSize({ width, height: 900 });
+    await waitForPresentation(width);
     await expect(page.getByRole('article')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    const enter = await page.getByRole('link', { name: '进入直播间', exact: true }).boundingBox();
-    const close = await page.getByRole('button', { name: /^关闭直播间/ }).boundingBox();
-    expect(Math.abs(enter!.y - close!.y)).toBeLessThanOrEqual(2);
+    await expect.poll(async () => {
+      const [enter, close] = await Promise.all([
+        page.getByRole('link', { name: '进入直播间', exact: true }).boundingBox(),
+        page.getByRole('button', { name: /^关闭直播间/ }).boundingBox(),
+      ]);
+      return enter && close ? Math.abs(enter.y - close.y) : Infinity;
+    }).toBeLessThanOrEqual(2);
   }
   await lobby(page, [
     { ...room, title: '下班了，一起聊聊今天', status: '直播中', viewers: 8 },
@@ -261,6 +271,7 @@ test('room cards fit mobile and desktop widths', async ({ page, context }) => {
   ]);
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 980 });
+    await waitForPresentation(width);
     await page.screenshot({ path: test.info().outputPath(`lobby-${width}.png`), fullPage: width > 500 });
   }
 });

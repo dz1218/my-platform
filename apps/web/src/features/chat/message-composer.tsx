@@ -1,5 +1,6 @@
 "use client";
 import { useRef } from "react";
+import { MobileMessageComposer } from "@my-platform/mobile-web/chat";
 import { useViewport } from '@/components/use-viewport';
 import { useChatUI } from "@/stores/provider";
 import { chatSelectors } from "@/stores/chat";
@@ -36,6 +37,8 @@ export function MessageComposer({
       inFlight.current = false;
     }
   }
+  if (viewport === 'mobile') return <MobileMessageComposer name={name} draft={draft} sending={sending} disabled={disabled}
+    onChange={value => { setDraft(matchId, value); onTyping?.(); }} onSend={() => void submit()} />;
   return (
     <form
       onSubmit={(event) => {

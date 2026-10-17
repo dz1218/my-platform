@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { MobileChatHeader } from "@my-platform/mobile-web/chat";
 import { LoadingPlaceholder } from '@/components/page-skeleton';
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
@@ -109,7 +110,15 @@ export function Conversation({
           : `和${match.identity.name}的聊天`
       }
     >
-      <header className="flex items-center gap-2.5 border-b border-line bg-panel px-3.5 py-3 sm:py-2.5">
+      <MobileChatHeader
+        back={<ChatBack intercepted={intercepted} operator={operator} aria-label={operator ? "返回我的 AI 身份" : "返回陪伴"} className="grid size-11 shrink-0 place-items-center rounded-full text-2xl text-muted hover:bg-surface-soft hover:text-ink">←</ChatBack>}
+        name={operator ? `与${participantName ?? "用户"}的对话` : match.identity.name}
+        avatar={match.identity.name.slice(-1)}
+        description={operator ? `以${match.identity.name}的身份回复` : `${match.identity.occupation ? `${match.identity.occupation} · ` : ""}当前使用本账户 · 对话可能由 AI 与真人共同参与`}
+        canManage={canManage}
+        onSettings={() => settingsDialog.current?.showModal()}
+      />
+      <header className="hidden items-center gap-2.5 md:flex border-b border-line bg-panel px-3.5 py-3 sm:py-2.5">
         <ChatBack intercepted={intercepted} operator={operator}
           aria-label={operator ? "返回我的 AI 身份" : "返回陪伴"}
           className="grid h-11 w-11 place-items-center rounded-lg text-2xl text-muted hover:bg-surface-soft hover:text-ink"

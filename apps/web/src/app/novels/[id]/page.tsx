@@ -1,3 +1,5 @@
+import { MobileNovelIntroduction } from '@my-platform/mobile-web/novels';
+import { BookOpen } from 'lucide-react';
 import { BookCover } from '@/features/novels/book-cover';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -39,7 +41,15 @@ export default async function NovelDetailPage({
         </Link>
       </div>
 
-      <div className="mb-10 grid items-start gap-7 md:grid-cols-[180px_minmax(0,1fr)]">
+      <MobileNovelIntroduction cover={<BookCover title={novel.title} author={novel.author.name ?? '匿名'} />} readAction={visibleChapters[0] && <Link href={`/novels/${id}/chapters/${visibleChapters[0].id}`} className="btn-primary"><BookOpen aria-hidden="true" className="size-4" />开始阅读</Link>}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0"><h1 className="wrap-anywhere text-2xl font-semibold leading-9">{novel.title}</h1><p className="mt-3 text-sm text-muted">{novel.author.name ?? '匿名'}</p></div>
+          {isAuthor && <Link href={`/novels/${id}/edit`} className="btn-secondary shrink-0">管理</Link>}
+        </div>
+        <p className="mt-3 text-xs text-muted">{visibleChapters.length} 章 <span className="ml-3">{novel.status === 'completed' ? '已完结' : '连载中'}</span></p>
+        {novel.description && <p className="mt-5 text-sm leading-7 text-muted">{novel.description}</p>}
+      </MobileNovelIntroduction>
+      <div className="mb-10 hidden items-start gap-7 md:grid md:grid-cols-[180px_minmax(0,1fr)]">
         <div className="hidden md:block"><BookCover title={novel.title} author={novel.author.name ?? '匿名'} /></div><div>
         <div className="mb-3 flex items-start justify-between gap-4">
           <div>
@@ -91,7 +101,7 @@ export default async function NovelDetailPage({
       </div>
 
       </div>
-      <div className="mb-5 flex items-center justify-between">
+      <div id="chapters" className="mb-5 flex scroll-mt-6 items-center justify-between">
         <h2 className="text-lg font-bold text-ink">
           章节目录
           <span className="ml-2 text-sm font-normal text-muted">

@@ -4,6 +4,8 @@ import { SceneBanner } from '@/components/scene-banner';
 import { PageHeading } from '@/components/page-heading';
 import { LiveIcon } from './live-icon';
 import '@/app/live/live.css';
+import { MobileLiveLobbyFrame, MobileLiveDirectory } from '@my-platform/mobile-web/live-lobby';
+export { MobileLiveLobbyFrame } from '@my-platform/mobile-web/live-lobby';
 
 type LobbyFilter = '全部' | '直播中' | '准备中';
 
@@ -12,14 +14,6 @@ export function DesktopLiveLobbyFrame({ directory, roomPanel }: { directory: Rea
     <PageHeading title="直播大厅" description="找个感兴趣的房间，让交流现在发生。" />
     <SceneBanner scene="live" title="把心事，调到同一个频率。" description="听一个声音，分享一段日常。总有故事正在发生。" />
     <div className="live-lobby-layout">{directory}{roomPanel}</div>
-  </>;
-}
-
-export function MobileLiveLobbyFrame({ actions, liveCount, children }: { actions: ReactNode; liveCount?: number; children: ReactNode }) {
-  return <>
-    <PageHeading title="直播" description="找一个声音，陪你度过此刻。" actions={actions} />
-    <SceneBanner compact scene="live" title="此刻，有人同频。" description={liveCount ? `${liveCount} 场直播正在进行` : '好话题，等你来开启。'} />
-    {children}
   </>;
 }
 
@@ -81,7 +75,7 @@ export function LiveLobbyLoadingContent() {
       </LiveCreatePanelFrame>} />
     </div>
     <div className="md:hidden">
-      <MobileLiveLobbyFrame actions={<button type="button" className="btn-primary" disabled>我的直播间</button>}>{directory}</MobileLiveLobbyFrame>
+      <MobileLiveLobbyFrame actions={<button type="button" className="btn-primary" disabled>我的直播间</button>}><MobileLiveDirectory rooms={[]} loading /></MobileLiveLobbyFrame>
     </div>
   </>;
 }

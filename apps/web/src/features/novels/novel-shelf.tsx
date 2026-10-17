@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { MobileNovelSummary } from '@my-platform/mobile-web/novels';
+import { useViewport } from '@my-platform/web-ui/use-viewport';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen } from 'lucide-react';
 import { useCurrentAccount } from '@/features/account/use-current-account';
@@ -9,6 +11,7 @@ import { BookCover } from './book-cover';
 import { NovelShelfFrame, NovelShelfSkeleton, novelShelfGridClassName } from './novel-shelf-frame';
 
 export function NovelShelf() {
+  const viewport = useViewport();
   const user = useCurrentAccount();
   const shelf = useQuery(novelShelfQueryOptions());
   const novels = shelf.data?.items;
@@ -22,12 +25,14 @@ export function NovelShelf() {
       <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-[20px] border border-accent-line"><BookOpen aria-hidden="true" size={32} strokeWidth={1.5} /></div>
       <p className="mb-2 text-[17px] font-bold text-muted">暂无小说</p>
       <p className="mx-auto max-w-80 text-sm leading-7 text-muted">{user ? '点击上方「创建小说」开始你的创作之旅。' : '还没有人发布小说，敬请期待。'}</p>
-    </div> : novels && <div className={novelShelfGridClassName}>
-      {novels.map(novel => <Link key={novel.id} data-browse-anchor={`novel:${novel.id}`} href={`/novels/${novel.id}`} className="group min-w-0 rounded-panel outline-offset-4">
+    </div> : novels && <div className={viewport === 'mobile' ? 'divide-y divide-line/60' : novelShelfGridClassName}>
+      {novels.map(novel => <Link key={novel.id} data-browse-anchor={`novel:${novel.id}`} href={`/novels/${novel.id}`} className={viewport === 'mobile' ? 'group flex min-w-0 gap-4 py-5 outline-offset-4 first:pt-0' : 'group min-w-0 rounded-panel outline-offset-4'}>
+        {viewport === 'mobile' ? <MobileNovelSummary title={novel.title} author={novel.author.name ?? '匿名'} chapterCount={novel.chapterCount} completed={novel.status === 'completed'} description={novel.description} /> : <>
         <BookCover title={novel.title} author={novel.author.name ?? '匿名'} />
         <h2 className="mt-4 text-base leading-6 font-semibold group-hover:text-accent">{novel.title}</h2>
         <p className="mt-2 text-xs text-muted">{novel.chapterCount} 章 <span className="ml-2">{novel.status === 'completed' ? '已完结' : '连载中'}</span></p>
         {novel.description && <p className="mt-3 line-clamp-2 text-xs leading-6 text-muted">{novel.description}</p>}
+        </>}
       </Link>)}
     </div>}
   </NovelShelfFrame>;

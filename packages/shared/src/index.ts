@@ -5,3 +5,8 @@ export interface RoomSummary {
   name: string;
   role: RoomRole;
 }
+
+export * from './companion';
+export * from './catalog';
+export * from './live';
+export * from './preferences';

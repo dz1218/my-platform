@@ -4,10 +4,10 @@ import { useStore } from 'zustand';
 import { createCatalogFormStore, catalogSelectors } from '@/stores/catalog';
 import { useStoreInstance } from '@/stores/use-store-instance';
 import type { CatalogFilters as Filters } from '@/services/catalog';
-import { Sheet } from '@/components/sheet';
 import { Select } from '@/components/select';
-import { SlidersHorizontal } from 'lucide-react';
 import { useViewport } from '@/components/use-viewport';
+import { MobileCatalogFilters, MobileCatalogFiltersLoading } from '@my-platform/mobile-web/catalog';
+export { MobileCatalogFilters } from '@my-platform/mobile-web/catalog';
 
 type Props = { value: Filters; occupations: Array<{ code: string; name: string }>; onChange: (value: Filters) => void; compact?: boolean };
 export function CatalogFilters({ value, occupations, onChange, sheet = false, compact = false }: Props & { sheet?: boolean }) {
@@ -23,26 +23,6 @@ export function CatalogFilters({ value, occupations, onChange, sheet = false, co
     <CatalogFilterFields id={id} draft={draft} occupations={occupations} onDraftChange={setDraft} sheet={sheet} />
     <div className={`col-span-2 flex gap-2 ${compact ? 'xl:col-span-1' : 'xl:col-span-4'}`}><button className="btn-primary" type="submit">{sheet ? '应用' : '筛选'}</button><button className={compact ? 'min-h-11 rounded-control px-3 text-sm text-muted hover:bg-surface-soft hover:text-ink' : 'btn-secondary'} type="button" onClick={() => { const reset = resetDraft(sheet ? value.q : ''); if (!sheet) onChange(reset); }}>重置</button></div>
   </form>;
-}
-
-export function MobileCatalogFilters({ value, occupations, onChange }: Props) {
-  const ui = useStoreInstance(() => createCatalogFormStore(value));
-  const open = useStore(ui, catalogSelectors.open);
-  const search = useStore(ui, catalogSelectors.search);
-  const { setOpen, setSearch } = ui.getState();
-  const count = [value.occupationCode, value.ageMin, value.ageMax].filter(Boolean).length;
-  return <>
-    <div className="mb-5 flex items-center gap-2">
-      <form className="flex min-w-0 flex-1 gap-2" role="search" onSubmit={event => { event.preventDefault(); onChange({ ...value, q: search.trim() }); }}>
-        <input aria-label="姓名" type="search" placeholder="搜索名字" value={search} maxLength={80} onChange={event => setSearch(event.target.value)} className="input-field min-w-0" />
-        <button type="submit" className="btn-secondary shrink-0">搜索</button>
-      </form>
-      <button type="button" onClick={() => setOpen(true)} aria-label={`筛选朋友${count ? `，${count} 项条件` : ''}`} className="btn-secondary shrink-0 px-3"><SlidersHorizontal size={18} />{count || null}</button>
-    </div>
-    <Sheet open={open} onClose={() => setOpen(false)} title="筛选朋友">
-      <CatalogFilters sheet value={value} occupations={occupations} onChange={next => { onChange(next); setOpen(false); }} />
-    </Sheet>
-  </>;
 }
 
 export function ResponsiveCatalogFilters(props: Props) {
@@ -65,10 +45,7 @@ function CatalogFilterFields({ id, draft, occupations, onDraftChange, sheet = fa
 /** Disabled controls preserve the directory layout before account/viewport resolution. */
 export function CatalogFiltersLoading({ mobile = false }: { mobile?: boolean }) {
   const id = useId();
-  if (mobile) return <div className="mb-5 flex items-center gap-2">
-    <div className="flex min-w-0 flex-1 gap-2"><input disabled aria-label="姓名" type="search" placeholder="搜索名字" className="input-field min-w-0" /><button disabled type="button" className="btn-secondary shrink-0">搜索</button></div>
-    <button disabled type="button" aria-label="筛选朋友" className="btn-secondary shrink-0 px-3"><SlidersHorizontal size={18} /></button>
-  </div>;
+  if (mobile) return <MobileCatalogFiltersLoading />;
   return <div aria-label="筛选角色" className="mb-5 grid grid-cols-2 gap-3 rounded-panel bg-panel p-4 sm:p-5 xl:grid-cols-4">
     <CatalogFilterFields id={id} draft={{ q: '', occupationCode: '', ageMin: '', ageMax: '' }} occupations={[]} onDraftChange={() => {}} disabled />
     <div className="col-span-2 flex gap-2 xl:col-span-4"><button disabled type="button" className="btn-primary">筛选</button><button disabled type="button" className="btn-secondary">重置</button></div>

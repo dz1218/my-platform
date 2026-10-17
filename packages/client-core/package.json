@@ -1,0 +1,51 @@
+{
+  "name": "@my-platform/client-core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react.ts",
+    "./auth": "./src/auth/index.ts",
+    "./catalog": "./src/catalog/index.ts",
+    "./chat": "./src/chat/index.ts",
+    "./chat/preferences": "./src/chat/preferences/index.ts",
+    "./companion": "./src/companion/index.ts",
+    "./identity": "./src/identity/index.ts",
+    "./live": "./src/live/index.ts",
+    "./live/lobby": "./src/live/lobby/index.ts",
+    "./live/room": "./src/live/room/index.ts",
+    "./chat/conversation": "./src/chat/conversation.ts",
+    "./chat/auto-reply": "./src/chat/auto-reply.ts",
+    "./live/chat": "./src/live/chat.ts",
+    "./live/voice": "./src/live/voice.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@my-platform/shared": "workspace:*",
+    "@tanstack/query-core": "^5.90.2",
+    "zustand": "^5.0.12"
+  },
+  "peerDependencies": {
+    "react": "^19.1.1"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.10",
+    "react": "19.1.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.2"
+  }
+}

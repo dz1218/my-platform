@@ -1,5 +1,7 @@
 @import "tailwindcss" source("../");
 @import "./theme.css";
+@source "../../../../packages/web-ui/src";
+@source "../../../../packages/mobile-web/src";
 
 /* Scoped to closing auth; normal route changes keep their existing behavior. */
 @keyframes auth-view-out {

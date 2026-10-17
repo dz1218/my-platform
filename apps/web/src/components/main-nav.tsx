@@ -1,4 +1,5 @@
 "use client";
+import { MobileNavigation, type MobileNavigationLinkProps } from "@my-platform/mobile-web/navigation";
 import NextLink, { useLinkStatus } from "next/link";
 import { InlineLoading, LoadingPlaceholder } from './page-skeleton';
 import { AccountStartupContent } from './account-startup-content';
@@ -105,6 +106,10 @@ const links = [
   glyph: NavigationGlyphName;
 }[];
 
+function StartupMobileLink(props: MobileNavigationLinkProps) {
+  return <NextLink {...props} prefetch={false} />;
+}
+
 /** Account bootstrap has no business controllers and never pretends to be a guest. */
 export function AppStartup() {
   const path = usePathname();
@@ -135,7 +140,7 @@ export function AppStartup() {
       <div aria-hidden="true" className="shell-ambient" />
       <AccountStartupContent path={path} />
     </div>
-    <nav aria-label="手机主导航" className="mobile-nav">{links.map(({ href, label, icon: Icon }) => <NextLink key={href} href={href} prefetch={false} aria-label={label} aria-current={path.startsWith(href) ? 'page' : undefined} className={cn('nav-item', path.startsWith(href) && 'nav-item-active')}><Icon aria-hidden="true" size={21} /><span>{label}</span></NextLink>)}</nav>
+    <MobileNavigation path={path} Link={StartupMobileLink} />
   </div>;
 }
 
@@ -204,9 +209,7 @@ function AppFrame({
           <InlineLoading label="正在打开页面…" className="min-h-11 py-2" />
         </div>}
       </div>
-      <nav aria-label="手机主导航" className="mobile-nav">
-        <NavigationLinks path={path} />
-      </nav>
+      <MobileNavigation path={path} pendingHref={pendingHref} Link={Link} />
     </div></BrowseNavigationProvider>
   );
 }

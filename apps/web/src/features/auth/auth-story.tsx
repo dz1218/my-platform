@@ -66,7 +66,7 @@ function SceneImage({ index, active, onLoaded }: { index: number; active: boolea
     if (image?.complete && image.naturalWidth) onLoaded(index);
   }, [index, onLoaded]);
   return <picture>
-    <source media="(min-width: 761px)" srcSet={images[index].desktop.srcSet} sizes={images[index].desktop.sizes} />
+    <source media="(min-width: 768px)" srcSet={images[index].desktop.srcSet} sizes={images[index].desktop.sizes} />
     <img {...images[index].mobile} alt="" loading="eager" fetchPriority={active ? 'high' : 'low'}
       ref={imageRef} onLoad={() => onLoaded(index)} />
   </picture>;

@@ -4,6 +4,7 @@ import path from 'path';
 
 const nextConfig = (phase: string): NextConfig => ({
   reactStrictMode: true,
+  transpilePackages: ['@my-platform/shared', '@my-platform/client-core', '@my-platform/web-ui', '@my-platform/mobile-web'],
   // A build must not remove chunks still referenced by the running dev server.
   distDir: process.env.NEXT_BUILD_DIR || (phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next'),
   async rewrites() {

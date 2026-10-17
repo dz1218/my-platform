@@ -6,7 +6,7 @@ import { LiveIcon } from './live-icon';
 import { LiveChat } from './live-chat';
 import { LiveVoiceControls, LiveVoicePanel, LiveViewerCall } from './live-voice';
 import { LiveStageMedia } from './live-stage-media';
-import { Sheet } from '@/components/sheet';
+import { MobileLiveRoomHeader, MobileLiveRoomPanels } from '@my-platform/mobile-web/live-room';
 import { useViewport } from '@/components/use-viewport';
 import { useLiveRoom, type LiveRoomProps, type Role } from './use-live-room';
 
@@ -24,11 +24,15 @@ export function LiveRoomClient(props: LiveRoomProps) {
   const roomTitle = rooms.data?.find(room => room.id === props.roomId)?.title ?? '直播间';
   const { role, isHost, roomNotice, nickname, setNickname, participants, error, setError, isJoining, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, voice, joinRoom, toggleLocalMedia, dispatchAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen } = useLiveRoom(props);
   return <>
-    <div className="live-room-nav"><Link href="/live"><LiveIcon name="back" size={17} />直播大厅</Link><span>{isHost ? '主播工作台' : '直播现场'}</span></div>
+    {viewport === 'mobile' ? <MobileLiveRoomHeader
+      back={<Link href="/live" aria-label="返回直播大厅" className="grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-soft"><LiveIcon name="back" size={21} /></Link>}
+      title={roomTitle} role={role} status={isReconnecting ? '正在重连…' : isConnected ? '已连接' : isJoining ? '连接中' : '未连接'}
+      count={isInRoom ? participants.length : null} onShare={() => void shareRoom()}
+    /> : <><div className="live-room-nav"><Link href="/live"><LiveIcon name="back" size={17} />直播大厅</Link><span>{isHost ? '主播工作台' : '直播现场'}</span></div>
     <header className="live-room-heading">
       <div className="live-room-title"><h1 title={roomTitle}>{roomTitle}</h1><div className="live-room-meta">{role && <RoleBadge role={role} />}<span className={`live-connection ${isConnected ? 'is-connected' : ''}`} role="status"><i />{isReconnecting ? '正在重连…' : isConnected ? '已连接' : isJoining ? '连接中' : '未连接'}</span>{isInRoom && <span><LiveIcon name="users" size={14} />{participants.length} 人在房间</span>}</div></div>
       <button type="button" className="live-button live-button-secondary" onClick={() => void shareRoom()}><LiveIcon name="link" size={16} />分享直播间</button>
-    </header>
+    </header></>}
     {roomNotice && <div role="status" className="live-notice"><LiveIcon name="info" /><p>{roomNotice}</p></div>}
     {notice && <div role="status" className="live-toast"><LiveIcon name="info" size={16} />{notice}</div>}
 
@@ -63,16 +67,16 @@ export function LiveRoomClient(props: LiveRoomProps) {
       </div>
 
       <aside className="live-sidebar" aria-label="直播互动">
-        <div className="live-sidebar-tabs"><button type="button" aria-pressed={sideTab === 'chat'} aria-controls="live-chat-panel" onClick={() => setSideTab('chat')}><LiveIcon name="chat" size={17} />聊天</button><button type="button" aria-pressed={sideTab === 'people'} aria-controls="live-people-panel" onClick={() => setSideTab('people')}><LiveIcon name="users" size={17} />在线 <span>{participants.length}</span></button>{isHost && <button type="button" aria-pressed={sideTab === 'voice'} aria-controls="live-voice-panel" onClick={() => setSideTab('voice')}><LiveIcon name="mic" size={17} />连麦{voice.slot && <span className="live-voice-badge">1</span>}</button>}</div>
+        {viewport !== 'mobile' && <div className="live-sidebar-tabs"><button type="button" aria-pressed={sideTab === 'chat'} aria-controls="live-chat-panel" onClick={() => setSideTab('chat')}><LiveIcon name="chat" size={17} />聊天</button><button type="button" aria-pressed={sideTab === 'people'} aria-controls="live-people-panel" onClick={() => setSideTab('people')}><LiveIcon name="users" size={17} />在线 <span>{participants.length}</span></button>{isHost && <button type="button" aria-pressed={sideTab === 'voice'} aria-controls="live-voice-panel" onClick={() => setSideTab('voice')}><LiveIcon name="mic" size={17} />连麦{voice.slot && <span className="live-voice-badge">1</span>}</button>}</div>}
         <div id="live-chat-panel" className="live-chat-panel" hidden={viewport !== 'mobile' && sideTab !== 'chat'}><LiveChat room={isInRoom ? roomRef.current : null} connected={isConnected} nickname={nickname} visible={viewport === 'mobile' || sideTab === 'chat'} /></div>
-        {viewport === 'mobile' ? <>
-          <Sheet open={sideTab === 'people'} onClose={() => setSideTab('chat')} title="在线成员">
-        <div id="live-people-panel" className="live-people-panel" >
+        {viewport === 'mobile' ? <MobileLiveRoomPanels selected={sideTab} onSelect={setSideTab}
+          participantCount={participants.length} isHost={isHost} hasVoice={!!voice.slot}
+          members={<>        <div id="live-people-panel" className="live-people-panel" >
           <h2>参与者 · {participants.length}</h2>
           {participants.length ? <ul>{participants.map((participant) => <li key={participant.identity}><span className={`live-avatar ${participant.role === '主播' ? 'is-host' : ''}`}>{participant.displayName.slice(0, 1)}</span><span className="live-person-name">{participant.displayName}{participant.isLocal && <small>（我）</small>}</span>{voice.slot?.identity === participant.identity && voice.slot.status === 'approved' ? <span className="live-role is-speaker">连麦观众</span> : <RoleBadge role={participant.role} />}</li>)}</ul> : <div className="live-people-empty"><LiveIcon name="users" size={28} /><p>连接后显示房间成员</p></div>}
-        </div></Sheet>
-          <Sheet open={isHost && sideTab === 'voice'} onClose={() => setSideTab('chat')} title="连麦管理">        {isHost && <div id="live-voice-panel" className="live-voice-container" ><LiveVoicePanel voice={voice} isHost={isHost} connected={isConnected} /></div>}</Sheet>
-        </> : <>        {isHost && <div id="live-voice-panel" className="live-voice-container" hidden={sideTab !== 'voice'}><LiveVoicePanel voice={voice} isHost={isHost} connected={isConnected} /></div>}
+        </div></>}
+          voice={<div id="live-voice-panel" className="live-voice-container"><LiveVoicePanel voice={voice} isHost={isHost} connected={isConnected} /></div>}
+        /> : <>        {isHost && <div id="live-voice-panel" className="live-voice-container" hidden={sideTab !== 'voice'}><LiveVoicePanel voice={voice} isHost={isHost} connected={isConnected} /></div>}
         <div id="live-people-panel" className="live-people-panel" hidden={sideTab !== 'people'}>
           <h2>参与者 · {participants.length}</h2>
           {participants.length ? <ul>{participants.map((participant) => <li key={participant.identity}><span className={`live-avatar ${participant.role === '主播' ? 'is-host' : ''}`}>{participant.displayName.slice(0, 1)}</span><span className="live-person-name">{participant.displayName}{participant.isLocal && <small>（我）</small>}</span>{voice.slot?.identity === participant.identity && voice.slot.status === 'approved' ? <span className="live-role is-speaker">连麦观众</span> : <RoleBadge role={participant.role} />}</li>)}</ul> : <div className="live-people-empty"><LiveIcon name="users" size={28} /><p>连接后显示房间成员</p></div>}

@@ -253,3 +253,47 @@ test('voice actions enforce host controls, serialize requests and discard stale 
   await pending;
   expect(voice.getState()).toMatchObject({ busy: false, error: '', state: { slot: null, hasHost: false } });
 });
+
+
+test('web presentation composition supplies a complete stable SSR snapshot without sharing form state', () => {
+  const services = { sendCode: async () => ({}), verifyCode: async () => ({}) };
+  const form = createAuthFormStore(services);
+  const secondForm = createAuthFormStore(services);
+  const initial = form.getInitialState();
+  expect(form.getState()).toBe(initial);
+  expect(initial).toMatchObject({ phone: '', showPassword: false, noticeOpen: false });
+  expect(initial.setShowPassword).toEqual(expect.any(Function));
+  const changes: boolean[] = [];
+  const unsubscribe = form.subscribe(s => s.showPassword, value => changes.push(value));
+  form.getState().setPhone('13800138000');
+  form.getState().setShowPassword(true);
+  form.getState().setNoticeOpen(true);
+  expect(form.getInitialState()).toBe(initial);
+  expect(initial).toMatchObject({ phone: '', showPassword: false, noticeOpen: false });
+  expect(secondForm.getState()).toMatchObject({ phone: '', showPassword: false, noticeOpen: false });
+  expect(changes).toEqual([true]);
+  unsubscribe();
+  form.getState().setShowPassword(false);
+  expect(changes).toEqual([true]);
+});
+
+test('room reset updates business and presentation atomically and preserves fullscreen ownership', () => {
+  const room = createLiveRoomStore('昵称', { dispatch: async () => {} });
+  const initial = room.getInitialState();
+  expect(initial).toMatchObject({ sideTab: 'chat', isFullscreen: false, sessionVersion: 0 });
+  room.getState().setRole('主播');
+  room.getState().setConnectionState(ConnectionState.Connected);
+  room.getState().setSideTab('voice');
+  room.getState().setIsFullscreen(true);
+  const seen: Array<{ role: string | null; sideTab: string; isFullscreen: boolean }> = [];
+  const unsubscribe = room.subscribe(s => s.sessionVersion, () => {
+    const { role, sideTab, isFullscreen } = room.getState();
+    seen.push({ role, sideTab, isFullscreen });
+  });
+  room.getState().resetSession();
+  expect(seen).toEqual([{ role: null, sideTab: 'chat', isFullscreen: true }]);
+  expect(room.getState().setSideTab).toEqual(expect.any(Function));
+  expect(room.getInitialState()).toBe(initial);
+  expect(initial).toMatchObject({ sideTab: 'chat', isFullscreen: false, sessionVersion: 0 });
+  unsubscribe();
+});

@@ -393,3 +393,14 @@
   .live-sidebar .sheet .live-people-panel { padding: 0; }
   .live-chat-form { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
 }
+
+/* The mobile controls reorder around one persistent stage and chat log. */
+@media (max-width: 767px) {
+  .live-room-page { padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+  .live-room-page .live-stage { min-height: 300px; aspect-ratio: 4 / 3; @apply rounded-scene; }
+  .live-room-page .live-studio { gap: 20px; }
+  .live-room-page .live-sidebar { height: min(580px, 70dvh); min-height: 380px; @apply rounded-scene border-line/60 bg-panel; }
+  .live-room-page .live-control-bar { @apply rounded-panel border-0 bg-surface-soft; }
+  .live-room-page .live-studio-footer { padding-inline: 4px; }
+  .live-room-page .live-stage-empty > p { font-size: 12px; }
+}

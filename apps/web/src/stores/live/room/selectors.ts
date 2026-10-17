@@ -1,4 +1,4 @@
-import { ConnectionState } from 'livekit-client';
+import { RoomConnectionState as ConnectionState } from '@my-platform/shared';
 import type { LiveRoomStore } from './store';
 export const liveRoomSelectors = {
   view: (s: LiveRoomStore) => ({

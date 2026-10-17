@@ -302,7 +302,9 @@ test('mobile auth is compact and desktop retains the scene layout', async ({ pag
     await page.screenshot({ path: `/tmp/radio-friday-app-login-${width}.png`, fullPage: true });
     await verifyPhone(page);
     if (width <= 760) {
-      await expect(page.getByRole('list', { name: '注册进度' }).locator('[aria-current=step]')).toHaveText('2完善资料');
+      await expect(page.getByRole('heading', { name: '认识一下你。', exact: true })).toBeVisible();
+      await expect(page.getByRole('list', { name: '注册进度' })).toHaveCount(0);
+      await expect(page.locator('form.auth-form')).toHaveCount(1);
       expect((await page.getByLabel('昵称', { exact: true }).boundingBox())!.y).toBeLessThan(400);
       await expect(page.getByRole('button', { name: '完成注册', exact: true })).toBeInViewport();
     }

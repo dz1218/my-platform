@@ -1,10 +1,6 @@
-import { createDomainStore } from '@/stores/create-store';
-import { initialIdentityState, type IdentityState } from './initial-state';
-import { createIdentityActions, type IdentityActions, type IdentityDependencies } from './actions';
-
-export type IdentityStore = IdentityState & IdentityActions;
-export function createIdentityStore(dependencies: IdentityDependencies) {
-  return createDomainStore<IdentityStore>()((...args) => ({
-    ...initialIdentityState(), ...createIdentityActions(dependencies)(...args),
-  }));
-}
+import { createIdentityStore as createCoreIdentityStore, type IdentityDependencies as CoreDependencies } from '@my-platform/client-core';
+import { browserIdentityService } from '@/services/core-adapters';
+export type { IdentityStore } from '@my-platform/client-core';
+export type IdentityDependencies = Omit<CoreDependencies, 'service'>;
+export const createIdentityStore = (dependencies: IdentityDependencies) =>
+  createCoreIdentityStore({ ...dependencies, service: browserIdentityService });

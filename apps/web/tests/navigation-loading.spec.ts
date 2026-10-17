@@ -405,6 +405,20 @@ for (const width of [390, 1440]) {
             await expect(tabs.getByRole('button', { name: '发现朋友', exact: true })).toBeDisabled();
             const bounds = (await tabs.boundingBox())!;
             frameBottom = bounds.y + bounds.height;
+          } else if (tab === 'live' && width < 768) {
+            // Mobile opens with room controls rather than the desktop scene.
+            await expect(main.locator('[data-mobile-page="live"]')).toBeVisible();
+            await expect(main.getByRole('region', { name: '深夜电台', exact: true })).toHaveCount(0);
+            await expect(main.getByRole('button', { name: '我的直播间', exact: true })).toBeDisabled();
+            const directory = main.getByRole('region', { name: '直播间列表', exact: true });
+            await expect(directory).toBeVisible();
+            await expect(directory.getByRole('button', { name: '刷新列表', exact: true })).toBeDisabled();
+            for (const name of ['全部', '直播中', '准备中']) {
+              await expect(directory.getByRole('button', { name, exact: true })).toBeDisabled();
+            }
+            await expect(directory.getByRole('button', { name: '全部', exact: true })).toHaveAttribute('aria-pressed', 'true');
+            const bounds = (await directory.getByRole('button', { name: '准备中', exact: true }).boundingBox())!;
+            frameBottom = bounds.y + bounds.height;
           } else {
             const scene = main.getByRole('region', { name: tab === 'companion' ? '温暖陪伴' : tab === 'live' ? '深夜电台' : '故事漫游', exact: true });
             await expect(scene).toBeVisible();
