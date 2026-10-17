@@ -51,7 +51,7 @@ Vercel 前端配 Railway API 时，使用 Railway 公网 HTTPS 地址作为 `COM
 
 部署本次连接协议时，先部署包含 `POST /api/v1/rooms/socket-ticket` 和 `/api/v1/rooms/socket` 的 Go API，再部署前端。仅推送 Git 或看到 `/health` 返回 200，不能确认这两个新接口已经上线。浏览器验证应看到同源连接请求成功、随后直连 Go 的 WebSocket 返回 101，并收到完整快照；断网恢复后应重新获取快照，登录用户和游客的管理权限应分别正确。
 
-现有陪伴聊天 `/ws/conversations/:id` 与匹配列表 `/ws/matches` 仍使用 Next.js rewrite，未随直播连接一起迁移；部署平台必须单独验证这两条链路支持 WebSocket 升级。自托管 Next.js 时，将前端域名反向代理到默认 3011 端口并保留升级头。
+匹配列表和陪伴聊天同样直连 Go：浏览器通过 `POST /api/realtime/connection?kind=matches` 或 `kind=conversation&conversationId=…` 获取短期凭据，连接 `/api/v1/matches/socket` 或 `/api/v1/conversations/:id/socket`。凭据有效期 60 秒，绑定用户、来源及单个 socket 路径，不能用作普通 API 登录凭据；聊天仍检查会话访问权限。先部署包含 `/matches/socket-ticket`、`/conversations/:id/socket-ticket` 的后端，再部署前端。所有三类连接共用服务器端 `COMPANION_WS_URL`，不依赖 Vercel WebSocket rewrite。
 
 LiveKit 媒体流直接在浏览器与 LiveKit 之间传输，需要独立配置 TLS、TCP/UDP 端口和外部 IP。本地可运行 `pnpm livekit:up`；仓库的 LiveKit 开发配置使用 `127.0.0.1`，不适用于公网部署。
 

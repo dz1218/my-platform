@@ -1,3 +1,4 @@
+import { privateSocketURL } from './socket-url';
 import type { Match } from '@/types/companion';
 
 const CONNECT_TIMEOUT = 10_000;
@@ -7,6 +8,7 @@ const HEARTBEAT_TIMEOUT = 45_000;
 
 export class MatchesConnection {
   private socket?: WebSocket;
+  private connecting?: AbortController;
   private retry?: ReturnType<typeof setTimeout>;
   private watchdog?: ReturnType<typeof setTimeout>;
   private attempts = 0;
@@ -20,19 +22,25 @@ export class MatchesConnection {
     this.connect();
   }
 
-  private connect() {
+  private async connect() {
     if (this.stopped || !navigator.onLine) return;
     clearTimeout(this.retry);
     this.retry = undefined;
-    const url = new URL('/ws/matches', window.location.href);
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    const pending = new AbortController();
+    this.connecting = pending;
+    this.lastReceived = Date.now();
+    this.watchdog = setTimeout(() => this.reconnect(), CONNECT_TIMEOUT);
     let socket: WebSocket;
     try {
+      const url = await privateSocketURL('matches', pending.signal);
+      if (this.stopped || this.connecting !== pending) return;
       socket = new WebSocket(url);
     } catch {
-      this.scheduleRetry();
+      if (this.connecting === pending && !this.stopped) this.reconnect();
       return;
     }
+    this.connecting = undefined;
+    clearTimeout(this.watchdog);
     this.socket = socket;
     this.lastReceived = Date.now();
     this.watchdog = setTimeout(() => this.reconnect(), CONNECT_TIMEOUT);
@@ -67,6 +75,8 @@ export class MatchesConnection {
 
   private disconnect() {
     clearTimeout(this.watchdog);
+    this.connecting?.abort();
+    this.connecting = undefined;
     const socket = this.socket;
     this.socket = undefined;
     if (!socket) return;
@@ -91,6 +101,7 @@ export class MatchesConnection {
 
   private resume = () => {
     if (this.stopped || document.visibilityState !== 'visible' || !navigator.onLine) return;
+    if (this.connecting && Date.now() - this.lastReceived < CONNECT_TIMEOUT) return;
     // Background tabs can suspend timers and miss a close event. Keep healthy
     // sockets, but replace dead or stale ones immediately when returning.
     if (this.socket?.readyState === WebSocket.OPEN && Date.now() - this.lastReceived < HEARTBEAT_TIMEOUT) return;

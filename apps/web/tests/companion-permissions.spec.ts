@@ -9,7 +9,7 @@ const settings = { ownerType: 'HUMAN', mode: 'TIMEOUT', delaySeconds: 120, versi
 async function mockChat(page: Page) {
   await page.context().addCookies([{ name: 'companion_session', value: 'inheritance-test-inherited', domain: '127.0.0.1', path: '/' }]);
   let socket: WebSocketRoute | undefined;
-  await page.routeWebSocket('**/ws/conversations/*', (ws) => { socket = ws; });
+  await page.routeWebSocket('**/api/v1/conversations/*/socket?*', (ws) => { socket = ws; });
   await page.route('**/api/v1/matches/permission-match', (route) => route.fulfill({ json: match }));
   await page.route('**/api/v1/operator/conversations', (route) => route.fulfill({ json: { items: [{ ...match, participantName: '聊天用户' }] } }));
   await page.route('**/api/v1/conversations/*/messages', (route) => route.fulfill({ json: { items: [] } }));

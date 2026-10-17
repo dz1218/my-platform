@@ -12,8 +12,8 @@ test('draft survives client navigation but is cleared when logging into a differ
   await page.route('**/api/v1/matches/scope-match', route => route.fulfill({ json: match }));
   await page.route('**/api/v1/conversations/scope-conversation/messages', route => route.fulfill({ json: { items: [] } }));
   await page.route('**/api/v1/conversations/scope-conversation/auto-reply', route => route.fulfill({ json: { ownerType: 'AI', mode: 'ALWAYS', version: 1, canManage: false } }));
-  await page.routeWebSocket('**/ws/conversations/*', () => {});
-  await page.routeWebSocket('**/ws/matches', () => {});
+  await page.routeWebSocket('**/api/v1/conversations/*/socket?*', () => {});
+  await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
 
   await page.goto('/chat/scope-match');
   const input = page.getByRole('textbox', { name: '给状态隔离测试朋友发消息' });

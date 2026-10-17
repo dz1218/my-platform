@@ -214,7 +214,7 @@ test('collapsing the sidebar resizes the chat overlay without reconnecting or lo
   await page.route('**/api/v1/matches/*', route => route.fulfill({ json: match }));
   await page.route('**/api/v1/conversations/*/messages', route => route.fulfill({ json: { items: [] } }));
   await page.route('**/api/v1/conversations/*/auto-reply', route => route.fulfill({ json: { ownerType: 'HUMAN', mode: 'ALWAYS', delaySeconds: 0, version: 1, canManage: false } }));
-  await page.routeWebSocket('**/ws/conversations/*', () => { sockets++; });
+  await page.routeWebSocket('**/api/v1/conversations/*/socket?*', () => { sockets++; });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/companion?view=discover');
   await page.getByRole('link', { name: /继续聊天\s*，和林晚/ }).click();

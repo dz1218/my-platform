@@ -12,7 +12,7 @@ async function setup(page: Page) {
   const accountSockets = new Set<WebSocketRoute>();
   let accountConnections = 0;
   let pongs = 0;
-  await page.routeWebSocket('**/ws/matches', socket => {
+  await page.routeWebSocket('**/api/v1/matches/socket?*', socket => {
     accountConnections++;
     accountSockets.add(socket);
     socket.onClose(() => { accountSockets.delete(socket); });
@@ -33,7 +33,7 @@ async function setup(page: Page) {
   await page.route('**/api/v1/matches/*', route => route.fulfill({ json: match }));
   await page.route('**/api/v1/conversations/*/messages', route => route.fulfill({ json: { items: [] } }));
   await page.route('**/api/v1/conversations/*/auto-reply', route => route.fulfill({ json: { ownerType: 'HUMAN', mode: 'ALWAYS', delaySeconds: 0, version: 1, canManage: false } }));
-  await page.routeWebSocket('**/ws/conversations/*', socket => {
+  await page.routeWebSocket('**/api/v1/conversations/*/socket?*', socket => {
     socket.onMessage(raw => {
       const command = JSON.parse(String(raw));
       if (command.type === 'send') socket.send(JSON.stringify({ type: 'accepted', requestId: command.requestId, message: { id: '101', sender: { id: 'self', name: '我' }, senderType: 'user', source: 'USER', content: command.content, status: 'complete', requestId: command.requestId, createdAt: new Date().toISOString() } }));
@@ -231,7 +231,7 @@ test('WebSocket receives and deduplicates messages, resumes after disconnect, an
   const state = await setup(page);
   const sockets: WebSocketRoute[] = [];
   const active = new Set<WebSocketRoute>();
-  await page.routeWebSocket('**/ws/conversations/*', socket => {
+  await page.routeWebSocket('**/api/v1/conversations/*/socket?*', socket => {
     sockets.push(socket);
     active.add(socket);
     socket.onClose(() => { active.delete(socket); });
@@ -273,7 +273,7 @@ async function startDelayedGreeting(page: Page) {
   const gate = new Promise<void>(resolve => { release = resolve; });
   let started = false;
   let connections = 0;
-  await page.routeWebSocket('**/ws/conversations/*', socket => {
+  await page.routeWebSocket('**/api/v1/conversations/*/socket?*', socket => {
     connections++;
     socket.onClose(() => { connections--; });
   });

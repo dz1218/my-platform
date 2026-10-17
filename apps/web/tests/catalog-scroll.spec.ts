@@ -55,7 +55,7 @@ async function setup(page: Page, inheritance = false) {
   });
   await page.route('**/api/v1/conversations/*/messages', route => route.fulfill({ json: { items: [] } }));
   await page.route('**/api/v1/conversations/*/auto-reply', route => route.fulfill({ json: { ownerType: 'AI', mode: 'ALWAYS', delaySeconds: 0, version: 1, canManage: false } }));
-  await page.routeWebSocket('**/ws/conversations/*', socket => {
+  await page.routeWebSocket('**/api/v1/conversations/*/socket?*', socket => {
     socket.onMessage(raw => {
       const data = JSON.parse(String(raw));
       if (data.type === 'send') socket.send(JSON.stringify({ type: 'accepted', requestId: data.requestId, message: { id: '101', sender: { id: 'user', name: '我' }, senderType: 'user', source: 'USER', content: data.content, status: 'complete', requestId: data.requestId, createdAt: new Date().toISOString() } }));

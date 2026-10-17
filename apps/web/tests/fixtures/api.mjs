@@ -104,6 +104,12 @@ const server = createServer(async (request, response) => {
     }
   }
   const session = request.headers.cookie?.match(/(?:^|;\s*)companion_session=([^;]+)/)?.[1];
+  if (request.method === 'POST' && (url.pathname === '/api/v1/matches/socket-ticket' || /^\/api\/v1\/conversations\/[^/]+\/socket-ticket$/.test(url.pathname))) {
+    if (!session) { response.statusCode = 401; return response.end('{}'); }
+    const ticket = randomUUID();
+    roomSocketTickets.set(ticket, { session, path: url.pathname.replace(/-ticket$/, ''), expires: Date.now() + 60_000 });
+    return response.end(JSON.stringify({ ticket }));
+  }
   if (url.pathname === '/api/v1/rooms/socket-ticket' && request.method === 'POST') {
     for (const [ticket, claims] of roomSocketTickets) {
       if (claims.expires <= Date.now()) roomSocketTickets.delete(ticket);
@@ -237,6 +243,14 @@ const server = createServer(async (request, response) => {
 const roomSocketServer = new WebSocket.Server({ noServer: true });
 server.on('upgrade', (request, socket, head) => {
   const url = new URL(request.url, 'http://127.0.0.1:18181');
+  if (url.pathname === '/api/v1/matches/socket' || /^\/api\/v1\/conversations\/[^/]+\/socket$/.test(url.pathname)) {
+    const claims = roomSocketTickets.get(url.searchParams.get('ticket'));
+    if (!claims || claims.path !== url.pathname || claims.expires <= Date.now()) return socket.destroy();
+    roomSocketServer.handleUpgrade(request, socket, head, client => {
+      client.send(JSON.stringify(url.pathname === '/api/v1/matches/socket' ? { type: 'matches.updated', items: [] } : { type: 'history', page: { items: [] } }));
+    });
+    return;
+  }
   if (url.pathname !== '/api/v1/rooms/socket') return socket.destroy();
   const roomId = url.searchParams.get('roomId');
   const realRoom = process.env.LIVEKIT_INTEGRATION === '1' && roomId?.startsWith('voice-e2e-');

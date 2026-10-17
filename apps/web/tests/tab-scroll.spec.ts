@@ -19,7 +19,7 @@ async function setup(page: Page) {
       occupations: [{ code: 'teacher', name: '教师' }] } });
   });
   await page.route('**/api/v1/matches', route => route.fulfill({ json: { items: [] } }));
-  await page.routeWebSocket('**/ws/matches', socket => { socket.onMessage(() => {}); });
+  await page.routeWebSocket('**/api/v1/matches/socket?*', socket => { socket.onMessage(() => {}); });
   return requests;
 }
 
@@ -153,7 +153,7 @@ test('retaining companion does not retain or duplicate a chat connection', async
   await page.route('**/api/v1/conversations/*/messages', route => route.fulfill({ json: { items: [] } }));
   await page.route('**/api/v1/conversations/*/auto-reply', route => route.fulfill({ json: { ownerType: 'AI', mode: 'ALWAYS', delaySeconds: 0, version: 1, canManage: false } }));
   let connections = 0;
-  await page.routeWebSocket('**/ws/conversations/*', socket => {
+  await page.routeWebSocket('**/api/v1/conversations/*/socket?*', socket => {
     connections++;
     socket.onClose(() => { connections--; });
   });

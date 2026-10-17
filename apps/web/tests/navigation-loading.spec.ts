@@ -241,7 +241,7 @@ for (const width of [390, 1440]) {
     await signIn(page);
     await configure(request, { delays: { '/api/v1/me': 3000 } });
     await page.route('**/api/v1/discover?*', route => route.fulfill({ json: { items: [], total: 0, nextPage: null, occupations: [] } }));
-    await page.routeWebSocket('**/ws/matches', () => {});
+    await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     let scriptsHeld: Promise<void>;
@@ -306,7 +306,7 @@ for (const width of [390, 1440]) {
 test('slow account resolution keeps the themed navigation shell on profile refresh', async ({ page, request }, testInfo) => {
   await signIn(page);
   await page.route('**/api/v1/matches', route => route.fulfill({ json: { items: [] } }));
-  await page.routeWebSocket('**/ws/matches', () => {});
+  await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
   await configure(request, { delays: { '/api/v1/me': 2500 } });
   await page.goto('/me', { waitUntil: 'commit' });
   const startup = page.locator('[data-app-startup]');
@@ -346,7 +346,7 @@ for (const width of [390, 1440]) {
       await configure(request, { delays: { '/api/v1/me': 5000 } });
       await page.route('**/api/v1/matches', route => route.fulfill({ json: { items: [] } }));
       await page.route('**/api/v1/discover?*', route => route.fulfill({ json: { items: [], total: 0, nextPage: null, occupations: [] } }));
-      await page.routeWebSocket('**/ws/matches', () => {});
+      await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
       const errors: string[] = [];
       page.on('pageerror', error => errors.push(error.message));
       let release = () => {};
@@ -453,7 +453,7 @@ for (const width of [390, 1440]) {
 
 test('profile waits for conversations inside the page while its cover and tabs remain available', async ({ page }, testInfo) => {
   await signIn(page);
-  await page.routeWebSocket('**/ws/matches', () => {});
+  await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
   let release = () => {};
   const held = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/api/v1/matches', async route => {
@@ -496,7 +496,7 @@ test('four tabs reuse ordinary data and one account subscription until an explic
     matchesReads++;
     return route.fulfill({ json: { items: [match] } });
   });
-  await page.routeWebSocket('**/ws/matches', socket => {
+  await page.routeWebSocket('**/api/v1/matches/socket?*', socket => {
     accountConnections++;
     activeAccountConnections.add(socket);
     socket.onClose(() => { activeAccountConnections.delete(socket); });
@@ -562,7 +562,7 @@ test('four tabs reuse ordinary data and one account subscription until an explic
 
 test('failed manual refresh retains the bookshelf and retries only its data', async ({ page, request }) => {
   await signIn(page);
-  await page.routeWebSocket('**/ws/matches', () => {});
+  await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
   await page.goto('/novels');
   const book = page.getByRole('heading', { name: '雨停之前的来信', exact: true });
   await expect(book).toBeVisible();
@@ -621,7 +621,7 @@ test('saved novel metadata and chapter creation invalidate an already visited bo
     }
   };
   await signIn(page);
-  await page.routeWebSocket('**/ws/matches', () => {});
+  await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
   await page.goto('/novels');
   const nav = page.getByRole('navigation', { name: '主导航', exact: true });
   await page.getByRole('main').locator('a[href="/novels/design-novel"]').click();
@@ -646,7 +646,7 @@ test('saved novel metadata and chapter creation invalidate an already visited bo
 
 test('creating and deleting a novel update the cached shelf across server-action redirects', async ({ page, request }) => {
   await signIn(page);
-  await page.routeWebSocket('**/ws/matches', () => {});
+  await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
   await page.goto('/novels');
   await expect(page.getByRole('heading', { name: '雨停之前的来信', exact: true })).toBeVisible();
   await page.getByRole('link', { name: '创建小说', exact: true }).click();
@@ -675,7 +675,7 @@ for (const status of [401, 403]) {
       ? { status, json: { error: { message: status === 401 ? '请先登录' : '暂时没有权限' } } }
       : { json: { items: [{ id: 'private-match', conversationId: 'private-conversation', identity }] } }));
     const activeConnections = new Set<WebSocketRoute>();
-    await page.routeWebSocket('**/ws/matches', socket => {
+    await page.routeWebSocket('**/api/v1/matches/socket?*', socket => {
       activeConnections.add(socket);
       // Playwright can report both an explicit close and context destruction
       // for the same routed socket when the account exits to a new document.
@@ -730,7 +730,7 @@ test('tab browsing choices survive navigation while a document reload resets cho
     matchReads++;
     return route.fulfill({ json: { items: [] } });
   });
-  await page.routeWebSocket('**/ws/matches', () => {});
+  await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
   await page.goto('/companion?view=discover');
   const nav = page.getByRole('navigation', { name: '主导航', exact: true });
   await expect(page.getByRole('searchbox', { name: '姓名', exact: true })).toBeVisible();
@@ -779,7 +779,7 @@ test('a temporary authentication error does not suppress a later session-expiry 
   await page.route('**/api/v1/matches', route => route.fulfill(failure
     ? { status: 401, json: { error: { message: '会话需要重新验证' } } }
     : { json: { items: [] } }));
-  await page.routeWebSocket('**/ws/matches', () => {});
+  await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
   await page.goto('/me');
   await expect(page.getByRole('heading', { name: '继承测试用户', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '刷新最近聊天', exact: true })).toBeEnabled();
@@ -811,7 +811,7 @@ test('an unavailable account check preserves private content and allows a later 
     ? { status: 401, json: { error: { message: '会话需要重新验证' } } }
     : { json: { items: [{ id: 'verification-match', conversationId: 'verification-conversation', identity }] } }));
   const activeConnections = new Set<WebSocketRoute>();
-  await page.routeWebSocket('**/ws/matches', socket => {
+  await page.routeWebSocket('**/api/v1/matches/socket?*', socket => {
     activeConnections.add(socket);
     socket.onClose(() => { activeConnections.delete(socket); });
   });
@@ -852,8 +852,8 @@ test('a failed recent-list refresh leaves cached discovery actions usable', asyn
   const match = { id: 'greeting-match', conversationId: 'greeting-conversation', identity };
   let failure = false;
   let greetings = 0;
-  await page.routeWebSocket('**/ws/matches', () => {});
-  await page.routeWebSocket('**/ws/conversations/*', () => {});
+  await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
+  await page.routeWebSocket('**/api/v1/conversations/*/socket?*', () => {});
   await page.route('**/api/v1/discover?*', route => route.fulfill({ json: { items: [identity], total: 1, nextPage: null, occupations: [] } }));
   await page.route('**/api/v1/conversations/*/messages', route => route.fulfill({ json: { items: [] } }));
   await page.route('**/api/v1/conversations/*/auto-reply', route => route.fulfill({ json: { ownerType: 'HUMAN', mode: 'ALWAYS', delaySeconds: 0, version: 1, canManage: false } }));
@@ -888,7 +888,7 @@ test('catalog refresh failure preserves cards and filters and retry refreshes on
   let recovered = false;
   let release = () => {};
   const held = new Promise<void>(resolve => { release = resolve; });
-  await page.routeWebSocket('**/ws/matches', socket => { socket.send(JSON.stringify({ type: 'ping' })); });
+  await page.routeWebSocket('**/api/v1/matches/socket?*', socket => { socket.send(JSON.stringify({ type: 'ping' })); });
   await page.route('**/api/v1/matches', route => {
     matchesReads++;
     return route.fulfill({ json: { items: [] } });

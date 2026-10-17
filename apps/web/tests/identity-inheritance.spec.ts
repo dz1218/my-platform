@@ -357,7 +357,7 @@ test('an inherited account cannot mount a chat with its own AI identity from an 
     conversationRequests.push(route.request().url());
     return route.fulfill({ json: { items: [] } });
   });
-  await page.routeWebSocket('**/ws/conversations/*', (socket) => { sockets++; socket.close(); });
+  await page.routeWebSocket('**/api/v1/conversations/*/socket?*', (socket) => { sockets++; socket.close(); });
   await page.goto('/chat/inherited-self');
   await expect(page.getByRole('heading', { name: '这是你继承的 AI 身份', exact: true })).toBeVisible();
   await expect(page.getByRole('textbox')).toHaveCount(0);

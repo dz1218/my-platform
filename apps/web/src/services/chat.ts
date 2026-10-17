@@ -1,3 +1,4 @@
+import { privateSocketURL } from './socket-url';
 import { api } from "./api/client";
 import type { AutoReply, Message, MessagePage } from "@/types/companion";
 export const history = (id: string, before?: string, signal?: AbortSignal) =>
@@ -13,6 +14,8 @@ type Pending = {
 };
 export class ChatConnection {
   private socket?: WebSocket;
+  private connecting?: AbortController;
+  private connectTimer?: ReturnType<typeof setTimeout>;
   private retry?: ReturnType<typeof setTimeout>;
   private stopped = false;
   private cursor = "0";
@@ -27,20 +30,34 @@ export class ChatConnection {
   ) {
     this.connect();
   }
-  private connect() {
+  private async connect() {
     if (this.stopped) return;
-    const url = new URL(
-      `/ws/conversations/${encodeURIComponent(this.id)}`,
-      window.location.href,
-    );
-    if (this.cursor !== "0") url.searchParams.set("after", this.cursor);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const socket = (this.socket = new WebSocket(url));
+    const pending = new AbortController();
+    this.connecting = pending;
+    let socket: WebSocket;
+    try {
+      const url = await privateSocketURL('conversation', AbortSignal.any([pending.signal, AbortSignal.timeout(10_000)]), this.id);
+      if (this.stopped || this.connecting !== pending) return;
+      if (this.cursor !== '0') url.searchParams.set('after', this.cursor);
+      socket = new WebSocket(url);
+    } catch {
+      if (!this.stopped && this.connecting === pending) {
+        this.connecting = undefined;
+        this.scheduleRetry();
+      }
+      return;
+    }
+    this.connecting = undefined;
+    this.socket = socket;
+    this.connectTimer = setTimeout(() => socket.close(), 10_000);
     socket.onopen = () => {
+      if (this.stopped || this.socket !== socket) return;
+      clearTimeout(this.connectTimer);
       this.attempts = 0;
       this.onError(null);
     };
     socket.onmessage = (event) => {
+      if (this.stopped || this.socket !== socket) return;
       try {
         const data = JSON.parse(event.data);
         if (data.type === "ping") {
@@ -76,15 +93,21 @@ export class ChatConnection {
       }
     };
     socket.onclose = () => {
+      if (this.socket !== socket) return;
+      clearTimeout(this.connectTimer);
+      this.socket = undefined;
       this.rejectPending();
-      if (this.stopped) return;
-      this.onError(new Error("聊天连接已断开，正在重连…"));
-      this.retry = setTimeout(
-        () => this.connect(),
-        Math.min(1000 * 2 ** this.attempts++, 15000),
-      );
+      this.scheduleRetry();
     };
     socket.onerror = () => socket.close();
+  }
+  private scheduleRetry() {
+    if (this.stopped || this.retry) return;
+    this.onError(new Error('聊天连接已断开，正在重连…'));
+    this.retry = setTimeout(() => {
+      this.retry = undefined;
+      void this.connect();
+    }, Math.min(1000 * 2 ** Math.min(this.attempts++, 4), 15000));
   }
   typing() {
     if (
@@ -118,7 +141,11 @@ export class ChatConnection {
   close() {
     this.stopped = true;
     clearTimeout(this.retry);
+    clearTimeout(this.connectTimer);
+    this.connecting?.abort();
+    this.connecting = undefined;
     this.socket?.close();
+    this.socket = undefined;
     this.rejectPending();
   }
 }

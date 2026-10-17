@@ -120,6 +120,10 @@ The lobby and room page obtain a connection URL from same-origin
 gets a new ticket. The long-lived login credential stays HttpOnly. The public
 WebSocket origin is derived from server-side `COMPANION_API_URL`; set
 `COMPANION_WS_URL` only when that API URL uses an internal address.
+Matches and conversation sockets likewise bootstrap through `POST /api/realtime/connection`
+and connect directly to Go using 60-second tickets bound to the account, origin
+and exact socket path. Conversation access checks still run before the handshake.
+Deploy the Go ticket endpoints before deploying the frontend.
 Initial connections and reconnects receive a full snapshot. Guests can receive
 public data; `canManage` is computed per connection from the verified ticket.
 Snapshots remain in React Query, and an incoming

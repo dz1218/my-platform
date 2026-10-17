@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -135,5 +137,40 @@ func TestMatchesSocketRouteRequiresAuthentication(t *testing.T) {
 	router.ServeHTTP(response, request)
 	if response.Code != 401 {
 		t.Fatalf("account socket requires authentication, got %d", response.Code)
+	}
+}
+
+func TestMatchesSocketTicketWithoutCookie(t *testing.T) {
+	h := auth.Handler{Service: auth.Service{Secret: strings.Repeat("ticket-secret", 4)}}
+	router := gin.New()
+	backend := &fakeMatchSource{items: []matching.Match{{ID: "private-match"}}, changes: make(chan struct{}, 1), closed: make(chan struct{})}
+	router.POST("/api/v1/matches/socket-ticket", h.Require, h.SocketTicket("http://web"))
+	router.GET("/api/v1/matches/socket", h.RequireSocket("http://web"), matchesSocket(backend, backend, "http://web"))
+	token, _ := h.Service.Token("ticket-owner")
+	request := httptest.NewRequest("POST", "/api/v1/matches/socket-ticket", nil)
+	request.Header.Set("Cookie", auth.CookieName+"="+token)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	var data struct {
+		Ticket string `json:"ticket"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &data); err != nil || data.Ticket == "" {
+		t.Fatalf("ticket issuance failed: %s", response.Body)
+	}
+	server := httptest.NewServer(router)
+	defer server.Close()
+	// No login Cookie is sent to the socket host.
+	ws, err := websocket.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/api/v1/matches/socket?ticket="+url.QueryEscape(data.Ticket), "", "http://web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.Close()
+	if got := readMatches(t, ws); len(got) != 1 || got[0].ID != "private-match" {
+		t.Fatalf("wrong snapshot: %+v", got)
+	}
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	if backend.subscribed != "ticket-owner" {
+		t.Fatalf("wrong account: %s", backend.subscribed)
 	}
 }

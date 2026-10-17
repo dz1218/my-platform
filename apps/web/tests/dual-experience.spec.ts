@@ -26,7 +26,8 @@ async function setup(page: Page, recent = true) {
   await page.route('**/api/v1/conversations/*/auto-reply', route => route.fulfill({ json: { ownerType: 'HUMAN', mode: 'ALWAYS', delaySeconds: 0, version: 1, canManage: false } }));
   await page.route('**/api/v1/identity-inheritance', route => route.fulfill({ json: { gender: 'FEMALE', onboardingCompleted: true, identity: null, items: [] } }));
   await page.route('**/api/v1/identity-inheritance/options?*', route => route.fulfill({ json: { items: [{ ...identity, available: true }], total: 1, page: 1, nextPage: null, occupations } }));
-  await page.routeWebSocket('**/ws/conversations/*', socket => {
+  await page.routeWebSocket('**/api/v1/matches/socket?*', socket => { socket.send(JSON.stringify({ type: 'matches.updated', items: matches })); });
+  await page.routeWebSocket('**/api/v1/conversations/*/socket?*', socket => {
     sockets++;
     socket.onMessage(raw => {
       const data = JSON.parse(String(raw));
