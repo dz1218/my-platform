@@ -214,13 +214,14 @@ export function Conversation({
               operator={operator}
             />
           ))}
-          {chat.outgoing && (
+          {chat.outgoing.map(turn => (
             <MessageBubble
+              key={turn.requestId}
               sending
               operator={operator}
               message={{
-                id: chat.outgoing.requestId,
-                content: chat.outgoing.content,
+                id: turn.requestId,
+                content: turn.content,
                 senderType: operator ? "identity" : "user",
                 source: operator ? "HUMAN" : "USER",
                 sender: {
@@ -231,7 +232,13 @@ export function Conversation({
                 createdAt: "",
               }}
             />
-          )}
+          ))}
+          {chat.failedTurns.map(turn => (
+            <div key={turn.requestId} className="self-end text-sm text-danger">
+              <p className="whitespace-pre-wrap">{turn.content}</p>
+              <button type="button" className="mt-1 rounded px-2 py-1 hover:bg-panel focus-visible:outline" onClick={() => { void chat.send(turn.content, turn.requestId).catch(() => {}); }}>发送失败，点击重试</button>
+            </div>
+          ))}
         </div>
         <div ref={bottom} />
       </div>
@@ -248,7 +255,6 @@ export function Conversation({
           onTyping={chat.typing}
           matchId={operator ? `operator:${match.conversationId}` : match.id}
           name={operator ? (participantName ?? "用户") : match.identity.name}
-          sending={chat.sending}
           disabled={
             chat.latest.isPending ||
             (operator &&

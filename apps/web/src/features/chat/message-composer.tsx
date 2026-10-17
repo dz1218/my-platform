@@ -1,5 +1,4 @@
 "use client";
-import { useRef } from "react";
 import { MobileMessageComposer } from "@my-platform/mobile-web/chat";
 import { useViewport } from '@/components/use-viewport';
 import { useChatUI } from "@/stores/provider";
@@ -7,14 +6,12 @@ import { chatSelectors } from "@/stores/chat";
 export function MessageComposer({
   matchId,
   name,
-  sending,
   disabled,
   onSend,
   onTyping,
 }: {
   matchId: string;
   name: string;
-  sending: boolean;
   disabled: boolean;
   onTyping?: () => void;
   onSend: (content: string) => Promise<unknown>;
@@ -23,21 +20,17 @@ export function MessageComposer({
   const draft = useChatUI(chatSelectors.draft(matchId));
   const setDraft = useChatUI((state) => state.setDraft);
   const clearSentDraft = useChatUI((state) => state.clearSentDraft);
-  const inFlight = useRef(false);
   async function submit() {
-    if (inFlight.current || sending || disabled || !draft.trim()) return;
-    inFlight.current = true;
+    if (disabled || !draft.trim()) return;
     const original = draft;
+    clearSentDraft(matchId, original);
     try {
       await onSend(original.trim());
-      clearSentDraft(matchId, original);
     } catch {
       /* The conversation hook renders the error and retains the request ID. */
-    } finally {
-      inFlight.current = false;
     }
   }
-  if (viewport === 'mobile') return <MobileMessageComposer name={name} draft={draft} sending={sending} disabled={disabled}
+  if (viewport === 'mobile') return <MobileMessageComposer name={name} draft={draft} sending={false} disabled={disabled}
     onChange={value => { setDraft(matchId, value); onTyping?.(); }} onSend={() => void submit()} />;
   return (
     <form
@@ -81,10 +74,10 @@ export function MessageComposer({
         </span>
         <button
           type="submit"
-          disabled={sending || disabled || !draft.trim()}
+          disabled={disabled || !draft.trim()}
           className="btn-primary min-w-[72px]"
         >
-          {sending ? "发送中…" : "发送"}
+          发送
           <span aria-hidden="true">↑</span>
         </button>
       </div>

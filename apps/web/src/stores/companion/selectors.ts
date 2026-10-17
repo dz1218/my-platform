@@ -2,7 +2,7 @@ import type { CompanionStore } from './store';
 
 export const companionSelectors = {
   view: (s: CompanionStore) => ({
-    pendingId: s.pendingId, error: s.error,
+    pendingIds: s.pendingIds, error: s.error,
     filters: s.filters,
     initialTab: s.initialTab,
   }),

@@ -24,20 +24,20 @@ export const createCompanionActions = ({ client, service, accountId, isOwnerActi
     if (!isOwnerActive()) return;
     if (!accountId) { openLogin(); return; }
     // A failed background refresh can leave usable cached matches with status=error.
-    if (get().pendingId || !client.getQueryData(['matches', accountId])) return;
+    if (get().pendingIds.includes(id) || !client.getQueryData(['matches', accountId])) return;
     // Capture focus before the pending state disables/replaces the trigger.
     prepareChat();
     const canNavigate = captureNavigationIntent();
-    set({ pendingId: id, error: null });
+    set(state => ({ pendingIds: [...state.pendingIds, id], error: null }));
     try {
       const match = await service.meet(id);
       if (!isOwnerActive()) return;
       client.setQueryData<Match>(['match', match.id], match);
       client.setQueryData<{ items: Match[] }>(['matches', accountId], previous => ({ items: [match, ...(previous?.items.filter(item => item.id !== match.id) ?? [])] }));
       // A successful greeting still belongs in this account's list. Navigation
-      // belongs to its original intent, which leaving and returning invalidates.
+      // belongs to its original intent; another greeting or leaving invalidates it.
       if (canNavigate()) openChat(match.id);
-    } catch (error) { if (isOwnerActive()) set({ error: error instanceof Error ? error : new Error('暂时无法开始聊天') }); }
-    finally { if (isOwnerActive()) set({ pendingId: null }); }
+    } catch (error) { if (isOwnerActive() && canNavigate()) set({ error: error instanceof Error ? error : new Error('暂时无法开始聊天') }); }
+    finally { if (isOwnerActive()) set(state => ({ pendingIds: state.pendingIds.filter(pending => pending !== id) })); }
   },
 });

@@ -180,15 +180,15 @@ test('conversation send action retains retry id, prevents duplicates and merges 
     return requests.length === 1 ? first.promise : { message: accepted };
   } });
   const sending = conversation.getState().send('你好');
-  await expect(conversation.getState().send('重复')).rejects.toThrow('消息正在发送');
+  await expect(conversation.getState().send('你好', requests[0])).rejects.toThrow('消息正在发送');
   const failure = expect(sending).rejects.toThrow('offline');
   first.reject(new Error('offline'));
   await failure;
-  expect(conversation.getState().outgoing).toBeNull();
+  expect(conversation.getState().outgoing).toEqual([]);
   await conversation.getState().send('你好');
   expect(requests).toHaveLength(2);
   expect(requests[1]).toBe(requests[0]);
-  expect(conversation.getState()).toMatchObject({ failedTurn: null, outgoing: null, sendError: null });
+  expect(conversation.getState()).toMatchObject({ failedTurn: null, outgoing: [], sendError: null });
   expect(client.getQueryData(['messages', 'one'])).toMatchObject({ items: [accepted] });
 });
 

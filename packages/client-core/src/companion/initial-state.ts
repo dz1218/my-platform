@@ -1,13 +1,13 @@
 import { emptyCatalogFilters, type CatalogFilters } from '@my-platform/shared';
 
 export type CompanionState = {
-  pendingId: string | null;
+  pendingIds: string[];
   error: Error | null;
   filters: CatalogFilters;
 };
 
 export const initialCompanionState = (): CompanionState => ({
-  pendingId: null, error: null,
+  pendingIds: [], error: null,
   filters: { ...emptyCatalogFilters },
 });
 

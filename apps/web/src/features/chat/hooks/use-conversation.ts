@@ -16,6 +16,7 @@ export function useConversation(conversationId: string) {
   }));
   const error = useStore(ui, conversationSelectors.error);
   const outgoing = useStore(ui, conversationSelectors.outgoing);
+  const failedTurns = useStore(ui, state => state.failedTurns);
   const sending = useStore(ui, conversationSelectors.sending);
   const { setConnectionError, receivePage, receiveSettings, send } = ui.getState();
   const latest = useQuery({ queryKey: ['messages', conversationId], queryFn: ({ signal }) => history(conversationId, undefined, signal), enabled: !!conversationId });
@@ -38,7 +39,8 @@ export function useConversation(conversationId: string) {
   const messages = mergeConversationMessages(older.data?.pages ?? [], latest.data);
   return {
     messages, typing: () => connection.current?.typing(), settings, latest, error, accessError, sending, send,
-    outgoing: outgoing && !messages.some(message => message.requestId === outgoing.requestId) ? outgoing : null,
+    failedTurns,
+    outgoing: outgoing.filter(turn => !messages.some(message => message.requestId === turn.requestId)),
     hasOlder: older.data ? older.hasNextPage : !!latest.data?.nextCursor,
     loadingOlder: older.isFetchingNextPage, olderError: older.error, loadOlder: () => older.fetchNextPage(),
   };

@@ -71,12 +71,14 @@ export class ChatConnection {
         if (data.type === "history") {
           for (const m of data.page.items as Message[])
             if (BigInt(m.id) > BigInt(this.cursor)) this.cursor = m.id;
+          for (const message of data.page.items as Message[]) this.acknowledge(message);
           this.onHistory(data.page);
           return;
         }
         if (data.type === "message.created") {
           const m = data.message as Message;
           if (BigInt(m.id) > BigInt(this.cursor)) this.cursor = m.id;
+          this.acknowledge(m);
           this.onHistory({ items: [m] });
           return;
         }
@@ -100,6 +102,14 @@ export class ChatConnection {
       this.scheduleRetry();
     };
     socket.onerror = () => socket.close();
+  }
+  private acknowledge(message: Message) {
+    if (!message.requestId) return;
+    const pending = this.pending.get(message.requestId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pending.delete(message.requestId);
+    pending.resolve({ message });
   }
   private scheduleRetry() {
     if (this.stopped || this.retry) return;
@@ -128,7 +138,13 @@ export class ChatConnection {
         reject(new Error("发送确认超时，请重试"));
       }, 15000);
       this.pending.set(requestId, { resolve, reject, timer });
-      socket.send(JSON.stringify({ type: "send", content, requestId }));
+      try {
+        socket.send(JSON.stringify({ type: "send", content, requestId }));
+      } catch {
+        clearTimeout(timer);
+        this.pending.delete(requestId);
+        reject(new Error("连接中断，请重试发送"));
+      }
     });
   }
   private rejectPending() {
