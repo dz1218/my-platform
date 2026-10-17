@@ -3,10 +3,7 @@ package livekit
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"hash/fnv"
-	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -21,7 +18,7 @@ const voiceAttribute = "live.voice"
 
 var voiceRequestID = regexp.MustCompile(`^[a-zA-Z0-9_-]{16,80}$`)
 
-// Striped, context-aware locks are shared by both route prefixes and the sweeper.
+// Striped, context-aware locks are shared by routes and webhook reconciliation.
 // Production uses a database advisory lock shared by all API replicas.
 var voiceLocks = func() [64]chan struct{} {
 	var locks [64]chan struct{}
@@ -80,17 +77,20 @@ func (h Handler) voiceActor(c *gin.Context) (*voiceClaims, bool) {
 
 type participantPermission struct {
 	CanPublish bool `json:"canPublish"`
+	Hidden     bool `json:"hidden,omitempty"`
 }
 
 func (p *participantPermission) UnmarshalJSON(data []byte) error {
 	var wire struct {
 		CanPublish bool `json:"canPublish"`
 		Proto      bool `json:"can_publish"`
+		Hidden     bool `json:"hidden"`
 	}
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return err
 	}
 	p.CanPublish = wire.CanPublish || wire.Proto
+	p.Hidden = wire.Hidden
 	return nil
 }
 
@@ -101,6 +101,7 @@ type voiceParticipant struct {
 	Kind       json.RawMessage       `json:"kind"`
 	State      json.RawMessage       `json:"state"`
 	Attributes map[string]string     `json:"attributes"`
+	Tracks     []json.RawMessage     `json:"tracks,omitempty"`
 	Permission participantPermission `json:"permission"`
 }
 
@@ -281,6 +282,18 @@ func (h Handler) voice(action string) gin.HandlerFunc {
 		if upstreamFailed(c, err) {
 			return
 		}
+		lifecycle, err := h.loadLifecycle(ctx, room)
+		if upstreamFailed(c, err) {
+			return
+		}
+		if lifecycle != nil && lifecycle.State != "open" {
+			closedRoom(c)
+			return
+		}
+		if actor.Role == "host" && lifecycle != nil && lifecycle.Host != nil && lifecycle.Host.Identity != actor.Subject {
+			fail(c, http.StatusForbidden, "请在当前主播页面操作")
+			return
+		}
 		caller := -1
 		for i, p := range participants {
 			if p.Identity == actor.Subject && p.human() && p.online() {
@@ -404,41 +417,6 @@ func (h Handler) voice(action string) gin.HandlerFunc {
 			c.JSON(200, stateFromParticipants(participants))
 		}
 	}
-}
-
-// RunVoiceCleanup runs once per API process. It is safe across replicas and both
-// URL aliases because it uses the same advisory locks as the request handlers.
-func RunVoiceCleanup(ctx context.Context, cfg Config, authentication auth.Handler) {
-	if !cfg.Enabled() {
-		return
-	}
-	h := Handler{Client: NewClient(cfg), Auth: authentication}
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := h.cleanupVoiceRooms(ctx); err != nil && ctx.Err() == nil {
-				slog.Warn("voice cleanup failed", "error", err)
-			}
-		}
-	}
-}
-
-func (h Handler) cleanupVoiceRooms(ctx context.Context) error {
-	rooms, err := h.Client.ListRooms(ctx)
-	if err != nil {
-		return err
-	}
-	var failures []error
-	for _, room := range rooms {
-		if err := h.ReconcileVoiceRoom(ctx, room.ID); err != nil {
-			failures = append(failures, fmt.Errorf("room %s: %w", room.ID, err))
-		}
-	}
-	return errors.Join(failures...)
 }
 
 // ReconcileVoiceRoom revokes stale voice approvals under the room lock.

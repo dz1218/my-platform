@@ -17,7 +17,7 @@ export function DesktopLiveLobbyFrame({ directory, roomPanel }: { directory: Rea
   </>;
 }
 
-export function LiveDirectoryFrame({ count, liveCount, filter = '全部', search = '', onFilter, onSearch, onRefresh, refreshing = false, refreshDisabled = false, children, result }: {
+export function LiveDirectoryFrame({ count, liveCount, filter = '全部', search = '', onFilter, onSearch, onRefresh, refreshing = false, refreshDisabled = false, updatesLabel = '正在连接实时更新…', children, result }: {
   count?: number;
   liveCount?: number;
   filter?: LobbyFilter;
@@ -27,11 +27,12 @@ export function LiveDirectoryFrame({ count, liveCount, filter = '全部', search
   onRefresh?: () => void;
   refreshing?: boolean;
   refreshDisabled?: boolean;
+  updatesLabel?: string;
   children: ReactNode;
   result?: ReactNode;
 }) {
   return <section className="live-directory" aria-label="直播间列表">
-    <div className="live-directory-top"><h2>发现直播 {count !== undefined && <span>{count}</span>}</h2><span className="live-update-note"><i />每 5 秒自动更新</span></div>
+    <div className="live-directory-top"><h2>发现直播 {count !== undefined && <span>{count}</span>}</h2><span className="live-update-note" role="status"><i className={updatesLabel === '实时更新' ? undefined : 'opacity-40'} />{updatesLabel}</span></div>
     <div className="live-directory-toolbar">
       <div className="live-filters" aria-label="筛选直播间">{(['全部', '直播中', '准备中'] as const).map(value => <button type="button" key={value} aria-pressed={filter === value} disabled={!onFilter} onClick={() => onFilter?.(value)}>{value}{value === '直播中' && liveCount !== undefined && <span>{liveCount}</span>}</button>)}</div>
       <div className="live-search-actions"><label className="live-search"><LiveIcon name="search" size={16} /><input type="search" aria-label="搜索直播间" placeholder="搜索直播间" value={search} disabled={!onSearch} onChange={event => onSearch?.(event.target.value)} /></label><button type="button" className="live-icon-button" aria-label="刷新列表" title="刷新列表" disabled={!onRefresh || refreshing || refreshDisabled} onClick={onRefresh}><LiveIcon name="refresh" className={refreshing ? 'live-spin' : undefined} /></button></div>

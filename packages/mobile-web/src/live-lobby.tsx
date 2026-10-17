@@ -17,13 +17,14 @@ export function MobileLiveLobbyFrame({ actions, liveCount, children }: { actions
   </div>;
 }
 
-export function MobileLiveDirectory({ rooms, total, liveCount, search = '', filter = '全部', loading = false, refreshing = false, refreshDisabled = false, error, isLoggedIn = false, isMutating = false, onSearch, onFilter, onRefresh, onCloseRoom, renderLink = fallbackLink }: {
+export function MobileLiveDirectory({ rooms, total, liveCount, search = '', filter = '全部', loading = false, refreshing = false, refreshDisabled = false, updatesLabel, error, isLoggedIn = false, isMutating = false, onSearch, onFilter, onRefresh, onCloseRoom, renderLink = fallbackLink }: {
   rooms: LiveRoomSummary[]; total?: number; liveCount?: number; search?: string; filter?: Filter;
-  loading?: boolean; refreshing?: boolean; refreshDisabled?: boolean; error?: string;
+  loading?: boolean; refreshing?: boolean; refreshDisabled?: boolean; updatesLabel?: string; error?: string;
   isLoggedIn?: boolean; isMutating?: boolean; onSearch?: (value: string) => void; onFilter?: (value: Filter) => void;
   onRefresh?: () => void; onCloseRoom?: (room: LiveRoomSummary) => void; renderLink?: RenderLink;
 }) {
   return <section aria-label="直播间列表">
+    {updatesLabel && <p className="mb-3 text-xs text-muted" role="status">{updatesLabel}</p>}
     <div className="mb-3 flex gap-2"><label className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-line bg-panel px-4"><Search aria-hidden="true" className="size-4 shrink-0 text-muted" /><input type="search" aria-label="搜索直播间" placeholder="搜索直播间" className="min-h-12 min-w-0 w-full bg-transparent text-base text-ink placeholder:text-muted" value={search} disabled={!onSearch} onChange={event => onSearch?.(event.target.value)} /></label><button type="button" className="grid size-12 shrink-0 place-items-center rounded-full border border-line text-muted hover:bg-surface-soft hover:text-ink disabled:opacity-50" aria-label="刷新列表" title="刷新列表" disabled={!onRefresh || refreshing || refreshDisabled} onClick={onRefresh}><RefreshCw aria-hidden="true" className={`size-4 ${refreshing ? 'motion-safe:animate-spin' : ''}`} /></button></div>
     <div className="mb-3 flex gap-2" aria-label="筛选直播间">{(['全部', '直播中', '准备中'] as const).map(value => <button key={value} type="button" disabled={!onFilter} aria-pressed={value === filter} onClick={() => onFilter?.(value)} className={`flex min-h-11 items-center gap-2 rounded-full px-4 text-sm ${value === filter ? 'bg-action font-medium text-on-action' : 'bg-surface-soft text-muted hover:text-ink'}`}>{value}{value === '直播中' && liveCount !== undefined && <span className="text-xs">{liveCount}</span>}</button>)}</div>
     {error && <div role="alert" className="my-4 rounded-control border border-danger-line bg-danger-soft p-4 text-sm leading-6 text-danger">直播间列表更新失败，{error}。请刷新列表重试。</div>}

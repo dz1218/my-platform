@@ -17,8 +17,14 @@ async function rpc(method: string, body: Record<string, unknown>) {
   const response = await fetch(`${livekitUrl.replace(/^ws/, 'http')}/twirp/livekit.RoomService/${method}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body),
   });
+  if (method === 'DeleteRoom' && response.status === 404) return {};
   expect(response.ok, `${method}: ${response.status}`).toBe(true);
-  return response.json();
+  const result = await response.json();
+  if (method === 'CreateRoom') {
+    const synchronized = await fetch('http://127.0.0.1:18182/__sync', { method: 'POST' });
+    expect(synchronized.ok, 'test room snapshot initialized').toBe(true);
+  }
+  return result;
 }
 
 async function guest(browser: Browser) {
@@ -304,7 +310,7 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
     }
   });
 
-  test('denied or delayed microphone consent cannot reopen a call; host departure releases approval', async ({ page: host, context, browser }) => {
+  test('denied or delayed microphone consent cannot reopen a call; host departure ends the room', async ({ page: host, context, browser }) => {
     test.setTimeout(90_000);
     const roomId = `voice-e2e-${randomUUID()}`;
     const viewer = await guest(browser);
@@ -331,11 +337,12 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       await host.getByRole('button', { name: '同意连麦', exact: true }).click();
       await viewer.page.getByRole('switch', { name: '麦克风', exact: true }).click();
       await expect(host.locator('audio')).toHaveCount(1);
-      await host.getByRole('button', { name: '离开房间', exact: true }).click();
-      await expect(viewer.page.getByRole('button', { name: '申请连麦' })).toBeDisabled({ timeout: 15_000 });
+      await host.getByRole('link', { name: '直播大厅', exact: true }).click();
+      await expect(viewer.page.getByRole('heading', { name: '直播间已结束' })).toBeVisible({ timeout: 20_000 });
+      await expect(viewer.page.getByRole('button', { name: '重新加入' })).toHaveCount(0);
       await expect.poll(() => viewer.page.evaluate(() => (window as unknown as MediaWindow).voiceMedia.tracks.every((track) => track.readyState === 'ended'))).toBe(true);
-      const people = (await rpc('ListParticipants', { room: roomId })).participants as WireParticipant[];
-      expect(people.every((p) => !(p.permission.canPublish ?? p.permission.can_publish))).toBe(true);
+      const rooms = await rpc('ListRooms', { names: [roomId] });
+      expect(rooms.rooms ?? []).toHaveLength(0);
     } finally {
       await viewer.context.close();
       await rpc('DeleteRoom', { room: roomId });

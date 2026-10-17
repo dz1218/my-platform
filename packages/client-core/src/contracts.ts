@@ -17,6 +17,7 @@ export type PreferencesService = { write: (id: string, path: string, body: unkno
 export type LiveLobbyService = {
   create: (title: string) => Promise<{ item: ApiRoomItem; conflict?: string }>;
   close: (id: string) => Promise<void>;
+  refresh?: () => Promise<ApiRoomItem[]>;
 };
 export type MediaDevice = 'camera' | 'microphone';
 export type MediaErrorMessage = (error: unknown, device: MediaDevice) => string;

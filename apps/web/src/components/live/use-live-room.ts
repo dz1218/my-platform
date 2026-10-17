@@ -4,22 +4,19 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStoreInstance } from '@/stores/use-store-instance';
 import { createLiveRoomStore, liveRoomSelectors } from '@/stores/live/room';
 import { useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { LiveRoomDetail } from '@my-platform/shared';
 import { ConnectionState, ParticipantKind, Room, RoomEvent, Track } from 'livekit-client';
+import { APIError, check } from '@/services/api/client';
+import { liveRoomService } from '@/services/live';
+import { RoomsConnection } from '@/services/rooms-connection';
+import { sessionQueryOptions } from '@/services/query-options';
+import { createLiveRoomUpdates } from '@my-platform/client-core';
 import { subscribeRoomNotice } from '@/stores/live/room/subscriptions';
 import { useLiveVoice } from './use-live-voice';
 
 import type { Role, ParticipantItem } from '@/stores/live/room';
 export type { Role } from '@/stores/live/room';
-
-type JoinResponse = {
-  token: string;
-  voiceToken?: string;
-  role: 'host' | 'viewer';
-  notice?: string;
-  livekitUrl: string;
-  roomId: string;
-  identity: string;
-};
 
 export type LiveRoomProps = {
   apiBaseUrl: string;
@@ -60,40 +57,59 @@ function clearContainer(ref: React.RefObject<HTMLDivElement | null>) {
   if (ref.current) ref.current.innerHTML = '';
 }
 
-function normalizeError(message: string) {
-  if (message.toLowerCase().includes('could not establish pc connection')) {
-    return '暂时无法连接直播，请检查网络后重新加入。';
-  }
-  return message;
-}
-
-async function readApiError(response: Response) {
-  try {
-    const data = (await response.json()) as { message?: string | string[]; error?: { message?: string } };
-    if (typeof data.error?.message === 'string') return data.error.message;
-    if (Array.isArray(data.message)) return data.message.join('; ');
-    if (typeof data.message === 'string' && data.message.trim()) return data.message;
-  } catch {
-    // ignore
-  }
-  return `请求失败: ${response.status}`;
-}
-
 export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: LiveRoomProps) {
-  const ui = useStoreInstance(() => createLiveRoomStore(isLoggedIn ? hostNickname : '', { dispatch: async () => {
-    const response = await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}/agent/dispatch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    if (!response.ok) throw new Error(await readApiError(response));
-  } }));
-  const { role, roomNotice, nickname, connectionState, participants, error, isJoining, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, voiceToken, notice, isFullscreen } = useStore(ui, useShallow(liveRoomSelectors.view));
-  const { dispatchAgent, setRole, setRoomNotice, setNickname, setConnectionState, setParticipants, setError, setIsJoining, setCameraEnabled, setMicrophoneEnabled, setAudioBlocked, setSideTab, setVoiceToken, setNotice, setIsFullscreen } = ui.getState();
-  const isHost = role === '主播';
-
-  const stageRef = useRef<HTMLDivElement>(null);
-
   const joinRequestRef = useRef<AbortController | null>(null);
+  const refreshRequestRef = useRef<AbortController | null>(null);
   const localIdentityRef = useRef('');
   const roomRef = useRef<Room | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const remoteAudioRef = useRef<HTMLDivElement>(null);
+  const closeDialogRef = useRef<HTMLDialogElement>(null);
+  const queryClient = useQueryClient();
+  const service = liveRoomService(apiBaseUrl);
+  const detailKey = ['live-room', apiBaseUrl, roomId];
+  const roomQuery = useQuery<LiveRoomDetail | null>({
+    ...sessionQueryOptions,
+    queryKey: detailKey,
+    queryFn: ({ signal }) => service.detail(roomId, signal),
+    refetchOnMount: 'always',
+    retry: false,
+  });
+  const ui = useStoreInstance(() => createLiveRoomStore(isLoggedIn ? hostNickname : '', {
+    dispatch: async () => {
+      await check(await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}/agent/dispatch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }));
+    },
+    session: {
+      createAttemptId: () => crypto.randomUUID(),
+      join: (name, attemptId) => service.join(roomId, name, attemptId, joinRequestRef.current?.signal),
+    },
+    close: () => service.close(roomId),
+    refresh: async () => {
+      const controller = new AbortController();
+      refreshRequestRef.current = controller;
+      try { return await service.refreshDetail(roomId, controller.signal); }
+      finally { if (refreshRequestRef.current === controller) refreshRequestRef.current = null; }
+    },
+    query: { client: queryClient, apiBaseUrl, roomId },
+  }));
+  const { role, roomNotice, nickname, connectionState, participants, error, isJoining, joinFailure, closeConfirmOpen, isClosing, closeError, isRefreshing, refreshError, updatesState, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, voiceToken, notice, isFullscreen } = useStore(ui, useShallow(liveRoomSelectors.view));
+  const { dispatchAgent, setNickname, setConnectionState, setParticipants, setError, setIsJoining, setCameraEnabled, setMicrophoneEnabled, setAudioBlocked, setSideTab, setNotice, setIsFullscreen, setCloseConfirmOpen, refreshRoom } = ui.getState();
+  const isHost = role === '主播';
+  const roomMissing = roomQuery.data === null || (roomQuery.error instanceof APIError && roomQuery.error.status === 404);
+  const roomEnded = joinFailure === 'closed' || joinFailure === 'missing' || roomMissing || (!!roomQuery.data && roomQuery.data.state !== 'open');
+  const roomInUse = joinFailure === 'in-use';
+  const hostDisconnected = joinFailure === 'host-disconnected';
+  const roomTitle = roomQuery.data?.item.title ?? '直播间';
+  const updatesLabel = updatesState === 'connected' ? '房间状态实时更新' : updatesState === 'reconnecting' ? '状态更新重新连接中…' : '正在连接状态更新…';
+
+  useEffect(() => {
+    const updates = createLiveRoomUpdates(queryClient, apiBaseUrl, roomId);
+    const connection = new RoomsConnection({ roomId,
+      onUpdate: event => { void updates.receive(event); },
+      onState: ui.getState().setUpdatesState,
+    });
+    return () => { updates.close(); connection.close(); refreshRequestRef.current?.abort(); };
+  }, [queryClient, apiBaseUrl, roomId, ui]);
 
   const isConnected = connectionState === ConnectionState.Connected;
   const isReconnecting = connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting;
@@ -131,40 +147,36 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
   }
 
   async function joinRoom() {
-    if (joinRequestRef.current || roomRef.current) return;
+    if (joinRequestRef.current || roomRef.current || roomEnded || roomInUse || hostDisconnected) return;
     const controller = new AbortController();
     joinRequestRef.current = controller;
-    setError(null);
-    setIsJoining(true);
-    let room: Room | null = null;
-    try {
-      const name = nickname.trim() || '观众';
-
-      const joinResponse = await fetch(`${apiBaseUrl}/rooms/${encodeURIComponent(roomId)}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-        signal: controller.signal,
-      });
-      if (!joinResponse.ok) throw new Error(await readApiError(joinResponse));
-
-      const data = (await joinResponse.json()) as JoinResponse;
-      if (controller.signal.aborted) return;
-      if (data.role !== 'host' && data.role !== 'viewer') {
-        throw new Error('暂时无法确认房间身份，请稍后重新加入。');
-      }
+    const attempt = { room: null as Room | null };
+    const joined = await ui.getState().joinSession(async data => {
       localIdentityRef.current = data.identity;
-      setRole(data.role === 'host' ? '主播' : '观众');
-      setRoomNotice(data.notice || '');
-      setVoiceToken(data.voiceToken || '');
-      setNickname(name);
-
       const activeRoom = new Room();
-      room = activeRoom;
+      attempt.room = activeRoom;
       roomRef.current = activeRoom;
+      let hasConnected = false;
+      const confirmPresence = async () => {
+        if (data.role !== 'host' || !data.voiceToken || roomRef.current !== activeRoom) return;
+        try {
+          await service.confirmPresence(roomId, data.voiceToken, controller.signal);
+        } catch (error) {
+          if (controller.signal.aborted || roomRef.current !== activeRoom) return;
+          // A successful SDK connection can precede LiveKit's participant list.
+          // The server's reconciliation also confirms presence; only a terminal
+          // response ends this session, never a transient verification failure.
+          if (error instanceof APIError && (error.code === 'room_closed' || error.status === 410)) {
+            queryClient.setQueryData<LiveRoomDetail>(detailKey, current => current ? { ...current, state: 'closed' } : current);
+            void roomQuery.refetch();
+            throw error;
+          }
+        }
+      };
       activeRoom
         .on(RoomEvent.ConnectionStateChanged, (state) => {
           if (roomRef.current !== activeRoom) return;
+          if (state === ConnectionState.Connected) hasConnected = true;
           setConnectionState(state);
         })
         .on(RoomEvent.ParticipantConnected, () => refreshParticipants(activeRoom))
@@ -179,6 +191,8 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
         .on(RoomEvent.Reconnected, () => {
           refreshParticipants(activeRoom);
           syncLocalMedia();
+          void confirmPresence().catch(() => void leaveRoom());
+          void roomQuery.refetch();
         })
         .on(RoomEvent.AudioPlaybackStatusChanged, () => setAudioBlocked(!activeRoom.canPlaybackAudio))
         .on(RoomEvent.Disconnected, () => {
@@ -186,7 +200,10 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
           activeRoom.removeAllListeners();
           roomRef.current = null;
           resetSession();
-          setError('房间连接已关闭，可重新加入；如果房间已关闭，请返回直播大厅。');
+          if (data.role === 'host' && hasConnected) ui.getState().handleHostDisconnected();
+          else setError('连接已断开，请重新加入或返回直播大厅。');
+          void roomQuery.refetch();
+          void queryClient.invalidateQueries({ queryKey: ['live-rooms', apiBaseUrl] });
         });
 
       await activeRoom.connect(data.livekitUrl, data.token);
@@ -194,23 +211,22 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
         await activeRoom.disconnect();
         return;
       }
+      await confirmPresence();
+      if (controller.signal.aborted || roomRef.current !== activeRoom) return;
       refreshParticipants(activeRoom);
       attachExistingRemoteTracks(activeRoom);
       setAudioBlocked(!activeRoom.canPlaybackAudio);
-    } catch (err) {
-      if (room) {
-        room.removeAllListeners();
-        await room.disconnect();
-      }
-      if (controller.signal.aborted) return;
-      roomRef.current = null;
+    }, () => controller.signal.aborted);
+    if (!joined && !controller.signal.aborted) {
+      const room = attempt.room;
+      room?.removeAllListeners();
+      if (roomRef.current === room) roomRef.current = null;
+      await room?.disconnect();
       resetSession();
-      setError(err instanceof Error ? normalizeError(err.message) : '加入房间失败');
-    } finally {
-      if (joinRequestRef.current === controller) {
-        joinRequestRef.current = null;
-        setIsJoining(false);
-      }
+    }
+    if (joinRequestRef.current === controller) {
+      joinRequestRef.current = null;
+      setIsJoining(false);
     }
   }
 
@@ -253,6 +269,10 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
     await room?.disconnect();
   }
 
+  async function endRoom() {
+    if (await ui.getState().endRoom()) await leaveRoom();
+  }
+
   async function enableAudio() {
     const room = roomRef.current;
     if (!room) return;
@@ -286,6 +306,21 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
 
   useEffect(() => subscribeRoomNotice(ui), [ui]);
 
+  useEffect(() => ui.subscribe(state => state.closeConfirmOpen, open => {
+    if (open) closeDialogRef.current?.showModal();
+    else closeDialogRef.current?.close();
+  }, { fireImmediately: true }), [ui]);
+
+  useEffect(() => {
+    if (!roomEnded) return;
+    void leaveRoom();
+    void queryClient.invalidateQueries({ queryKey: ['live-rooms', apiBaseUrl] });
+  }, [roomEnded]);
+
+  useEffect(() => {
+    if (roomEnded && !isClosing) setCloseConfirmOpen(false);
+  }, [roomEnded, isClosing]);
+
   useEffect(() => {
     const update = () => setIsFullscreen(document.fullscreenElement === stageRef.current);
     document.addEventListener('fullscreenchange', update);
@@ -304,5 +339,5 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
     } catch { setNotice('当前浏览器暂不支持全屏观看。'); }
   }
 
-  return { role, isHost, roomNotice, nickname, setNickname, participants, error, setError, isJoining, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, voice, joinRoom, toggleLocalMedia, dispatchAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen };
+  return { roomTitle, roomEnded, roomInUse, hostDisconnected, roomReason: roomQuery.data?.reason, closeConfirmOpen, setCloseConfirmOpen, isClosing, closeError, closeDialogRef, endRoom, refreshRoom, isRefreshing, refreshError, updatesLabel, role, isHost, roomNotice, nickname, setNickname, participants, error, setError, isJoining, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, voice, joinRoom, toggleLocalMedia, dispatchAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen };
 }

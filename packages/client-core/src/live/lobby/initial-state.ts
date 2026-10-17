@@ -1,4 +1,4 @@
-import type { ApiRoomItem } from '@my-platform/shared';
+import type { ApiRoomItem, LiveUpdatesState } from '@my-platform/shared';
 
 export type LiveLobbyState = {
   title: string;
@@ -8,6 +8,9 @@ export type LiveLobbyState = {
   createdRoomId: string | null;
   error: string | null;
   closeError: string | null;
+  isRefreshing: boolean;
+  refreshError: string | null;
+  updatesState: LiveUpdatesState;
 };
 
 export const initialLiveLobbyState = (): LiveLobbyState => ({
@@ -18,5 +21,8 @@ export const initialLiveLobbyState = (): LiveLobbyState => ({
   createdRoomId: null,
   error: null,
   closeError: null,
+  isRefreshing: false,
+  refreshError: null,
+  updatesState: 'connecting',
 });
 

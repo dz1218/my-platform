@@ -17,6 +17,8 @@ func TestRoomCreatorOwnsHostRoleAndManagement(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case strings.HasSuffix(r.URL.Path, "/ListParticipants"):
+			w.Write([]byte(`{"participants":[]}`))
 		case strings.HasSuffix(r.URL.Path, "/ListRooms"):
 			json.NewEncoder(w).Encode(map[string]any{"rooms": []room{
 				{Name: "room-owned", Metadata: `{"title":"房主的直播","ownerId":"creator"}`},
@@ -110,6 +112,8 @@ func TestCreatorCanJoinBeforeGlobalRoomListCatchesUp(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		case strings.HasSuffix(r.URL.Path, "/ListParticipants"):
+			w.Write([]byte(`{"participants":[]}`))
 		case strings.HasSuffix(r.URL.Path, "/CreateRoom"):
 			created = &room{}
 			if err := json.NewDecoder(r.Body).Decode(created); err != nil {
@@ -154,5 +158,5 @@ func TestCreatorCanJoinBeforeGlobalRoomListCatchesUp(t *testing.T) {
 	}
 	request(t, router, "POST", "/rooms/room-other/join", `{}`, 404)
 	request(t, router, "DELETE", "/rooms/room-new", "", 200)
-	request(t, router, "POST", "/rooms/room-new/join", `{}`, 404)
+	request(t, router, "POST", "/rooms/room-new/join", `{}`, 410)
 }

@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import WebSocket from 'next/dist/compiled/ws/index.js';
 
 // Isolated SSR fixture: browser requests are controlled by each test. This
 // process never touches the application's database, sessions or existing rooms.
@@ -7,8 +8,22 @@ const inheritedIdentity = {
 };
 const failedRegistrations = new Set();
 // Test-only controls include SSR requests, which browser routing cannot delay.
-let performanceConfig = { delays: {}, failures: {}, rooms: undefined, user: undefined };
+let performanceConfig = { delays: {}, failures: {}, rooms: undefined, roomDetails: {}, user: undefined };
 let performanceRequests = [];
+const roomSockets = new Set();
+let roomSocketConnections = 0;
+let roomSocketPongs = 0;
+function snapshot(socket) {
+  if (socket.readyState !== WebSocket.OPEN) return;
+  if (!socket.roomId) {
+    if (performanceConfig.rooms === undefined) return;
+    // Ownership stays private to the signed-in account, including WS snapshots.
+    const items = performanceConfig.rooms.map(room => ({ ...room, canManage: Boolean(room.canManage && socket.session === 'live-test-host') }));
+    socket.send(JSON.stringify({ type: 'rooms.updated', items }));
+  } else if (performanceConfig.roomDetails[socket.roomId]) {
+    socket.send(JSON.stringify({ type: 'room.updated', detail: performanceConfig.roomDetails[socket.roomId] }));
+  }
+}
 const inheritanceUser = (session) => session === 'inheritance-test-second' ? {
   id: 'inheritance-second-user', name: '第二测试用户', email: 'inheritance-second@example.invalid',
   gender: 'FEMALE', onboardingCompleted: true, inheritedIdentity: null,
@@ -26,20 +41,30 @@ function createFixtureNovels() {
 }
 let fixtureNovels = createFixtureNovels();
 
-createServer(async (request, response) => {
+const server = createServer(async (request, response) => {
   response.setHeader('Content-Type', 'application/json');
   response.setHeader('Cache-Control', 'no-store');
   if (request.url === '/health') return response.end('{}');
   if (request.url === '/__performance') {
     if (request.method === 'POST') {
       let body = ''; for await (const part of request) body += part;
-      performanceConfig = { delays: {}, failures: {}, rooms: undefined, user: undefined, ...JSON.parse(body || '{}') };
+      performanceConfig = { delays: {}, failures: {}, rooms: undefined, roomDetails: {}, user: undefined, ...JSON.parse(body || '{}') };
       performanceRequests = [];
       fixtureNovels = createFixtureNovels();
+      for (const socket of roomSockets) snapshot(socket);
     }
-    return response.end(JSON.stringify({ requests: performanceRequests }));
+    return response.end(JSON.stringify({ requests: performanceRequests, roomSockets: roomSockets.size, roomSocketConnections, roomSocketPongs }));
   }
-  const measured = { path: request.url, method: request.method, startedAt: Date.now(), finishedAt: null, abortedAt: null };
+  if (request.url === '/__rooms/disconnect' && request.method === 'POST') {
+    for (const socket of roomSockets) socket.close(1012, 'test reconnect');
+    return response.end('{}');
+  }
+  if (request.url === '/__rooms/heartbeat' && request.method === 'POST') {
+    for (const socket of roomSockets) socket.send(JSON.stringify({ type: 'ping' }));
+    return response.end('{}');
+  }
+  const measured = { path: request.url, method: request.method, startedAt: Date.now(), finishedAt: null, abortedAt: null,
+    liveVoiceTokenPresent: Boolean(request.headers['x-live-voice-token']) };
   performanceRequests.push(measured);
   performanceRequests = performanceRequests.slice(-500);
   response.once('finish', () => { measured.finishedAt = Date.now(); });
@@ -54,7 +79,7 @@ createServer(async (request, response) => {
   }
   // Voice browser tests exercise the real Go handlers against temporary LiveKit
   // rooms. Existing regressions keep their isolated fixtures and mocked joins.
-  if (process.env.LIVEKIT_INTEGRATION === '1' && /^\/api\/v1\/rooms\/voice-e2e-[a-zA-Z0-9-]+\//.test(request.url ?? '')) {
+  if (process.env.LIVEKIT_INTEGRATION === '1' && /^\/api\/v1\/rooms\/voice-e2e-[a-zA-Z0-9-]+(?:\/|$)/.test(request.url ?? '')) {
     let body = '';
     for await (const part of request) body += part;
     try {
@@ -173,10 +198,56 @@ createServer(async (request, response) => {
     response.statusCode = 404;
     return response.end('{}');
   }
-  if (request.url === '/api/v1/rooms') {
+  if (request.url === '/api/v1/rooms' || request.url === '/api/v1/rooms/refresh') {
     return response.end(JSON.stringify({ items: performanceConfig.rooms ?? [] }));
+  }
+  const roomDetail = request.url?.match(/^\/api\/v1\/rooms\/([^/]+)(?:\/refresh)?$/);
+  if (roomDetail && (request.method === 'GET' || request.url.endsWith('/refresh'))) {
+    if (performanceConfig.roomDetails[roomDetail[1]]) return response.end(JSON.stringify(performanceConfig.roomDetails[roomDetail[1]]));
+    const item = performanceConfig.rooms?.find(room => room.id === roomDetail[1]) ?? {
+      id: roomDetail[1], title: '测试直播间', status: '准备中', viewers: 0, canManage: false,
+    };
+    return response.end(JSON.stringify({ item, state: 'open' }));
+  }
+  if (request.method === 'POST' && /^\/api\/v1\/rooms\/[^/]+\/presence$/.test(request.url ?? '')) {
+    return response.end(JSON.stringify({ ok: true }));
   }
   if (request.url === '/api/v1/novels') return response.end(JSON.stringify({ items: [] }));
   response.statusCode = 401;
   response.end(JSON.stringify({ error: { message: '请先登录' } }));
-}).listen(18181, '127.0.0.1');
+});
+
+const roomSocketServer = new WebSocket.Server({ noServer: true });
+server.on('upgrade', (request, socket, head) => {
+  const url = new URL(request.url, 'http://127.0.0.1:18181');
+  if (url.pathname !== '/api/v1/rooms/socket') return socket.destroy();
+  roomSocketServer.handleUpgrade(request, socket, head, client => {
+    const roomId = url.searchParams.get('roomId');
+    if (process.env.LIVEKIT_INTEGRATION === '1' && roomId?.startsWith('voice-e2e-')) {
+      const upstream = new WebSocket(`ws://127.0.0.1:18182${request.url}`, { headers: {
+        Cookie: request.headers.cookie || '', Origin: request.headers.origin || 'http://127.0.0.1:3012',
+      } });
+      const queued = [];
+      client.on('message', message => {
+        if (upstream.readyState === WebSocket.OPEN) upstream.send(message.toString());
+        else queued.push(message.toString());
+      });
+      upstream.on('open', () => { for (const message of queued) upstream.send(message); });
+      upstream.on('message', message => { if (client.readyState === WebSocket.OPEN) client.send(message.toString()); });
+      upstream.on('close', () => client.close());
+      upstream.on('error', () => client.close(1011));
+      client.on('close', () => upstream.close());
+      return;
+    }
+    roomSocketConnections++;
+    client.roomId = roomId;
+    client.session = request.headers.cookie?.match(/(?:^|;\s*)companion_session=([^;]+)/)?.[1];
+    roomSockets.add(client);
+    client.on('close', () => roomSockets.delete(client));
+    client.on('message', message => {
+      try { if (JSON.parse(message.toString()).type === 'pong') roomSocketPongs++; } catch { /* ignore malformed test messages */ }
+    });
+    snapshot(client);
+  });
+});
+server.listen(18181, '127.0.0.1');

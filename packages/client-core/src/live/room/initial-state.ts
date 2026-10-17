@@ -1,6 +1,7 @@
-import { RoomConnectionState as ConnectionState } from '@my-platform/shared';
+import { RoomConnectionState as ConnectionState, type LiveUpdatesState } from '@my-platform/shared';
 export type Role = '主播' | '观众';
 export type ParticipantItem = { identity: string; displayName: string; role: Role | 'AI助手'; isLocal: boolean };
+export type RoomJoinFailure = 'retryable' | 'in-use' | 'closed' | 'missing' | 'host-disconnected' | null;
 
 export type LiveRoomState = {
   sessionVersion: number;
@@ -11,6 +12,15 @@ export type LiveRoomState = {
   participants: ParticipantItem[];
   error: string | null;
   isJoining: boolean;
+  joinPending: boolean;
+  joinAttemptId: string | null;
+  joinFailure: RoomJoinFailure;
+  closeConfirmOpen: boolean;
+  isClosing: boolean;
+  closeError: string | null;
+  isRefreshing: boolean;
+  refreshError: string | null;
+  updatesState: LiveUpdatesState;
   isDispatchingAgent: boolean;
   agentRequested: boolean;
   voiceToken: string;
@@ -29,6 +39,15 @@ export const initialLiveRoomState = (nickname = ''): LiveRoomState => ({
   participants: [],
   error: null,
   isJoining: true,
+  joinPending: false,
+  joinAttemptId: null,
+  joinFailure: null,
+  closeConfirmOpen: false,
+  isClosing: false,
+  closeError: null,
+  isRefreshing: false,
+  refreshError: null,
+  updatesState: 'connecting',
   isDispatchingAgent: false,
   agentRequested: false,
   voiceToken: '',
@@ -44,6 +63,14 @@ export const resetLiveRoomSession = (state: LiveRoomState): LiveRoomState => ({
   ...initialLiveRoomState(state.nickname),
   sessionVersion: state.sessionVersion + 1,
   isJoining: state.isJoining,
+  joinAttemptId: state.joinAttemptId,
+  joinFailure: state.joinFailure,
+  closeConfirmOpen: state.closeConfirmOpen,
+  isClosing: state.isClosing,
+  closeError: state.closeError,
+  isRefreshing: state.isRefreshing,
+  refreshError: state.refreshError,
+  updatesState: state.updatesState,
   error: state.error,
   notice: state.notice,
 });

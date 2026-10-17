@@ -2,12 +2,14 @@ package livekit
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 	"unicode/utf16"
 
@@ -26,6 +28,7 @@ type Handler struct {
 	Client    *Client
 	Auth      auth.Handler
 	RoomCache *redis.Client
+	now       func() time.Time
 }
 
 func Register(r gin.IRouter, cfg Config, authentication auth.Handler, cache ...*redis.Client) {
@@ -49,7 +52,11 @@ func Register(r gin.IRouter, cfg Config, authentication auth.Handler, cache ...*
 		c.Next()
 	})
 	rooms.GET("", h.list)
+	rooms.POST("/refresh", h.refreshRooms)
+	rooms.GET("/:roomId", h.roomDetail)
+	rooms.POST("/:roomId/refresh", h.refreshRoom)
 	rooms.POST("/:roomId/join", h.join)
+	rooms.POST("/:roomId/presence", h.presence)
 	rooms.GET("/:roomId/voice", h.voice("state"))
 	rooms.POST("/:roomId/voice/request", h.voice("request"))
 	rooms.DELETE("/:roomId/voice/request", h.voice("cancel"))
@@ -103,18 +110,15 @@ func field(b map[string]json.RawMessage, key string, min, max int, trim bool) (s
 	return s, true, n >= min && n <= max
 }
 func (h Handler) list(c *gin.Context) {
-	items, err := h.Client.ListRooms(c.Request.Context())
-	if !upstreamFailed(c, err) {
-		userID, _ := h.sessionUser(c)
-		items, err = h.includeOwnerRoom(c.Request.Context(), userID, items)
-		if upstreamFailed(c, err) {
-			return
-		}
-		for i := range items {
-			items[i].CanManage = userID != "" && items[i].OwnerID == userID
-		}
-		c.JSON(http.StatusOK, gin.H{"items": items})
+	items, err := h.CachedRooms(c.Request.Context())
+	if cachedRoomsFailed(c, err) {
+		return
 	}
+	userID, _ := h.sessionUser(c)
+	for i := range items {
+		items[i].CanManage = userID != "" && items[i].OwnerID == userID
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 
 func (h Handler) sessionUser(c *gin.Context) (string, error) {
@@ -129,6 +133,21 @@ func (h Handler) sessionUser(c *gin.Context) (string, error) {
 }
 
 func (h Handler) ownsRoom(c *gin.Context, userID string) bool {
+	record, err := h.loadLifecycle(c.Request.Context(), c.Param("roomId"))
+	if upstreamFailed(c, err) {
+		return false
+	}
+	if record != nil && record.State != "open" {
+		closedRoom(c)
+		return false
+	}
+	if record != nil {
+		if userID != "" && record.OwnerID == userID {
+			return true
+		}
+		fail(c, http.StatusForbidden, "只有直播间创建者可以执行此操作")
+		return false
+	}
 	items, err := h.Client.ListRooms(c.Request.Context(), c.Param("roomId"))
 	if upstreamFailed(c, err) {
 		return false
@@ -184,6 +203,14 @@ func (h Handler) create(c *gin.Context) {
 		return
 	}
 	if reserved.ID != "" {
+		lifecycle, err := h.loadLifecycle(ctx, reserved.ID)
+		if upstreamFailed(c, err) {
+			return
+		}
+		if lifecycle != nil && lifecycle.State == "closing" {
+			failRoom(c, http.StatusConflict, "room_closing", "上个直播间正在关闭，请稍后重试")
+			return
+		}
 		current, err := h.exactRoom(ctx, reserved.ID)
 		if upstreamFailed(c, err) {
 			return
@@ -206,6 +233,10 @@ func (h Handler) create(c *gin.Context) {
 		}
 	}
 	items, err := h.Client.ListRooms(ctx)
+	if upstreamFailed(c, err) {
+		return
+	}
+	items, err = h.filterLifecycleRooms(ctx, items)
 	if upstreamFailed(c, err) {
 		return
 	}
@@ -249,6 +280,14 @@ func (h Handler) create(c *gin.Context) {
 		fail(c, 409, "该直播间已存在，请创建新的直播间")
 		return
 	}
+	previous, err := h.loadLifecycle(ctx, id)
+	if upstreamFailed(c, err) {
+		return
+	}
+	if previous != nil && previous.State != "open" {
+		failRoom(c, http.StatusConflict, "room_id_unavailable", "该直播间编号已结束，请创建新的直播间")
+		return
+	}
 	if upstreamFailed(c, h.saveOwnerRoom(ctx, owner, ownerRoom{ID: id, Title: title, Pending: true})) {
 		return
 	}
@@ -257,6 +296,9 @@ func (h Handler) create(c *gin.Context) {
 		if item.ID != id || item.OwnerID != owner {
 			// An incomplete success response must not erase the reservation.
 			fail(c, http.StatusBadGateway, "直播间创建结果尚未确认，请重试")
+			return
+		}
+		if upstreamFailed(c, h.initLifecycle(ctx, item)) {
 			return
 		}
 		if upstreamFailed(c, h.saveOwnerRoom(ctx, owner, ownerRoom{ID: item.ID, Title: item.Title})) {
@@ -280,78 +322,131 @@ func (h Handler) join(c *gin.Context) {
 		return
 	}
 	name, hasName, validName := field(b, "name", 1, 80, true)
-	if !validName {
-		fail(c, 400, "Invalid request body")
+	attempt, hasAttempt, validAttempt := field(b, "attemptId", 16, 80, false)
+	if !validName || !validAttempt || (hasAttempt && !voiceRequestID.MatchString(attempt)) {
+		fail(c, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	// Only the room creator becomes the host, including for logged-in viewers.
 	userID, err := h.sessionUser(c)
 	if err != nil {
 		fail(c, http.StatusUnauthorized, "登录已失效，请重新登录")
 		return
 	}
-	identity := "viewer_" + database.ID()
-	canPublish := false
-	hostUserID := ""
-	// Joining a missing room would otherwise implicitly create it in LiveKit.
-	// Cloud's unfiltered room listing can lag behind CreateRoom. Resolve this
-	// room by name so its creator can join immediately with the correct role.
-	items, err := h.Client.ListRooms(c.Request.Context(), c.Param("roomId"))
+	ctx := c.Request.Context()
+	id := c.Param("roomId")
+	known, err := h.loadLifecycle(ctx, id)
 	if upstreamFailed(c, err) {
 		return
 	}
-	found := false
-	roomNotice := ""
-	for _, item := range items {
-		if item.ID == c.Param("roomId") {
-			found = true
-			if item.OwnerID != "" && item.OwnerID == userID {
-				identity = "host_" + userID + "_" + database.ID()[:12]
-				canPublish = true
-				hostUserID = userID
-			} else if item.OwnerID == "" && userID != "" {
-				roomNotice = "此旧直播间未记录主播身份，请重新创建直播间后开播。"
-			}
-			break
-		}
-	}
-	if !found {
-		fail(c, http.StatusNotFound, "直播间已关闭或不存在")
+	if known != nil && known.State != "open" {
+		closedRoom(c)
 		return
 	}
-	if !hasName {
-		name = identity
-	}
-	token, err := h.Client.JoinToken(c.Param("roomId"), identity, name, canPublish)
-	if upstreamFailed(c, err) {
+	// Entering is an explicit observation; unlike a cached GET, it repairs a
+	// missed webhook and persists any discovered close before returning 410.
+	if upstreamFailed(c, h.ReconcileRoom(ctx, id)) {
 		return
 	}
-	voiceToken, err := h.Client.VoiceToken(c.Param("roomId"), identity, hostUserID)
-	if !upstreamFailed(c, err) {
-		role := "viewer"
-		if canPublish {
-			role = "host"
-		}
-		c.JSON(http.StatusCreated, gin.H{"token": token, "voiceToken": voiceToken, "role": role, "notice": roomNotice, "livekitUrl": h.Client.config.URL, "roomId": c.Param("roomId"), "identity": identity})
-	}
-}
-func (h Handler) close(c *gin.Context) {
-	unlock, err := h.lockRoomCreation(c.Request.Context(), c.Param("roomId"))
+	unlock, err := h.lockVoice(ctx, id)
 	if upstreamFailed(c, err) {
 		return
 	}
 	defer unlock()
-	if !upstreamFailed(c, h.Client.DeleteRoom(c.Request.Context(), c.Param("roomId"))) {
-		reserved, err := h.loadOwnerRoom(c.Request.Context(), auth.UserID(c))
+	record, err := h.loadLifecycle(ctx, id)
+	if upstreamFailed(c, err) {
+		return
+	}
+	if record != nil && record.State != "open" {
+		closedRoom(c)
+		return
+	}
+	item, err := h.exactRoom(ctx, id)
+	if upstreamFailed(c, err) {
+		return
+	}
+	if item == nil {
+		if record != nil {
+			closedRoom(c)
+		} else {
+			missingRoom(c)
+		}
+		return
+	}
+	if record != nil && record.SID != "" && record.SID != item.SID {
+		closedRoom(c)
+		return
+	}
+	identity, role, hostUserID, notice := "viewer_"+database.ID(), "viewer", "", ""
+	var token string
+	if userID != "" && item.OwnerID == userID {
+		admission, err := h.admitHost(ctx, *item, attempt, name)
+		if errors.Is(err, errHostBusy) {
+			busyHost(c)
+			return
+		}
+		if errors.Is(err, errRoomClosed) {
+			closedRoom(c)
+			return
+		}
 		if upstreamFailed(c, err) {
 			return
 		}
-		if reserved.ID == c.Param("roomId") && upstreamFailed(c, h.saveOwnerRoom(c.Request.Context(), auth.UserID(c), ownerRoom{})) {
+		identity, role, hostUserID = admission.Identity, "host", userID
+		token, err = h.Client.hostJoinToken(id, admission)
+		if upstreamFailed(c, err) {
 			return
 		}
-		c.JSON(200, gin.H{"ok": true})
+	} else {
+		if item.OwnerID == "" && userID != "" {
+			notice = "此旧直播间未记录主播身份，请重新创建直播间后开播。"
+		}
+		if !hasName {
+			name = identity
+		}
+		token, err = h.Client.JoinToken(id, identity, name, false)
+		if upstreamFailed(c, err) {
+			return
+		}
 	}
+	voiceToken, err := h.Client.VoiceToken(id, identity, hostUserID)
+	if upstreamFailed(c, err) {
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"token": token, "voiceToken": voiceToken, "role": role, "notice": notice, "livekitUrl": h.Client.config.URL, "roomId": id, "identity": identity})
 }
+
+func (h Handler) close(c *gin.Context) {
+	ctx := c.Request.Context()
+	unlock, err := h.lockRoomCreation(ctx, c.Param("roomId"))
+	if upstreamFailed(c, err) {
+		return
+	}
+	defer unlock()
+	record, err := h.loadLifecycle(ctx, c.Param("roomId"))
+	if upstreamFailed(c, err) {
+		return
+	}
+	if record == nil {
+		current, err := h.exactRoom(ctx, c.Param("roomId"))
+		if upstreamFailed(c, err) {
+			return
+		}
+		if current == nil {
+			missingRoom(c)
+			return
+		}
+		record = lifecycleForRoom(*current)
+	}
+	if record.OwnerID != auth.UserID(c) {
+		fail(c, http.StatusForbidden, "只有直播间创建者可以执行此操作")
+		return
+	}
+	if upstreamFailed(c, h.deleteLifecycleRoom(ctx, record, "owner_closed")) {
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 func (h Handler) dispatch(c *gin.Context) {
 	b, ok := body(c)
 	if !ok {

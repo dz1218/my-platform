@@ -121,29 +121,3 @@ func (h Handler) exactRoom(ctx context.Context, id string) (*RoomItem, error) {
 	}
 	return nil, nil
 }
-
-// Include the caller's newly created room even before the global listing catches
-// up. Reads never clear reservations: a create may still be in flight.
-func (h Handler) includeOwnerRoom(ctx context.Context, owner string, items []RoomItem) ([]RoomItem, error) {
-	if owner == "" {
-		return items, nil
-	}
-	reserved, err := h.loadOwnerRoom(ctx, owner)
-	if err != nil || reserved.ID == "" {
-		return items, err
-	}
-	current, err := h.exactRoom(ctx, reserved.ID)
-	if err != nil {
-		return nil, err
-	}
-	filtered := make([]RoomItem, 0, len(items)+1)
-	for _, item := range items {
-		if item.ID != reserved.ID {
-			filtered = append(filtered, item)
-		}
-	}
-	if current != nil {
-		filtered = append(filtered, *current)
-	}
-	return filtered, nil
-}

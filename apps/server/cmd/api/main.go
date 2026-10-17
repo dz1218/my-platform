@@ -70,13 +70,13 @@ func run() error {
 	}()
 	defer func() { stopUpdates(); <-updatesDone }()
 	router := httpapi.New(cfg, db, cache, policies, updates)
-	voiceCtx, stopVoice := context.WithCancel(context.Background())
-	voiceDone := make(chan struct{})
+	roomsCtx, stopRooms := context.WithCancel(context.Background())
+	roomsDone := make(chan struct{})
 	go func() {
-		defer close(voiceDone)
-		livekit.RunVoiceCleanup(voiceCtx, cfg.LiveKit, auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: cfg.JWTSecret}})
+		defer close(roomsDone)
+		livekit.RunRoomMaintenance(roomsCtx, cfg.LiveKit, auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: cfg.JWTSecret}}, cache)
 	}()
-	defer func() { stopVoice(); <-voiceDone }()
+	defer func() { stopRooms(); <-roomsDone }()
 	server := &http.Server{Addr: cfg.Address, Handler: router, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)

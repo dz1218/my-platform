@@ -33,7 +33,8 @@ async function proxy(
   const cookie = request.cookies.get(sessionCookie)?.value;
   if (cookie) headers.set("Cookie", `${sessionCookie}=${cookie}`);
   headers.set("Content-Type", "application/json");
-  if (path[0] === "rooms" && path[2] === "voice") {
+  const isPresenceRequest = request.method === "POST" && path.length === 3 && path[2] === "presence";
+  if (path[0] === "rooms" && (path[2] === "voice" || isPresenceRequest)) {
     const voiceToken = request.headers.get("x-live-voice-token");
     if (voiceToken) headers.set("X-Live-Voice-Token", voiceToken);
   }

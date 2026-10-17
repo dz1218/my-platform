@@ -108,10 +108,9 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
       apply({ slot, hasHost });
     }
 
-    let refreshing = false;
-    async function refresh() {
-      if (refreshing || controller.signal.aborted || room!.state !== ConnectionState.Connected) return;
-      refreshing = true;
+    let refreshPromise: Promise<void> | null = null;
+    let refreshAgain = false;
+    async function fetchState() {
       const version = versionRef.current;
       try {
         const response = await fetch(base, { headers: { 'X-Live-Voice-Token': token }, signal: controller.signal, cache: 'no-store' });
@@ -125,10 +124,21 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
           setReady(false);
           setError(err instanceof Error ? err.message : '连线状态更新失败，请稍后重试');
         }
-      } finally { refreshing = false; }
+      }
+    }
+    function refresh(): Promise<void> {
+      if (controller.signal.aborted || room!.state !== ConnectionState.Connected) return Promise.resolve();
+      if (refreshPromise) { refreshAgain = true; return refreshPromise; }
+      refreshPromise = (async () => {
+        do {
+          refreshAgain = false;
+          await fetchState();
+        } while (refreshAgain && !controller.signal.aborted && room!.state === ConnectionState.Connected);
+      })().finally(() => { refreshPromise = null; });
+      return refreshPromise;
     }
     refreshRef.current = refresh;
-    const reconnect = () => { sync(); void refresh(); };
+    const reconnect = () => { sync(); setError(''); void refresh(); };
     const connectionChanged = () => {
       if (room.state !== ConnectionState.Connected && !isHost) stopDevices(room);
       sync();
@@ -138,11 +148,9 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
     room.on(RoomEvent.Reconnected, reconnect).on(RoomEvent.ConnectionStateChanged, connectionChanged);
     sync();
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 5000);
     return () => {
       unsubscribePermissions();
       controller.abort();
-      window.clearInterval(timer);
       events.forEach((event) => room.off(event, sync));
       room.off(RoomEvent.Reconnected, reconnect).off(RoomEvent.ConnectionStateChanged, connectionChanged);
       if (!isHost) stopDevices(room);
@@ -213,7 +221,7 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
   }
 
   const own = !!room && state.slot?.identity === room.localParticipant.identity;
-  return { ...state, own, ready, busy, mediaBusy, microphoneEnabled, cameraEnabled, speakerEnabled, error, act,
+  return { ...state, own, ready, busy, mediaBusy, microphoneEnabled, cameraEnabled, speakerEnabled, error, act, refresh: () => { setError(''); return refreshRef.current(); },
     toggleMicrophone: () => toggleDevice('microphone'), toggleCamera: () => toggleDevice('camera'),
     canOpenMicrophone: !!room && allowed(room), canOpenCamera: !!room && allowed(room, 'camera'), dismissError: () => setError('') };
 }

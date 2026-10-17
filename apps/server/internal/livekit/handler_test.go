@@ -2,6 +2,7 @@ package livekit
 
 import (
 	"companion/server/internal/auth"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -67,6 +68,8 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 		case "CreateRoom", "DeleteRoom":
 			permission = "roomCreate"
 			service = "RoomService"
+		case "ListParticipants":
+			service = "RoomService"
 		}
 		if r.URL.Path != "/twirp/livekit."+service+"/"+method {
 			t.Error("wrong RPC service")
@@ -83,6 +86,11 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		var result any = map[string]any{}
 		switch method {
+		case "ListParticipants":
+			result = map[string]any{"participants": []any{
+				map[string]any{"sid": "PA_viewer_a", "identity": "viewer_a", "state": "ACTIVE", "tracks": []any{map[string]any{"sid": "TR_audio"}}},
+				map[string]any{"sid": "PA_viewer_b", "identity": "viewer_b", "state": "ACTIVE"},
+			}}
 		case "ListRooms":
 			result = map[string]any{"rooms": []any{
 				map[string]any{"name": "room-test", "metadata": `{"title":"直播测试","ownerId":"test-user"}`, "num_participants": 2, "num_publishers": 1},
@@ -116,13 +124,22 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 	}))
 	defer upstream.Close()
 	router := gin.New()
-	Register(router, Config{URL: "wss://public.example.com", InternalURL: upstream.URL, APIKey: "test-key", APISecret: "test-secret", AgentName: "test-agent"}, auth.Handler{Service: auth.Service{Secret: "test-session-secret"}})
+	cfg := Config{URL: "wss://public.example.com", InternalURL: upstream.URL, APIKey: "test-key", APISecret: "test-secret", AgentName: "test-agent"}
+	Register(router, cfg, auth.Handler{Service: auth.Service{Secret: "test-session-secret"}})
+	if err := (Handler{Client: NewClient(cfg)}).SyncRooms(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	result := request(t, router, "GET", "/rooms", "", 200)
 	items := result["items"].([]any)
-	if len(items) != 3 || items[0].(map[string]any)["title"] != "直播测试" || items[0].(map[string]any)["status"] != "直播中" || items[0].(map[string]any)["viewers"] != float64(2) {
+	byID := make(map[string]map[string]any)
+	for _, item := range items {
+		value := item.(map[string]any)
+		byID[value["id"].(string)] = value
+	}
+	if len(items) != 3 || byID["room-test"]["title"] != "直播测试" || byID["room-test"]["status"] != "直播中" || byID["room-test"]["viewers"] != float64(2) {
 		t.Fatalf("wrong rooms: %v", items)
 	}
-	if items[1].(map[string]any)["title"] != "room-empty" || items[1].(map[string]any)["status"] != "准备中" || items[2].(map[string]any)["viewers"] != float64(3) {
+	if byID["room-empty"]["title"] != "room-empty" || byID["room-empty"]["status"] != "准备中" || byID["room-camel"]["viewers"] != float64(3) {
 		t.Fatal(items)
 	}
 	created := request(t, router, "POST", "/rooms", `{"id":"room-new","title":"新的直播"}`, 201, "creation-user")["item"].(map[string]any)
@@ -139,7 +156,7 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 	request(t, router, "POST", "/rooms", `{"title":"  直播测试  "}`, 409)
 	request(t, router, "POST", "/rooms", `{"title":"ROOM-EMPTY"}`, 409)
 	request(t, router, "POST", "/rooms", `{"id":"room-test","title":"其他名称"}`, 409)
-	for _, body := range []string{`{"identity":" user-1 ","name":" 测试 "}`, `{"identity":"user-1"}`} {
+	for _, body := range []string{`{"identity":" user-1 ","name":" 测试 ","attemptId":"attempt-1234567890"}`, `{"identity":"user-1","attemptId":"attempt-1234567890"}`} {
 		joined := request(t, router, "POST", "/rooms/room-test/join", body, 201)
 		if joined["livekitUrl"] != "wss://public.example.com" || !strings.HasPrefix(joined["identity"].(string), "host_test-user_") || joined["roomId"] != "room-test" {
 			t.Fatal(joined)
@@ -148,7 +165,7 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 		if token["sub"] != joined["identity"] || (token["name"] != "测试" && token["name"] != joined["identity"]) {
 			t.Fatal(token)
 		}
-		if token["exp"].(float64)-token["iat"].(float64) != 7200 {
+		if token["exp"].(float64)-token["iat"].(float64) != 60 {
 			t.Fatal("token TTL changed")
 		}
 		grant := token["video"].(map[string]any)
@@ -199,9 +216,16 @@ func TestUnavailableAndEmptyResponses(t *testing.T) {
 	}{{`{}`, 200, 200}, {`{"secret":"do not leak"}`, 500, 502}, {`invalid`, 200, 502}} {
 		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(reply.code); w.Write([]byte(reply.body)) }))
 		r := gin.New()
-		Register(r, Config{URL: upstream.URL, APIKey: "test-key", APISecret: "test-secret"}, auth.Handler{Service: auth.Service{Secret: "test-session-secret"}})
+		cfg := Config{URL: upstream.URL, APIKey: "test-key", APISecret: "test-secret"}
+		Register(r, cfg, auth.Handler{Service: auth.Service{Secret: "test-session-secret"}})
+		if err := (Handler{Client: NewClient(cfg)}).markSnapshotsReady(context.Background()); err != nil {
+			t.Fatal(err)
+		}
 		for _, path := range []string{"/rooms", "/rooms/room-test/agent/dispatch"} {
 			want := reply.want
+			if path == "/rooms" {
+				want = 200 // Ordinary reads use the initialized cache even if Cloud is down.
+			}
 			if want == 200 && strings.Contains(path, "dispatch") {
 				want = 404
 			}

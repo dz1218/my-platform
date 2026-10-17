@@ -1,8 +1,33 @@
 import type { ApiRoomItem } from '@/lib/api';
+import type { LiveRoomDetail, LiveRoomJoin } from '@my-platform/shared';
 import { check } from './api/client';
 
 export function liveRoomService(base: string) {
   return {
+    refresh: async (signal?: AbortSignal): Promise<ApiRoomItem[]> => {
+      const response = await check(await fetch(`${base}/rooms/refresh`, { method: 'POST', signal }));
+      return (await response.json()).items;
+    },
+    refreshDetail: async (id: string, signal?: AbortSignal): Promise<LiveRoomDetail> => {
+      const response = await check(await fetch(`${base}/rooms/${encodeURIComponent(id)}/refresh`, { method: 'POST', signal }));
+      return response.json();
+    },
+    detail: async (id: string, signal?: AbortSignal): Promise<LiveRoomDetail> => {
+      const response = await check(await fetch(`${base}/rooms/${encodeURIComponent(id)}`, { cache: 'no-store', signal }));
+      return response.json();
+    },
+    join: async (id: string, name: string, attemptId: string, signal?: AbortSignal): Promise<LiveRoomJoin> => {
+      const response = await check(await fetch(`${base}/rooms/${encodeURIComponent(id)}/join`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, attemptId }), signal,
+      }));
+      return response.json();
+    },
+    confirmPresence: async (id: string, voiceToken: string, signal?: AbortSignal) => {
+      await check(await fetch(`${base}/rooms/${encodeURIComponent(id)}/presence`, {
+        method: 'POST', headers: { 'X-Live-Voice-Token': voiceToken }, signal,
+      }));
+    },
     list: async (signal?: AbortSignal): Promise<ApiRoomItem[]> => {
       const response = await check(await fetch(`${base}/rooms`, { cache: 'no-store', signal }));
       return (await response.json()).items;

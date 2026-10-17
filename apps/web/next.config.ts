@@ -12,6 +12,7 @@ const nextConfig = (phase: string): NextConfig => ({
     return [
       { source: '/ws/conversations/:id', destination: `${api}/api/v1/conversations/:id/socket` },
       { source: '/ws/matches', destination: `${api}/api/v1/matches/socket` },
+      { source: '/ws/rooms', destination: `${api}/api/v1/rooms/socket` },
     ];
   },
   outputFileTracingRoot: path.join(__dirname, '../..'),

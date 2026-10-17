@@ -27,14 +27,14 @@ function DesktopLiveLobby({ model }: { model: LiveLobbyModel }) {
 }
 function MobileLiveLobby({ model, onCreate }: { model: LiveLobbyModel; onCreate: () => void }) {
   return <MobileLiveLobbyFrame liveCount={model.roomsQuery.isPending ? undefined : model.liveCount} actions={model.roomsQuery.isPending ? <button type="button" className="btn-primary" disabled>我的直播间</button> : model.ownedRoom ? <Link href={`/live/${encodeURIComponent(model.ownedRoom.id)}`} className="btn-primary">我的直播间</Link> : model.isLoggedIn ? <button type="button" onClick={onCreate} className="btn-primary">开播</button> : <Link href="/login" className="btn-secondary">登录开播</Link>}>
-    <MobileLiveDirectory rooms={model.visibleRooms} total={model.rooms.length} liveCount={model.roomsQuery.isPending ? undefined : model.liveCount} search={model.search} filter={model.filter} loading={model.roomsQuery.isPending} refreshing={model.roomsQuery.isFetching} refreshDisabled={model.isMutating} error={model.roomsQuery.error?.message} isLoggedIn={model.isLoggedIn} isMutating={model.isMutating} onSearch={model.setSearch} onFilter={model.setFilter} onRefresh={() => void model.roomsQuery.refetch()} onCloseRoom={room => { model.setCloseError(null); model.setRoomToClose(room); }} renderLink={renderMobileLink} />
+    <MobileLiveDirectory rooms={model.visibleRooms} total={model.rooms.length} liveCount={model.roomsQuery.isPending ? undefined : model.liveCount} search={model.search} filter={model.filter} loading={model.roomsQuery.isPending} refreshing={model.roomsQuery.isFetching || model.isRefreshing} refreshDisabled={model.isMutating} updatesLabel={model.updatesLabel} error={model.listError} isLoggedIn={model.isLoggedIn} isMutating={model.isMutating} onSearch={model.setSearch} onFilter={model.setFilter} onRefresh={() => void model.refreshRooms()} onCloseRoom={room => { model.setCloseError(null); model.setRoomToClose(room); }} renderLink={renderMobileLink} />
   </MobileLiveLobbyFrame>;
 }
 
 function LobbyDirectory({ model }: { model: LiveLobbyModel }) {
-  const { roomsQuery, rooms, search, setSearch, filter, setFilter, setRoomToClose, setCloseError, isMutating, liveCount, visibleRooms, isLoggedIn } = model;
-  return (      <LiveDirectoryFrame count={roomsQuery.isPending ? undefined : rooms.length} liveCount={roomsQuery.isPending ? undefined : liveCount} filter={filter} search={search} onFilter={setFilter} onSearch={setSearch} onRefresh={() => void roomsQuery.refetch()} refreshing={roomsQuery.isFetching} refreshDisabled={isMutating} result={!roomsQuery.isPending && `${visibleRooms.length} 个直播间${search || filter !== '全部' ? `，共 ${rooms.length} 个` : ''}`}>
-        {roomsQuery.isError && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>直播间列表更新失败，{roomsQuery.error.message}。请刷新列表重试。</p></div>}
+  const { roomsQuery, rooms, search, setSearch, filter, setFilter, setRoomToClose, setCloseError, isMutating, liveCount, visibleRooms, isLoggedIn, refreshRooms, isRefreshing, listError, updatesLabel } = model;
+  return (      <LiveDirectoryFrame count={roomsQuery.isPending ? undefined : rooms.length} liveCount={roomsQuery.isPending ? undefined : liveCount} filter={filter} search={search} onFilter={setFilter} onSearch={setSearch} onRefresh={() => void refreshRooms()} refreshing={roomsQuery.isFetching || isRefreshing} refreshDisabled={isMutating} updatesLabel={updatesLabel} result={!roomsQuery.isPending && `${visibleRooms.length} 个直播间${search || filter !== '全部' ? `，共 ${rooms.length} 个` : ''}`}>
+        {listError && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>直播间列表更新失败，{listError}。请刷新列表重试。</p></div>}
         {roomsQuery.isPending ? <LiveDirectorySkeleton /> : visibleRooms.length ? <div className="live-room-grid">
           {visibleRooms.map((room) => <article className="live-room-card" key={room.id} data-browse-anchor={`room:${room.id}`} aria-label={room.title}>
             <Link href={`/live/${encodeURIComponent(room.id)}`} className={`live-room-cover ${room.status === '直播中' ? 'is-live' : ''}`} tabIndex={-1} aria-hidden="true">
@@ -47,7 +47,7 @@ function LobbyDirectory({ model }: { model: LiveLobbyModel }) {
               <div className="live-room-card-actions"><Link href={`/live/${encodeURIComponent(room.id)}`} className="live-enter-link">{isLoggedIn && room.canManage ? '进入直播间' : '观看'}<LiveIcon name="arrow" size={16} /></Link>{isLoggedIn && room.canManage && <button type="button" className="live-close-room" disabled={isMutating} aria-label={`关闭直播间：${room.title}`} onClick={() => { setCloseError(null); setRoomToClose(room); }}>关闭</button>}</div>
             </div>
           </article>)}
-        </div> : !roomsQuery.isError && <div className="live-empty">
+        </div> : !listError && <div className="live-empty">
           <div className="live-empty-icon"><LiveIcon name={search ? 'search' : 'video'} size={30} /></div>
           <h3>{rooms.length ? '没有找到匹配的直播间' : '暂无直播间'}</h3>
           <p>{rooms.length ? '换个关键词，或看看其他状态的直播间。' : isLoggedIn ? '还没有人开播，创建一个直播间开始分享吧。' : '现在还没有人开播，过会儿再来看看。'}</p>

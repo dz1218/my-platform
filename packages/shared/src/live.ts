@@ -7,6 +7,28 @@ export type ApiRoomItem = {
 };
 export type LiveRoomSummary = ApiRoomItem;
 
+export type LiveRoomDetail = {
+  item: ApiRoomItem;
+  state: 'open' | 'closing' | 'closed';
+  reason?: 'host_left' | 'owner_closed' | 'room_finished';
+};
+
+export type LiveRoomJoin = {
+  token: string;
+  voiceToken?: string;
+  role: 'host' | 'viewer';
+  notice?: string;
+  livekitUrl: string;
+  roomId: string;
+  identity: string;
+};
+
+export type LiveRoomsUpdate =
+  | { type: 'rooms.updated'; items: ApiRoomItem[] }
+  | { type: 'room.updated'; detail: LiveRoomDetail }
+  | { type: 'room.missing'; roomId: string };
+export type LiveUpdatesState = 'connecting' | 'connected' | 'reconnecting';
+
 export const RoomConnectionState = {
   Disconnected: 'disconnected', Connecting: 'connecting', Connected: 'connected',
   Reconnecting: 'reconnecting', SignalReconnecting: 'signalReconnecting',

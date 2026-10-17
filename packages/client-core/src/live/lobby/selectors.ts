@@ -9,6 +9,9 @@ export const liveLobbySelectors = {
     createdRoomId: s.createdRoomId,
     error: s.error,
     closeError: s.closeError,
+    isRefreshing: s.isRefreshing,
+    refreshError: s.refreshError,
+    updatesState: s.updatesState,
   }),
 };
 

@@ -241,7 +241,7 @@ func TestVoiceCleanupAndSessionReplacement(t *testing.T) {
 				f.people[p.Identity] = p
 			}
 			f.mu.Unlock()
-			if err := f.handler.cleanupVoiceRooms(context.Background()); err != nil {
+			if err := f.handler.ReconcileVoiceRoom(context.Background(), "room-voice"); err != nil {
 				t.Fatal(err)
 			}
 			state := voiceResult(t, f.call("viewer_two", "GET", voiceBase, ""), 200)

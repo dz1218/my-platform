@@ -11,7 +11,7 @@ async function login(context: BrowserContext) {
 
 async function lobby(page: Page, items: typeof room[] = []) {
   await page.request.post(fixture, { data: { rooms: items } });
-  await page.route('**/api/v1/rooms', async (route) => {
+  await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, async (route) => {
     await route.fulfill({ json: { items } });
   });
   await page.goto('/live');
@@ -22,8 +22,8 @@ test('create and close update immediately even when subsequent list requests fai
   await login(context);
   let listFails = false;
   let creates = 0;
-  await page.route('**/api/v1/rooms', async (route) => {
-    if (route.request().method() === 'POST') {
+  await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, async (route) => {
+    if (route.request().method() === 'POST' && !route.request().url().endsWith('/refresh')) {
       creates++;
       listFails = true;
       return route.fulfill({ status: 201, json: { item: room } });
@@ -50,13 +50,15 @@ test('create and close update immediately even when subsequent list requests fai
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toBeEnabled();
 });
 
-test('polling updates another user’s room without a document reload', async ({ page }) => {
+test('a pushed snapshot updates another user’s room without a document reload', async ({ page }) => {
   const items: typeof room[] = [];
   await lobby(page, items);
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
   items.push(room);
-  await expect(page.getByRole('article', { name: room.title })).toBeVisible({ timeout: 8_000 });
+  await page.request.post(fixture, { data: { rooms: items } });
+  await expect(page.getByRole('article', { name: room.title })).toBeVisible();
   items.pop();
+  await page.request.post(fixture, { data: { rooms: items } });
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible({ timeout: 8_000 });
 });
 
@@ -87,8 +89,8 @@ test('a second tab creating a room changes a stale form into the existing room e
   await login(context);
   await lobby(page);
   let creates = 0;
-  await page.route('**/api/v1/rooms', (route) => {
-    if (route.request().method() === 'POST') {
+  await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, (route) => {
+    if (route.request().method() === 'POST' && !route.request().url().endsWith('/refresh')) {
       creates++;
       return route.fulfill({ status: 409, json: { error: { code: 'room_already_exists', message: '你已有一个直播间，请先关闭后再创建' }, item: room } });
     }
@@ -110,25 +112,24 @@ test('legacy duplicate rooms can be managed but cannot create another room', asy
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toHaveCount(0);
 });
 
-test('a delayed old list cannot undo a successful create', async ({ page, context }) => {
+test('a delayed manual refresh cannot undo a newer pushed snapshot', async ({ page, context }) => {
   await login(context);
   await lobby(page);
   let release!: () => void;
   const delayed = new Promise<void>((resolve) => { release = resolve; });
   let listStarted!: () => void;
   const started = new Promise<void>((resolve) => { listStarted = resolve; });
-  await page.route('**/api/v1/rooms', async (route) => {
-    if (route.request().method() === 'POST') return route.fulfill({ status: 201, json: { item: room } });
+  await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, async (route) => {
     listStarted();
     await delayed;
     await route.fulfill({ json: { items: [] } }).catch(() => {});
   });
   await page.getByRole('button', { name: '刷新列表' }).click();
   await started;
-  await page.getByRole('textbox', { name: '房间名称' }).fill(room.title);
-  await page.getByRole('button', { name: '创建直播间', exact: true }).click();
+  await page.request.post(fixture, { data: { rooms: [room] } });
   await expect(page.getByRole('article', { name: room.title })).toBeVisible();
   release();
+  await expect(page.getByRole('button', { name: '刷新列表' })).toBeEnabled();
   await expect(page.getByRole('article', { name: room.title })).toBeVisible();
 });
 
@@ -136,8 +137,8 @@ test('failed create preserves the title; Chinese composition does not submit', a
   await login(context);
   await lobby(page);
   let creates = 0;
-  await page.route('**/api/v1/rooms', async (route) => {
-    if (route.request().method() === 'POST') {
+  await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, async (route) => {
+    if (route.request().method() === 'POST' && !route.request().url().endsWith('/refresh')) {
       creates++;
       return route.fulfill({ status: 503, json: { error: { message: '创建失败，请重试' } } });
     }
@@ -155,12 +156,12 @@ test('failed create preserves the title; Chinese composition does not submit', a
 
 test('guests see errors and can retry without a misleading empty state', async ({ page }) => {
   await page.request.post(fixture, { data: { failures: { '/api/v1/rooms': 503 } } });
-  await page.route('**/api/v1/rooms', (route) => route.fulfill({ status: 503, json: { error: { message: '直播服务暂不可用' } } }));
+  await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, (route) => route.fulfill({ status: 503, json: { error: { message: '直播服务暂不可用' } } }));
   await page.goto('/live');
   await expect(page.getByRole('main').getByRole('alert')).toContainText('直播服务暂不可用');
   await expect(page.getByText('暂无直播间', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toHaveCount(0);
-  await page.route('**/api/v1/rooms', (route) => route.fulfill({ json: { items: [room] } }));
+  await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, (route) => route.fulfill({ json: { items: [room] } }));
   await page.getByRole('button', { name: '刷新列表' }).click();
   await expect(page.getByRole('article', { name: room.title })).toBeVisible();
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
@@ -172,21 +173,22 @@ test('returning to the lobby checks current room data in the background', async 
   await page.getByRole('link', { name: '观看', exact: true }).click();
   await expect(page).toHaveURL(`/live/${room.id}`);
   items.pop();
+  await page.request.post(fixture, { data: { rooms: items } });
   await page.getByRole('link', { name: '直播大厅' }).click();
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible({ timeout: 8_000 });
 });
 
-test('join errors allow retry and leaving cancels an unfinished join', async ({ page }) => {
+test('temporary join errors allow retry and leaving cancels an unfinished join', async ({ page }) => {
   let attempts = 0;
   let release!: () => void;
   const delayed = new Promise<void>((resolve) => { release = resolve; });
   await page.route('**/api/v1/rooms/room-missing/join', async (route) => {
     attempts++;
     if (attempts > 1) await delayed;
-    await route.fulfill({ status: 404, json: { error: { message: '直播间已关闭或不存在' } } }).catch(() => {});
+    await route.fulfill({ status: 503, json: { error: { message: '直播服务暂时不可用' } } }).catch(() => {});
   });
   await page.goto('/live/room-missing');
-  await expect(page.getByRole('main').getByRole('alert')).toContainText('直播间已关闭或不存在');
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('直播服务暂时不可用');
   await expect(page.getByText('观众模式', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: '观众昵称' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '申请连麦', exact: true })).toHaveCount(0);
@@ -201,6 +203,48 @@ test('join errors allow retry and leaving cancels an unfinished join', async ({ 
   await expect(page).toHaveURL('/live');
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 });
+
+for (const width of [390, 1440]) {
+  test(`a second host page is refused without becoming a viewer or offering retry at ${width}px`, async ({ page, context }) => {
+    await login(context);
+    await page.setViewportSize({ width, height: 900 });
+    let attempts = 0;
+    await page.route(`**/api/v1/rooms/${room.id}/join`, route => {
+      attempts++;
+      expect(route.request().postDataJSON().attemptId).toBeTruthy();
+      return route.fulfill({ status: 409, json: { error: {
+        code: 'host_session_in_use', message: '你已在另一个页面或设备进入此直播间，请使用原页面继续直播。',
+      } } });
+    });
+    await page.goto(`/live/${room.id}`);
+    await expect(page.getByRole('heading', { name: '此直播间已在其他页面打开' })).toBeVisible();
+    await expect(page.getByText('观众模式', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^(重新加入|结束直播|申请连麦)$/ })).toHaveCount(0);
+    await expect(page.getByRole('textbox', { name: '发送消息' })).toBeDisabled();
+    await expect(page.getByRole('link', { name: '返回直播大厅', exact: true }).filter({ hasText: '返回直播大厅' })).toBeVisible();
+    // Resize reuses the same business owner; it must not retry the refused join.
+    await page.setViewportSize({ width: width === 390 ? 1440 : 390, height: 900 });
+    await expect(page.getByRole('heading', { name: '此直播间已在其他页面打开' })).toBeVisible();
+    expect(attempts).toBe(1);
+  });
+
+  test(`a closed room is terminal even if an obsolete lobby card remains at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.route(`**/api/v1/rooms/${room.id}`, route => route.fulfill({ json: {
+      item: room, state: 'closed', reason: 'host_left',
+    } }));
+    await page.route(`**/api/v1/rooms/${room.id}/join`, route => route.fulfill({ status: 410, json: {
+      error: { code: 'room_closed', message: '直播间已结束' },
+    } }));
+    await page.goto(`/live/${room.id}`);
+    await expect(page.getByRole('heading', { name: '直播间已结束' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^(重新加入|结束直播|申请连麦)$/ })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: '返回直播大厅', exact: true }).filter({ hasText: '返回直播大厅' })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('heading', { name: '直播间已结束' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '重新加入' })).toHaveCount(0);
+  });
+}
 
 for (const loggedIn of [true, false]) {
   test(`${loggedIn ? 'logged-in viewer' : 'guest'} never gets host controls from a legacy identity without an explicit role`, async ({ page, context }) => {
@@ -312,8 +356,8 @@ test('room names are required, unique, and server conflicts preserve input', asy
   const otherRoom = { ...room, canManage: false };
   await lobby(page, [otherRoom]);
   let creates = 0;
-  await page.route('**/api/v1/rooms', (route) => {
-    if (route.request().method() === 'POST') {
+  await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, (route) => {
+    if (route.request().method() === 'POST' && !route.request().url().endsWith('/refresh')) {
       creates++;
       return route.fulfill({ status: 409, json: { error: { message: '这个房间名称已被使用，请换一个名称' } } });
     }

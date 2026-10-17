@@ -57,7 +57,11 @@ func NewClient(cfg Config) *Client {
 
 func (c *Client) token(identity, name string, grant map[string]any, ttl time.Duration) (string, error) {
 	now := time.Now()
-	claims := jwt.MapClaims{"iss": c.config.APIKey, "nbf": now.Unix(), "iat": now.Unix(), "exp": now.Add(ttl).Unix(), "video": grant}
+	return c.tokenAt(identity, name, grant, now, now.Add(ttl))
+}
+
+func (c *Client) tokenAt(identity, name string, grant map[string]any, now, expires time.Time) (string, error) {
+	claims := jwt.MapClaims{"iss": c.config.APIKey, "nbf": now.Unix(), "iat": now.Unix(), "exp": expires.Unix(), "video": grant}
 	if identity != "" {
 		claims["sub"] = identity
 		claims["name"] = name
@@ -109,6 +113,7 @@ func (c *Client) call(ctx context.Context, service, method string, grant map[str
 
 // Twirp deployments can emit either protobuf field names or lowerCamelCase.
 type room struct {
+	SID                  string `json:"sid"`
 	Name                 string `json:"name"`
 	Metadata             string `json:"metadata"`
 	NumParticipants      int    `json:"numParticipants"`
@@ -117,6 +122,7 @@ type room struct {
 	NumPublishersProto   int    `json:"num_publishers"`
 }
 type RoomItem struct {
+	SID       string `json:"-"`
 	ID        string `json:"id"`
 	Title     string `json:"title"`
 	Status    string `json:"status"`
@@ -142,7 +148,7 @@ func (r room) item() RoomItem {
 	if r.NumPublishers > 0 || r.NumPublishersProto > 0 {
 		status = "直播中"
 	}
-	return RoomItem{ID: r.Name, Title: title, Status: status, Viewers: viewers, OwnerID: metadata.OwnerID}
+	return RoomItem{SID: r.SID, ID: r.Name, Title: title, Status: status, Viewers: viewers, OwnerID: metadata.OwnerID}
 }
 func (c *Client) ListRooms(ctx context.Context, names ...string) ([]RoomItem, error) {
 	var result struct {

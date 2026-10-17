@@ -234,6 +234,7 @@ func TestOwnerRoomAcrossRedisClientsAndDatabaseLocks(t *testing.T) {
 	t.Cleanup(func() {
 		key := (Handler{Client: NewClient(f.config)}).ownerRoomKey("test-user")
 		_ = caches[0].Del(context.Background(), key).Err()
+		cleanupLifecycleKeys(t, Handler{Client: NewClient(f.config), RoomCache: caches[0]})
 	})
 	responses := make(chan *httptest.ResponseRecorder, 2)
 	token, _ := (auth.Service{Secret: "test-session-secret"}).Token("test-user")

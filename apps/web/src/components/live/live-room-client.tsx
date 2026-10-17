@@ -1,7 +1,5 @@
 'use client';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import { liveRoomService } from '@/services/live';
 import { LiveIcon } from './live-icon';
 import { LiveChat } from './live-chat';
 import { LiveVoiceControls, LiveVoicePanel, LiveViewerCall } from './live-voice';
@@ -16,13 +14,11 @@ function RoleBadge({ role }: { role: Role | 'AI助手' }) {
 
 export function LiveRoomClient(props: LiveRoomProps) {
   const viewport = useViewport();
-  const rooms = useQuery({
-    queryKey: ['live-rooms', props.apiBaseUrl],
-    queryFn: ({ signal }) => liveRoomService(props.apiBaseUrl).list(signal),
-    staleTime: 5_000,
-  });
-  const roomTitle = rooms.data?.find(room => room.id === props.roomId)?.title ?? '直播间';
-  const { role, isHost, roomNotice, nickname, setNickname, participants, error, setError, isJoining, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, voice, joinRoom, toggleLocalMedia, dispatchAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen } = useLiveRoom(props);
+  const { roomTitle, roomEnded, roomInUse, hostDisconnected, roomReason, setCloseConfirmOpen, isClosing, closeError, closeDialogRef, endRoom, refreshRoom, isRefreshing, refreshError, updatesLabel, role, isHost, roomNotice, nickname, setNickname, participants, error, setError, isJoining, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, voice, joinRoom, toggleLocalMedia, dispatchAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen } = useLiveRoom(props);
+  const isTerminal = roomEnded || roomInUse || hostDisconnected;
+  const terminalMessage = roomEnded ? roomReason === 'host_left' ? '主播已离开，直播间已结束。' : '直播间已结束，请返回直播大厅。'
+    : roomInUse ? '你已在另一个页面或设备进入此直播间，请使用原页面继续直播。'
+      : '主播连接已断开，正在确认直播间结束状态。';
   return <>
     {viewport === 'mobile' ? <MobileLiveRoomHeader
       back={<Link href="/live" aria-label="返回直播大厅" className="grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-soft"><LiveIcon name="back" size={21} /></Link>}
@@ -35,40 +31,42 @@ export function LiveRoomClient(props: LiveRoomProps) {
     </header></>}
     {roomNotice && <div role="status" className="live-notice"><LiveIcon name="info" /><p>{roomNotice}</p></div>}
     {notice && <div role="status" className="live-toast"><LiveIcon name="info" size={16} />{notice}</div>}
+    {!roomEnded && <div className="mb-4 flex flex-wrap items-center justify-end gap-3 text-xs text-muted"><span role="status">{updatesLabel}</span><button type="button" className="live-agent-button" disabled={isRefreshing || isClosing} onClick={() => void refreshRoom()}><LiveIcon name="refresh" size={15} className={isRefreshing ? 'live-spin' : undefined} />{isRefreshing ? '正在刷新…' : '刷新状态'}</button></div>}
+    {refreshError && !roomEnded && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>{refreshError}</p></div>}
 
     <div className="live-studio">
       <div className="live-stage-column">
         <div className="live-stage" ref={stageRef}>
-          <LiveStageMedia room={isInRoom ? roomRef.current : null} isHost={isHost} slot={voice.slot} cameraDisabled={!isConnected || mediaBusy !== null} onEnableCamera={() => void toggleLocalMedia('camera')} />
+          <LiveStageMedia room={isInRoom && !isTerminal ? roomRef.current : null} isHost={isHost} slot={voice.slot} cameraDisabled={!isConnected || mediaBusy !== null} onEnableCamera={() => void toggleLocalMedia('camera')} />
           <div ref={remoteAudioRef} hidden />
-          {!isInRoom && <div className="live-stage-empty">
-            <div className="live-stage-symbol"><LiveIcon name={isJoining ? 'refresh' : error ? 'screen' : 'leave'} size={34} className={isJoining ? 'live-spin' : undefined} /></div>
-            <h2>{isJoining ? '正在连接直播间' : error ? '暂时无法进入直播间' : '你已离开直播间'}</h2>
-            {error ? <p role="alert">{error}</p> : <p>{isJoining ? '马上就好，请稍等片刻。' : '摄像头和麦克风已关闭，随时可以重新加入。'}</p>}
-            {!isHost && !isJoining && <label className="live-guest-name"><span>{role === '观众' ? '观众昵称' : '房间昵称'}</span><input className="live-input" autoComplete="nickname" maxLength={80} value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="输入你的昵称" /></label>}
-            <div className="live-stage-actions"><button type="button" className="live-button live-button-light" disabled={isJoining} onClick={() => void joinRoom()}><LiveIcon name="refresh" size={16} />{isJoining ? '正在进入直播间…' : '重新加入'}</button>{isJoining && <button type="button" className="live-button live-button-stage" onClick={() => void leaveRoom()}>取消连接</button>}</div>
+          {(!isInRoom || isTerminal) && <div className="live-stage-empty">
+            <div className="live-stage-symbol"><LiveIcon name={isTerminal ? 'leave' : isJoining ? 'refresh' : error ? 'screen' : 'leave'} size={34} className={!isTerminal && isJoining ? 'live-spin' : undefined} /></div>
+            <h2>{roomEnded ? '直播间已结束' : roomInUse ? '此直播间已在其他页面打开' : hostDisconnected ? '主播连接已断开' : isJoining ? '正在连接直播间' : error ? '暂时无法进入直播间' : '你已离开直播间'}</h2>
+            {isTerminal ? <p role="status">{terminalMessage}</p> : error ? <p role="alert">{error}</p> : <p>{isJoining ? '马上就好，请稍等片刻。' : '摄像头和麦克风已关闭，随时可以重新加入。'}</p>}
+            {!isTerminal && !isHost && !isJoining && <label className="live-guest-name"><span>{role === '观众' ? '观众昵称' : '房间昵称'}</span><input className="live-input" autoComplete="nickname" maxLength={80} value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="输入你的昵称" /></label>}
+            <div className="live-stage-actions">{isTerminal ? <Link href="/live" className="live-button live-button-light"><LiveIcon name="back" size={16} />返回直播大厅</Link> : <><button type="button" className="live-button live-button-light" disabled={isJoining} onClick={() => void joinRoom()}><LiveIcon name="refresh" size={16} />{isJoining ? '正在进入直播间…' : '重新加入'}</button>{isJoining && <button type="button" className="live-button live-button-stage" onClick={() => void leaveRoom()}>取消连接</button>}</>}</div>
           </div>}
           <div className="live-stage-bottom"><span>{isInRoom ? isHost ? nickname : '正在观看' : isJoining ? '正在连接' : '尚未加入'}{isInRoom && isHost && <LiveIcon name={microphoneEnabled ? 'mic' : 'micOff'} size={14} />}</span><button type="button" className="live-icon-button" title={isFullscreen ? '退出全屏' : '全屏观看'} aria-label={isFullscreen ? '退出全屏' : '全屏观看'} onClick={() => void toggleFullscreen()}><LiveIcon name="expand" size={18} /></button></div>
         </div>
 
-        <div className="live-control-bar">
+        {!isTerminal && <div className="live-control-bar">
           <div className="live-device-controls">{isHost ? <>
             <button type="button" className={`live-device-button ${cameraEnabled ? 'is-enabled' : ''}`} aria-pressed={cameraEnabled} disabled={!isConnected || mediaBusy !== null} onClick={() => void toggleLocalMedia('camera')}><LiveIcon name={cameraEnabled ? 'video' : 'videoOff'} size={21} /><span>{mediaBusy === 'camera' ? '切换中…' : cameraEnabled ? '关闭摄像头' : '开启摄像头'}</span></button>
             <button type="button" className={`live-device-button ${microphoneEnabled ? 'is-enabled' : ''}`} aria-pressed={microphoneEnabled} disabled={!isConnected || mediaBusy !== null} onClick={() => void toggleLocalMedia('microphone')}><LiveIcon name={microphoneEnabled ? 'mic' : 'micOff'} size={21} /><span>{mediaBusy === 'microphone' ? '切换中…' : microphoneEnabled ? '关闭麦克风' : '开启麦克风'}</span></button>
           </> : role === '观众' ? <LiveVoiceControls voice={voice} connected={isConnected} /> : <span className="live-viewer-note">{isJoining ? '正在确认房间身份…' : '加入成功后显示房间操作'}</span>}
           {audioBlocked && <button type="button" className="live-button live-button-secondary" disabled={!isConnected} onClick={() => void enableAudio()}><LiveIcon name="volume" size={17} />播放声音</button>}</div>
-          <button type="button" className="live-button live-button-leave" disabled={!isInRoom && !isJoining} onClick={() => void leaveRoom()}><LiveIcon name="leave" size={17} />离开房间</button>
-        </div>
+          <button type="button" className="live-button live-button-leave" disabled={(!isInRoom && !isJoining) || isClosing} onClick={() => isHost ? setCloseConfirmOpen(true) : void leaveRoom()}><LiveIcon name="leave" size={17} />{isHost ? '结束直播' : '离开房间'}</button>
+        </div>}
         {!isHost && isInRoom && voice.own && voice.slot?.status === 'approved' && <LiveViewerCall voice={voice} connected={isConnected} />}
         {isInRoom && error && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>{error}</p><button type="button" className="live-icon-button" aria-label="关闭提示" onClick={() => setError(null)}><LiveIcon name="close" size={16} /></button></div>}
-        {isInRoom && voice.error && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>{voice.error}</p><button type="button" className="live-icon-button" aria-label="关闭连线提示" onClick={voice.dismissError}><LiveIcon name="close" size={16} /></button></div>}
+        {isInRoom && voice.error && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>{voice.error}</p><button type="button" className="live-agent-button" disabled={!isConnected || voice.busy} onClick={() => void voice.refresh()}>重试连麦状态</button><button type="button" className="live-icon-button" aria-label="关闭连线提示" onClick={voice.dismissError}><LiveIcon name="close" size={16} /></button></div>}
         {isReconnecting && <div role="status" className="live-notice"><LiveIcon name="refresh" className="live-spin" /><p>连接暂时中断，正在尝试恢复。恢复后即可继续聊天和控制设备。</p></div>}
         <div className="live-studio-footer"><div><LiveIcon name="info" size={15} /><span>{!role ? '尚未加入房间，摄像头和麦克风均未开启。' : isHost ? '摄像头和麦克风默认关闭，由你决定何时开启。' : voice.own && voice.slot?.status === 'approved' ? '连麦设备在“我的连麦”中设置，退出连麦后可以继续观看。' : voice.own ? '申请已提交，等待主播同意；麦克风尚未开启。' : '可以发送聊天消息，也可以申请与主播连麦。'}</span></div>{isHost && <button type="button" className="live-agent-button" disabled={!isConnected || isDispatchingAgent || agentRequested || hasAgent} onClick={() => void dispatchAgent()}><LiveIcon name="robot" size={16} />{isDispatchingAgent ? '呼叫中…' : hasAgent ? 'AI 助手已在线' : agentRequested ? '已呼叫，等待助手加入' : '呼叫 AI 助手'}</button>}</div>
       </div>
 
       <aside className="live-sidebar" aria-label="直播互动">
         {viewport !== 'mobile' && <div className="live-sidebar-tabs"><button type="button" aria-pressed={sideTab === 'chat'} aria-controls="live-chat-panel" onClick={() => setSideTab('chat')}><LiveIcon name="chat" size={17} />聊天</button><button type="button" aria-pressed={sideTab === 'people'} aria-controls="live-people-panel" onClick={() => setSideTab('people')}><LiveIcon name="users" size={17} />在线 <span>{participants.length}</span></button>{isHost && <button type="button" aria-pressed={sideTab === 'voice'} aria-controls="live-voice-panel" onClick={() => setSideTab('voice')}><LiveIcon name="mic" size={17} />连麦{voice.slot && <span className="live-voice-badge">1</span>}</button>}</div>}
-        <div id="live-chat-panel" className="live-chat-panel" hidden={viewport !== 'mobile' && sideTab !== 'chat'}><LiveChat room={isInRoom ? roomRef.current : null} connected={isConnected} nickname={nickname} visible={viewport === 'mobile' || sideTab === 'chat'} /></div>
+        <div id="live-chat-panel" className="live-chat-panel" hidden={viewport !== 'mobile' && sideTab !== 'chat'}><LiveChat room={isInRoom && !isTerminal ? roomRef.current : null} connected={isConnected && !isTerminal} nickname={nickname} visible={viewport === 'mobile' || sideTab === 'chat'} /></div>
         {viewport === 'mobile' ? <MobileLiveRoomPanels selected={sideTab} onSelect={setSideTab}
           participantCount={participants.length} isHost={isHost} hasVoice={!!voice.slot}
           members={<>        <div id="live-people-panel" className="live-people-panel" >
@@ -83,5 +81,10 @@ export function LiveRoomClient(props: LiveRoomProps) {
         </div></>}
       </aside>
     </div>
+    <dialog ref={closeDialogRef} className="live-dialog" aria-labelledby="end-live-title" aria-describedby="end-live-description" onCancel={event => { if (isClosing) event.preventDefault(); else setCloseConfirmOpen(false); }} onClose={() => setCloseConfirmOpen(false)}>
+      <h2 id="end-live-title">结束这个直播间？</h2><p id="end-live-description">结束后，所有参与者将断开连接。之后需要重新创建直播间。</p>
+      {closeError && <p role="alert" className="live-form-error">{closeError}</p>}
+      <div className="live-dialog-actions"><button autoFocus type="button" className="live-button live-button-secondary" disabled={isClosing} onClick={() => setCloseConfirmOpen(false)}>取消</button><button type="button" className="live-button live-button-danger" disabled={isClosing} onClick={() => void endRoom()}>{isClosing ? '正在结束…' : '确认结束'}</button></div>
+    </dialog>
   </>;
 }

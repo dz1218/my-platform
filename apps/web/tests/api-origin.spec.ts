@@ -26,3 +26,27 @@ for (const { name, host, origin, status } of cases) {
     });
   });
 }
+
+for (const { method, path, forwarded } of [
+  { method: 'POST', path: '/rooms/proxy-header-probe/presence', forwarded: true },
+  { method: 'POST', path: '/rooms/proxy-header-probe/voice/request', forwarded: true },
+  { method: 'GET', path: '/rooms/proxy-header-probe/presence', forwarded: false },
+  { method: 'POST', path: '/rooms/proxy-header-probe/presence/extra', forwarded: false },
+  { method: 'POST', path: '/rooms/proxy-header-probe/join', forwarded: false },
+  { method: 'POST', path: '/other/proxy-header-probe/presence', forwarded: false },
+]) {
+  test(`API proxy ${forwarded ? 'forwards' : 'omits'} the live token for ${method} ${path}`, async ({ request }) => {
+    const fixture = 'http://127.0.0.1:18181/__performance';
+    await request.post(fixture, { data: {} });
+    await request.fetch(`/api/v1${path}`, {
+      method,
+      headers: { Origin: 'http://127.0.0.1:3012', 'X-Live-Voice-Token': 'proxy-test-token' },
+    });
+    const snapshot = await (await request.get(fixture)).json() as {
+      requests: Array<{ path: string; method: string; liveVoiceTokenPresent: boolean }>;
+    };
+    const upstream = snapshot.requests.filter(item => item.path === `/api/v1${path}` && item.method === method);
+    expect(upstream).toHaveLength(1);
+    expect(upstream[0].liveVoiceTokenPresent).toBe(forwarded);
+  });
+}

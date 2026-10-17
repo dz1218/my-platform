@@ -79,6 +79,59 @@ Uncertain creates retry with the same room ID. Local tests use a process store.
 An existing room returns `409 room_already_exists` with its `item`; the lobby
 shows an entry link instead of a second creation form. Closed or expired rooms
 release the slot after an exact-name lookup confirms they are gone.
+Only one page/device may enter an account's own room. Admission is reserved on
+the server before a host token is issued; a second page receives
+`409 host_session_in_use`, without a viewer token or an automatic takeover.
+The same account can still watch other people's rooms in another page/device.
+Navigating away from the actual host page disconnects that host and ends its
+room; refreshing is not a supported way to transfer or resume a broadcast.
+LiveKit's native reconnection can recover while the original participant has
+not left. Muting devices, inactivity and background tabs do not end a room when
+the host connection remains active.
+
+After a host has connected, its confirmed departure closes the entire room,
+including remaining viewers and agents. New rooms that no host has joined yet
+continue to use the existing LiveKit empty-room timeout; no extra departure
+grace period or new LiveKit timeout override is added. The API stores the active
+host session and closing state in Redis, and retries failed closes before
+releasing the owner's room slot. `GET /api/v1/rooms/:roomId` distinguishes an open,
+closing or closed room so clients do not offer to rejoin an ended broadcast.
+
+Configure **LiveKit Cloud → Settings → Webhooks** to send events to
+`https://<public-go-api-host>/api/v1/livekit/webhook`, using the same signing API
+key as `LIVEKIT_API_KEY`. This is the Go API endpoint, not a browser callback or
+the web app's authenticated API proxy. It authenticates the raw request body,
+deduplicates successfully processed events and checks current room/participant
+SIDs before acting on notifications. Room, participant and track events update
+the shared Redis snapshots. There is **no periodic full-room LiveKit sweep**.
+API startup performs one synchronization; explicit refreshes perform a shared,
+rate-limited synchronization. Only rooms already marked `closing` have persisted
+retry tasks, with increasing delays; restarting the API resumes those tasks.
+Failed reads do not prove that a host left, and never cause a room to be deleted.
+If LiveKit ultimately abandons an event and no later event or explicit check
+corrects it, state can remain stale. Webhook configuration is therefore required
+for automatic host-departure handling; WebSocket delivery cannot discover a
+change that the backend never received.
+
+The lobby and room page use same-origin `/ws/rooms`, forwarded to the Go API's
+`/api/v1/rooms/socket`. An optional `roomId` selects room details; without it the
+socket sends the lobby list. Initial connections and reconnects receive a full
+snapshot. Guests can receive public data; `canManage` is computed per connection
+from the signed login session. Snapshots remain in React Query, and an incoming
+push cancels stale HTTP reads. Ordinary list/detail reads and WebSocket snapshots
+do not query LiveKit. The previous five-second lobby, detail and voice polling
+has been removed. `POST /api/v1/rooms/refresh` and
+`POST /api/v1/rooms/:roomId/refresh` explicitly verify upstream state; repeated
+requests are coalesced and limited rather than multiplied by viewer count.
+
+For local development using LiveKit Cloud, automatic notifications require a
+public HTTPS tunnel forwarding to the local Go API on port 8080, with
+`/api/v1/livekit/webhook` configured in Cloud. A localhost callback cannot be
+reached from Cloud. Alternatively, local Docker LiveKit already points to
+`http://host.docker.internal:8080/api/v1/livekit/webhook`; restart LiveKit after
+changing that configuration. The Go API and agent must use the matching local
+LiveKit URL/key pair when choosing this mode. No new application secret is needed.
+
 Each room has one viewer call slot: submitting a request reserves it immediately,
 including while approval is pending or the approved viewer is muted. There is no
 queue. A host can approve, reject, or end the call; the viewer must explicitly
@@ -95,8 +148,10 @@ the join response supplies a two-hour `voiceToken` sent as `X-Live-Voice-Token`.
 Host actions also require the login session. Expired voice credentials require
 rejoining. State is stored in server-managed LiveKit participant attributes, with
 PostgreSQL advisory locks for cross-replica admission; no schema migration is needed.
-The Go API reconciles stale approvals every five seconds and ends the call when
-the last host leaves. Real voice tests run with
+LiveKit attribute and permission events update call controls. Entering a room,
+SDK reconnection and user actions perform authoritative checks; no five-second
+voice poll runs in the browser or API. Host departure closes the room and ends
+its call. Real voice tests run with
 `LIVEKIT_INTEGRATION=1 pnpm --filter web exec playwright test tests/live-voice.spec.ts`
 using a local Go fixture, Chrome/Chromium and temporary LiveKit rooms.
 Agent dispatch requires a separately

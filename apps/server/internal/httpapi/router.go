@@ -45,6 +45,9 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 			return
 		}
 		limit := int64(32 * 1024)
+		if c.Request.URL.Path == livekit.WebhookPath {
+			limit = 1024 * 1024
+		}
 		if c.Request.Method == "POST" && strings.HasPrefix(c.Request.URL.Path, "/api/v1/novels/") {
 			limit = 1024 * 1024
 		}
@@ -61,6 +64,8 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 		c.JSON(200, gin.H{"ok": true, "service": "companion"})
 	})
 	ah := auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: cfg.JWTSecret, SMS: cfg.SMS}, SecureCookie: cfg.SecureCookie}
+	livekit.RegisterWebhook(r, cfg.LiveKit, ah, cache)
+	livekit.RegisterRealtime(r, cfg.LiveKit, ah, cache, cfg.WebOrigin)
 	livekit.Register(r, cfg.LiveKit, ah, cache)
 	ids := identity.Repository{DB: db}
 	messages := conversation.Repository{DB: db}

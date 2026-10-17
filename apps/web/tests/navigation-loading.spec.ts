@@ -583,14 +583,14 @@ test('failed manual refresh retains the bookshelf and retries only its data', as
   expect((await requests(request)).filter(item => item.path === '/api/v1/me')).toHaveLength(0);
 });
 
-test('live polling stops when its tab is hidden and cached rooms survive a slow return check', async ({ page, request }) => {
+test('leaving the live tab stops room updates and cached rooms survive a slow return check', async ({ page, request }) => {
   await page.goto('/live');
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
   const nav = page.getByRole('navigation', { name: '主导航', exact: true });
   await nav.getByRole('link', { name: '小说', exact: true }).click();
   await expect(page.getByText('暂无小说', { exact: true })).toBeVisible();
   const readsBefore = (await requests(request)).filter(item => item.path === '/api/v1/rooms').length;
-  // Deliberately cross the configured five-second interval while the tab is hidden.
+  // Cross the former poll interval: unmounted rooms must not make background reads.
   await page.waitForTimeout(5200);
   expect((await requests(request)).filter(item => item.path === '/api/v1/rooms')).toHaveLength(readsBefore);
   await configure(request, { delays: { '/api/v1/rooms': 2500 } });
