@@ -1,5 +1,5 @@
 import { UnsavedChanges } from '@/components/unsaved-changes';
-import { ConfirmForm } from '@/components/confirm-form';
+import { NovelMutationForm } from '@/features/novels/novel-mutation-form';
 import { SubmitButton } from '@/components/submit-button';
 import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
@@ -55,7 +55,7 @@ export default async function EditNovelPage({
       {/* ── 编辑小说信息 ── */}
       <div className="surface mb-6 p-5">
         <h2 className="mb-5 text-base font-bold text-ink">基本信息</h2>
-        <form action={updateNovelAction} className="grid gap-5">
+        <NovelMutationForm action={updateNovelAction} className="grid gap-5">
           <UnsavedChanges />
           <input type="hidden" name="novelId" value={id} />
 
@@ -97,7 +97,7 @@ export default async function EditNovelPage({
           <SubmitButton className="btn-primary mt-1 py-2.5 text-sm font-bold">
             保存修改
           </SubmitButton>
-        </form>
+        </NovelMutationForm>
       </div>
 
       {/* ── 章节管理 ── */}
@@ -112,7 +112,7 @@ export default async function EditNovelPage({
         </div>
 
         {/* 添加新章节 */}
-        <form action={createChapterAction} className="mb-5 flex gap-3">
+        <NovelMutationForm action={createChapterAction} className="mb-5 flex gap-3">
           <input type="hidden" name="novelId" value={id} />
           <input
             name="title" maxLength={200} aria-label="新章节标题" autoComplete="off"
@@ -136,7 +136,7 @@ export default async function EditNovelPage({
             </svg>
             添加章节
           </SubmitButton>
-        </form>
+        </NovelMutationForm>
 
         {novel.chapters.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted">
@@ -182,7 +182,7 @@ export default async function EditNovelPage({
         <p className="mb-4 text-sm text-muted">
           删除后无法恢复，所有章节将一并删除。
         </p>
-        <ConfirmForm action={deleteNovelAction} message="删除后无法恢复，确定删除吗？">
+        <NovelMutationForm action={deleteNovelAction} confirmMessage="删除后无法恢复，确定删除吗？">
           <input type="hidden" name="novelId" value={id} />
           <SubmitButton className="btn-danger-ghost">
             <svg aria-hidden="true"
@@ -201,7 +201,7 @@ export default async function EditNovelPage({
             </svg>
             删除小说
           </SubmitButton>
-        </ConfirmForm>
+        </NovelMutationForm>
       </div>
     </main>
   );

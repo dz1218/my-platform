@@ -3,15 +3,12 @@ import type { StateCreator } from 'zustand/vanilla';
 import type { ApiRoomItem } from '@/lib/api';
 import { liveRoomService } from '@/services/live';
 import type { LiveLobbyStore } from './store';
-import type { Filter } from './initial-state';
 
 export type LobbyDependencies = { client: QueryClient; apiBaseUrl: string; isLoggedIn: boolean; service?: ReturnType<typeof liveRoomService> };
 export type LobbyActions = {
   createRoom: () => Promise<'invalid-title' | undefined>;
   closeRoom: () => Promise<void>;
   setTitle: (title: string) => void;
-  setSearch: (search: string) => void;
-  setFilter: (filter: Filter) => void;
   setCreating: (creating: boolean) => void;
   setRoomToClose: (room: ApiRoomItem | null) => void;
   setError: (error: string | null) => void;
@@ -41,7 +38,7 @@ export const createLobbyActions = ({ client, apiBaseUrl, isLoggedIn, service = l
         const result = await service.create(title);
         await upsert(result.item);
         if (result.conflict) { set({ error: result.conflict }); return; }
-        set({ title: '', search: '', filter: '全部', createdRoomId: result.item.id });
+        set({ title: '', createdRoomId: result.item.id });
       } catch (error) { set({ error: error instanceof Error ? error.message : '创建房间失败，请重试' }); }
       finally { set({ isCreating: false }); }
     },
@@ -58,8 +55,6 @@ export const createLobbyActions = ({ client, apiBaseUrl, isLoggedIn, service = l
       finally { set({ closingRoomId: null }); }
     },
     setTitle: title => set({ title, error: null }),
-    setSearch: search => set({ search }),
-    setFilter: filter => set({ filter }),
     setCreating: creating => set({ creating }),
     setRoomToClose: roomToClose => { if (!busy()) set({ roomToClose, closeError: null }); },
     setError: error => set({ error }),

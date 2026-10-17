@@ -7,7 +7,7 @@ const inheritedIdentity = {
 };
 const failedRegistrations = new Set();
 // Test-only controls include SSR requests, which browser routing cannot delay.
-let performanceConfig = { delays: {}, failures: {}, rooms: undefined };
+let performanceConfig = { delays: {}, failures: {}, rooms: undefined, user: undefined };
 let performanceRequests = [];
 const inheritanceUser = (session) => session === 'inheritance-test-second' ? {
   id: 'inheritance-second-user', name: '第二测试用户', email: 'inheritance-second@example.invalid',
@@ -19,6 +19,13 @@ const inheritanceUser = (session) => session === 'inheritance-test-second' ? {
   inheritedIdentity: session === 'inheritance-test-inherited' ? inheritedIdentity : null,
 });
 
+function createFixtureNovels() {
+  const chapter = { id: 'design-chapter', novelId: 'design-novel', title: '窗边的第一封信', orderIndex: 1, published: true, content: '雨停之前，她把收音机调到了熟悉的频率。街道另一端的灯还亮着。\n每一段平凡的日常，都值得有人认真倾听。'.repeat(8) };
+  const novel = { id: 'design-novel', title: '雨停之前的来信', description: '一座城市，两段生活。那些未曾说出口的话，终于在一个雨夜有了回音。', status: 'ongoing', authorId: 'inheritance-test-user', author: { id: 'inheritance-test-user', name: '夜行人' }, chapterCount: 1, chapters: [chapter] };
+  return [novel, { ...novel, id: 'design-novel-two', title: '在城市的另一边，等一个缓缓而来的晴天', author: { ...novel.author, name: '远山' }, status: 'completed', chapters: [{ ...chapter }] }];
+}
+let fixtureNovels = createFixtureNovels();
+
 createServer(async (request, response) => {
   response.setHeader('Content-Type', 'application/json');
   response.setHeader('Cache-Control', 'no-store');
@@ -26,15 +33,19 @@ createServer(async (request, response) => {
   if (request.url === '/__performance') {
     if (request.method === 'POST') {
       let body = ''; for await (const part of request) body += part;
-      performanceConfig = { delays: {}, failures: {}, rooms: undefined, ...JSON.parse(body || '{}') };
+      performanceConfig = { delays: {}, failures: {}, rooms: undefined, user: undefined, ...JSON.parse(body || '{}') };
       performanceRequests = [];
+      fixtureNovels = createFixtureNovels();
     }
     return response.end(JSON.stringify({ requests: performanceRequests }));
   }
-  const measured = { path: request.url, method: request.method, startedAt: Date.now(), finishedAt: null };
+  const measured = { path: request.url, method: request.method, startedAt: Date.now(), finishedAt: null, abortedAt: null };
   performanceRequests.push(measured);
   performanceRequests = performanceRequests.slice(-500);
   response.once('finish', () => { measured.finishedAt = Date.now(); });
+  response.once('close', () => {
+    if (!response.writableFinished) measured.abortedAt = Date.now();
+  });
   const delay = performanceConfig.delays[request.url] ?? 0;
   if (delay) await new Promise(resolve => setTimeout(resolve, delay));
   if (performanceConfig.failures[request.url]) {
@@ -61,7 +72,7 @@ createServer(async (request, response) => {
   }
   const session = request.headers.cookie?.match(/(?:^|;\s*)companion_session=([^;]+)/)?.[1];
   if (request.url === '/api/v1/me' && /^inheritance-test-(female|male|legacy|completed|inherited|second)$/.test(session ?? '')) {
-    return response.end(JSON.stringify({ user: inheritanceUser(session) }));
+    return response.end(JSON.stringify({ user: { ...inheritanceUser(session), ...performanceConfig.user } }));
   }
   if (['/api/v1/auth/code', '/api/v1/auth/verify'].includes(request.url) && request.method === 'POST') {
     let body = ''; for await (const part of request) body += part;
@@ -121,13 +132,45 @@ createServer(async (request, response) => {
   if (request.url === '/api/v1/me' && session === 'live-test-viewer') {
     return response.end(JSON.stringify({ user: { id: 'live-test-viewer', name: '登录观众', email: 'viewer@example.invalid' } }));
   }
-  // Deterministic server-rendered content for the dual-experience visual suite.
+  // Stateful novels stay in this isolated process so server-action redirects can
+  // be checked against an already-cached client bookshelf without real writes.
   if (session?.startsWith('inheritance-test-') && request.url?.startsWith('/api/v1/novels')) {
-    const chapter = { id: 'design-chapter', novelId: 'design-novel', title: '窗边的第一封信', orderIndex: 1, published: true, content: '雨停之前，她把收音机调到了熟悉的频率。街道另一端的灯还亮着。\n每一段平凡的日常，都值得有人认真倾听。'.repeat(8) };
-    const novel = { id: 'design-novel', title: '雨停之前的来信', description: '一座城市，两段生活。那些未曾说出口的话，终于在一个雨夜有了回音。', status: 'ongoing', authorId: 'inheritance-test-user', author: { id: 'inheritance-test-user', name: '夜行人' }, chapterCount: 1, chapters: [chapter] };
-    if (request.url === '/api/v1/novels') return response.end(JSON.stringify({ items: [novel, { ...novel, id: 'design-novel-two', title: '在城市的另一边，等一个缓缓而来的晴天', author: { ...novel.author, name: '远山' }, status: 'completed' }] }));
-    if (request.url === '/api/v1/novels/design-novel') return response.end(JSON.stringify(novel));
-    if (request.url === '/api/v1/novels/design-novel/chapters/design-chapter') return response.end(JSON.stringify(chapter));
+    const parts = request.url.split('/').filter(Boolean);
+    if (request.method === 'POST') {
+      let body = ''; for await (const part of request) body += part;
+      const data = JSON.parse(body || '{}');
+      if (parts.length === 3) {
+        const novel = { id: `fixture-novel-${fixtureNovels.length + 1}`, title: data.title, description: data.description, status: 'ongoing', authorId: 'inheritance-test-user', author: { id: 'inheritance-test-user', name: '夜行人' }, chapterCount: 0, chapters: [] };
+        fixtureNovels.push(novel);
+        return response.end(JSON.stringify(novel));
+      }
+      const novel = fixtureNovels.find(item => item.id === parts[3]);
+      if (!novel) { response.statusCode = 404; return response.end('{}'); }
+      if (parts[4] === 'update') Object.assign(novel, data);
+      if (parts[4] === 'delete') fixtureNovels = fixtureNovels.filter(item => item.id !== novel.id);
+      if (parts[4] === 'chapters') {
+        if (parts.length === 5) {
+          const chapter = { id: `fixture-chapter-${novel.chapters.length + 1}`, novelId: novel.id, title: data.title, content: '', orderIndex: novel.chapters.length + 1, published: false };
+          novel.chapters.push(chapter);
+          novel.chapterCount = novel.chapters.length;
+          return response.end(JSON.stringify(chapter));
+        }
+        const chapter = novel.chapters.find(item => item.id === parts[5]);
+        if (!chapter) { response.statusCode = 404; return response.end('{}'); }
+        if (['update', 'publish'].includes(parts[6])) Object.assign(chapter, data);
+        if (parts[6] === 'delete') novel.chapters = novel.chapters.filter(item => item.id !== chapter.id);
+        novel.chapterCount = novel.chapters.length;
+      }
+      return response.end(JSON.stringify(novel));
+    }
+    if (parts.length === 3) return response.end(JSON.stringify({ items: fixtureNovels }));
+    const novel = fixtureNovels.find(item => item.id === parts[3]);
+    if (!novel) { response.statusCode = 404; return response.end('{}'); }
+    if (parts.length === 4) return response.end(JSON.stringify(novel));
+    const chapter = novel.chapters.find(item => item.id === parts[5]);
+    if (chapter) return response.end(JSON.stringify(chapter));
+    response.statusCode = 404;
+    return response.end('{}');
   }
   if (request.url === '/api/v1/rooms') {
     return response.end(JSON.stringify({ items: performanceConfig.rooms ?? [] }));

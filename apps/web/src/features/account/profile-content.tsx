@@ -1,27 +1,29 @@
 'use client';
 
-import { type KeyboardEvent } from 'react';
-import { useStore } from 'zustand';
-import { createAccountStore, accountSelectors } from '@/stores/account';
-import { useStoreInstance } from '@/stores/use-store-instance';
+import { useState, type KeyboardEvent } from 'react';
+import { useBrowseUI } from '@/stores/provider';
 import Link from 'next/link';
 import { MatchLink } from '@/features/chat/match-link';
-import { ListSkeleton } from '@/components/page-skeleton';
+import { InlineLoading } from '@/components/page-skeleton';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, MessageCircle, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, MessageCircle, Plus, RefreshCw } from 'lucide-react';
 import { Avatar } from '@/features/identity/avatar';
-import { matches } from '@/services/companion';
+import { matchesQueryOptions } from '@/services/query-options';
 import type { Identity } from '@/types/companion';
 
 type Tab = 'recent' | 'identity';
 const tabs: { id: Tab; label: string }[] = [{ id: 'recent', label: '最近聊天' }, { id: 'identity', label: 'AI 身份' }];
 
 export function ProfileContent({ accountId, identity }: { accountId: string; identity: Identity | null }) {
-  const ui = useStoreInstance(createAccountStore);
-  const tab = useStore(ui, accountSelectors.tab);
-  const indicatorMotion = useStore(ui, accountSelectors.indicatorMotion);
-  const { selectTab } = ui.getState();
-  const conversations = useQuery({ queryKey: ['matches', accountId], queryFn: ({ signal }) => matches(signal), staleTime: 0 });
+  const tab = useBrowseUI(s => s.profileTab);
+  const setTab = useBrowseUI(s => s.setProfileTab);
+  const [indicatorMotion, setIndicatorMotion] = useState<'left' | 'right' | null>(null);
+  const selectTab = (next: Tab) => {
+    if (next === tab) return;
+    setIndicatorMotion(next === 'identity' ? 'right' : 'left');
+    setTab(next);
+  };
+  const conversations = useQuery(matchesQueryOptions(accountId));
   const recent = conversations.data?.items.filter(match => match.identity.id !== identity?.id);
   function onTabKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     let next: number;
@@ -49,15 +51,16 @@ export function ProfileContent({ accountId, identity }: { accountId: string; ide
     <section role="tabpanel" id="profile-panel-recent" aria-labelledby="profile-tab-recent" hidden={tab !== 'recent'} tabIndex={0} className="p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-base font-semibold">你的聊天{recent && <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-line/60 bg-surface-soft/70 px-2 text-xs font-medium leading-none tabular-nums text-ink">{recent.length}</span>}</h2>
-        <Link href="/companion?view=discover" className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm text-muted transition-colors hover:text-ink">认识新朋友<ChevronRight aria-hidden="true" className="size-4" /></Link>
+        <div className="flex items-center gap-2"><button type="button" aria-label="刷新最近聊天" title="刷新最近聊天" disabled={conversations.isFetching} onClick={() => void conversations.refetch()} className="grid size-11 shrink-0 place-items-center rounded-control text-muted hover:bg-surface-soft hover:text-ink disabled:opacity-50"><RefreshCw aria-hidden="true" className={`size-4 ${conversations.isFetching ? 'motion-safe:animate-spin' : ''}`} /></button><Link href="/companion?view=discover" className="inline-flex min-h-11 shrink-0 items-center gap-1 text-sm text-muted transition-colors hover:text-ink">认识新朋友<ChevronRight aria-hidden="true" className="size-4" /></Link></div>
       </div>
-      {conversations.isPending ? <ListSkeleton count={3} label="正在加载聊天…" /> : conversations.isError ? <div role="alert" className="rounded-panel bg-panel p-6"><p className="text-sm">聊天暂时加载失败</p><button type="button" className="btn-secondary mt-4" onClick={() => void conversations.refetch()}>重试</button></div> : recent?.length ? <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {recent.map(match => <li key={match.id}><MatchLink match={match} aria-label={`继续和${match.identity.name}聊天`} className="group flex h-full items-center gap-4 rounded-control bg-surface-soft/40 p-5 transition-shadow duration-200 hover:shadow-card-hover-glow focus-visible:shadow-card-hover-glow motion-reduce:transition-none">
+      {conversations.isError && <div role="alert" className="mb-4 rounded-panel bg-panel p-6"><p className="text-sm">{conversations.data ? '聊天更新失败，已保留上次内容' : '聊天暂时加载失败'}</p><button type="button" disabled={conversations.isFetching} className="btn-secondary mt-4" onClick={() => void conversations.refetch()}>重试</button></div>}
+      {conversations.isPending ? <InlineLoading label="正在加载聊天…" /> : recent?.length ? <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {recent.map(match => <li key={match.id} data-browse-anchor={`match:${match.id}`}><MatchLink match={match} aria-label={`继续和${match.identity.name}聊天`} className="group flex h-full items-center gap-4 rounded-control bg-surface-soft/40 p-5 transition-shadow duration-200 hover:shadow-card-hover-glow focus-visible:shadow-card-hover-glow motion-reduce:transition-none">
           <Avatar identity={match.identity} large />
           <span className="min-w-0 flex-1"><span className="block truncate text-base font-medium">{match.identity.name}</span><span className="mt-2 block text-xs text-muted">继续你们的对话</span></span>
           <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted group-hover:text-ink" />
         </MatchLink></li>)}
-      </ul> : <div className="flex flex-col items-start gap-5 py-5 sm:flex-row sm:items-center sm:py-6">
+      </ul> : conversations.data && <div className="flex flex-col items-start gap-5 py-5 sm:flex-row sm:items-center sm:py-6">
         <span className="grid size-12 shrink-0 place-items-center rounded-full bg-surface-soft text-muted"><MessageCircle aria-hidden="true" className="size-5" /></span>
         <div className="min-w-0 flex-1"><h3 className="font-medium">还没有开始的对话</h3><p className="mt-2 text-sm leading-6 text-muted">认识一位朋友，聊过之后就能在这里找到 TA。</p></div>
       </div>}

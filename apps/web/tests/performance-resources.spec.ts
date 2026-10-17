@@ -6,7 +6,9 @@ test('document streams while slow authentication and novel requests overlap', as
   await page.context().addCookies([{ name: 'companion_session', value: 'inheritance-test-completed', domain: '127.0.0.1', path: '/' }]);
   await request.post('http://127.0.0.1:18181/__performance', { data: { delays: { '/api/v1/me': 2500, '/api/v1/novels/design-novel': 2500 } } });
   await page.goto('/novels/design-novel', { waitUntil: 'commit' });
-  await expect(page.getByRole('status', { name: '正在加载页面…', exact: true })).toBeVisible();
+  await expect(page.locator('[data-app-startup]')).toBeVisible();
+  await expect(page.getByRole('navigation', { name: '主导航', exact: true })).toBeVisible();
+  await expect(page.locator('[data-page-skeleton]')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: '雨停之前的来信', exact: true, level: 1 })).toBeVisible();
   const { requests } = await (await request.get('http://127.0.0.1:18181/__performance')).json();
   const user = requests.find((item: { path: string }) => item.path === '/api/v1/me');

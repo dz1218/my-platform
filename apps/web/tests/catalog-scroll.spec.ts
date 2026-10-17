@@ -191,7 +191,8 @@ test('filters cancel stale results, survive a chat return, and expose retry for 
   await page.goBack();
   await expect(page.getByRole('searchbox', { name: '姓名' })).toHaveValue('朋友01');
   await expect(page.getByRole('combobox', { name: '职业', exact: true })).toHaveText('教师');
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  // A user scroll cancels any remaining restoration before requesting more.
+  await page.mouse.wheel(0, 20_000);
   await expect(page.getByRole('button', { name: '重试加载', exact: true })).toBeVisible();
   mock.fail(0);
   await page.getByRole('button', { name: '重试加载', exact: true }).click();

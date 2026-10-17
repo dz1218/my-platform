@@ -20,7 +20,10 @@ async function setup(page: Page) {
     socket.send(JSON.stringify({ type: 'matches.updated', items }));
   });
   page.on('request', request => {
-    if (request.url().includes('/api/v1/') || new URL(request.url()).searchParams.has('_rsc')) requests.push(request.url());
+    const url = new URL(request.url());
+    // Link visibility can schedule prefetch after the initial content settles;
+    // count every business read and only actual route work for this assertion.
+    if (url.pathname.startsWith('/api/v1/') || (url.searchParams.has('_rsc') && request.headers()['next-router-prefetch'] !== '1')) requests.push(request.url());
   });
   await page.route('**/api/v1/discover?*', route => route.fulfill({ json: { items: [identity], total: 1, page: 1, nextPage: null, occupations: [] } }));
   await page.route('**/api/v1/matches', route => {
@@ -74,7 +77,7 @@ test('chat intent warms HTTP data without connecting and reuses the known match 
   expect(state.requests.filter(url => new URL(url).pathname === '/api/v1/matches/request-match')).toEqual([]);
 });
 
-test('idle companion does not poll, but returning to the window refreshes stale matches', async ({ page }) => {
+test('idle and refocused companion keeps cached matches until manual refresh', async ({ page }) => {
   await page.clock.install();
   const state = await setup(page);
   const before = state.matchReads();
@@ -88,6 +91,9 @@ test('idle companion does not poll, but returning to the window refreshes stale 
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
   });
+  await page.clock.runFor(500);
+  expect(state.matchReads()).toBe(before);
+  await page.getByRole('button', { name: '刷新最近聊天', exact: true }).click();
   await expect.poll(state.matchReads).toBe(before + 1);
   await expect(page.getByText('你们的故事，从这里开始', { exact: true })).toBeVisible();
 });
@@ -149,24 +155,25 @@ test('heartbeats keep an idle account connection alive and a silent connection r
   await expect(page.locator('.conversation-rail li').first()).toContainText('苏禾');
 });
 
-test('a quick return to the window refreshes even within the previous 15-second freshness window', async ({ page }) => {
-  await page.clock.install();
+test('account snapshots update the shared profile list without reconnecting or issuing HTTP', async ({ page }) => {
   const state = await setup(page);
   await expect.poll(state.activeAccountSockets).toBe(1);
-  await page.evaluate(() => {
-    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
-    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
-  });
-  state.setMatches([secondMatch, match]);
-  await page.clock.runFor(1_000);
-  await page.evaluate(() => {
-    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
-    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
-  });
+  const connections = state.accountConnections();
+  const reads = state.matchReads();
+  const nav = page.getByRole('navigation', { name: '主导航', exact: true });
+  await nav.getByRole('link', { name: '我的', exact: true }).click();
+  await expect(page).toHaveURL('/me');
+  await expect(page.getByRole('link', { name: '继续和林晚聊天', exact: true })).toBeVisible();
+  state.pushMatches([secondMatch, match]);
+  await expect(page.getByRole('link', { name: '继续和苏禾聊天', exact: true })).toBeVisible();
+  await nav.getByRole('link', { name: '陪伴', exact: true }).click();
   await expect(page.locator('.conversation-rail li').first()).toContainText('苏禾');
+  expect(state.matchReads()).toBe(reads);
+  expect(state.accountConnections()).toBe(connections);
+  expect(state.activeAccountSockets()).toBe(1);
 });
 
-test('account socket reconnect restores changes missed while offline and is released on navigation', async ({ page }) => {
+test('account socket reconnect restores missed changes and survives ordinary tab navigation', async ({ page }) => {
   const state = await setup(page);
   await expect.poll(state.activeAccountSockets).toBe(1);
   const connections = state.accountConnections();
@@ -177,7 +184,8 @@ test('account socket reconnect restores changes missed while offline and is rele
   await expect.poll(state.activeAccountSockets).toBe(1);
   await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '我的', exact: true }).click();
   await expect(page).toHaveURL('/me');
-  await expect.poll(state.activeAccountSockets).toBe(0);
+  await expect.poll(state.activeAccountSockets).toBe(1);
+  await expect(page.getByRole('link', { name: '继续和苏禾聊天', exact: true })).toBeVisible();
 });
 
 test('a socket snapshot wins over a stale HTTP response still in flight', async ({ page }) => {
@@ -192,12 +200,7 @@ test('a socket snapshot wins over a stale HTTP response still in flight', async 
     await route.fulfill({ json: { items: [match] } }).catch(() => {});
   });
   try {
-    await page.evaluate(() => {
-      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
-      document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
-      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
-      document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
-    });
+    await page.getByRole('button', { name: '刷新最近聊天', exact: true }).click();
     await expect.poll(() => started).toBe(true);
     state.pushMatches([secondMatch, match]);
     await expect(page.locator('.conversation-rail li').first()).toContainText('苏禾');
@@ -256,4 +259,74 @@ test('WebSocket receives and deduplicates messages, resumes after disconnect, an
   await page.getByRole('link', { name: 'Radio Friday 首页' }).click();
   await expect(page).toHaveURL('/companion');
   await expect.poll(state.matchReads).toBe(before + 1);
+});
+
+async function startDelayedGreeting(page: Page) {
+  const state = await setup(page);
+  const friend = { ...identity, id: 'delayed-friend', name: '迟来朋友' };
+  const created = { id: 'delayed-match', conversationId: 'delayed-conversation', identity: friend };
+  await page.route('**/api/v1/discover?*', route => route.fulfill({ json: { items: [friend], total: 1, page: 1, nextPage: null, occupations: [] } }));
+  await page.getByRole('button', { name: '刷新人物目录', exact: true }).click();
+  const greeting = page.getByRole('button', { name: '和迟来朋友打个招呼', exact: true });
+  await expect(greeting).toBeEnabled();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let started = false;
+  let connections = 0;
+  await page.routeWebSocket('**/ws/conversations/*', socket => {
+    connections++;
+    socket.onClose(() => { connections--; });
+  });
+  await page.route('**/api/v1/matches', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    started = true;
+    await gate;
+    return route.fulfill({ json: created });
+  });
+  await greeting.click();
+  await expect.poll(() => started).toBe(true);
+  return { ...state, release: () => { state.setMatches([created, match]); release(); }, connections: () => connections };
+}
+
+async function settleGreetingNavigation(page: Page) {
+  await page.evaluate(() => new Promise<void>(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+}
+
+test('a delayed greeting updates the shared list without leaving the newly selected tab', async ({ page }) => {
+  const state = await startDelayedGreeting(page);
+  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '我的', exact: true }).click();
+  await expect(page).toHaveURL('/me');
+  state.release();
+  await expect(page.getByRole('link', { name: '继续和迟来朋友聊天', exact: true })).toBeVisible();
+  await settleGreetingNavigation(page);
+  await expect(page).toHaveURL('/me');
+  expect(state.requests.some(url => new URL(url).pathname === '/chat/delayed-match')).toBe(false);
+  expect(state.connections()).toBe(0);
+});
+
+test('leaving and returning invalidates a delayed greeting navigation intent', async ({ page }) => {
+  const state = await startDelayedGreeting(page);
+  const nav = page.getByRole('navigation', { name: '主导航', exact: true });
+  await nav.getByRole('link', { name: '我的', exact: true }).click();
+  await expect(page).toHaveURL('/me');
+  await nav.getByRole('link', { name: '陪伴', exact: true }).click();
+  await expect(page).toHaveURL('/companion');
+  state.release();
+  await expect(page.getByRole('link', { name: /继续聊天\s*，和迟来朋友/ })).toBeVisible();
+  await settleGreetingNavigation(page);
+  await expect(page).toHaveURL('/companion');
+  expect(state.requests.some(url => new URL(url).pathname === '/chat/delayed-match')).toBe(false);
+  expect(state.connections()).toBe(0);
+});
+
+test('a delayed greeting still opens its conversation while its original page remains active', async ({ page }) => {
+  const state = await startDelayedGreeting(page);
+  state.release();
+  await expect(page).toHaveURL('/chat/delayed-match');
+  await expect(page.getByRole('textbox', { name: '给迟来朋友发消息' })).toBeVisible();
+  await expect.poll(state.connections).toBe(1);
+  await page.getByRole('link', { name: 'Radio Friday 首页' }).click();
+  await expect(page.getByRole('link', { name: /继续聊天\s*，和迟来朋友/ })).toBeVisible();
 });

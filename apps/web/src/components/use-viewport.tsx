@@ -1,5 +1,6 @@
 'use client';
 import { useSyncExternalStore } from 'react';
+import { InlineLoading } from './page-skeleton';
 
 export type ViewportMode = 'mobile' | 'desktop';
 const query = '(min-width: 768px)';
@@ -16,11 +17,6 @@ export function useViewport(): ViewportMode | null {
   return useSyncExternalStore(subscribe, snapshot, serverSnapshot);
 }
 
-export function ViewportSkeleton() {
-  return <div role="status" aria-label="正在加载页面" className="space-y-5 py-6">
-    <div className="h-8 w-40 rounded-control bg-surface-soft" />
-    <div className="h-36 rounded-panel bg-surface-soft" />
-    <div className="h-52 rounded-panel bg-panel" />
-    <span className="sr-only">正在加载页面…</span>
-  </div>;
+export function ViewportLoading() {
+  return <InlineLoading label="正在准备页面…" />;
 }

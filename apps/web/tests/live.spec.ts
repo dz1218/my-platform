@@ -166,7 +166,7 @@ test('guests see errors and can retry without a misleading empty state', async (
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 });
 
-test('returning to the lobby keeps cached data until its next scheduled refresh', async ({ page }) => {
+test('returning to the lobby checks current room data in the background', async ({ page }) => {
   const items = [room];
   await lobby(page, items);
   await page.getByRole('link', { name: '观看', exact: true }).click();

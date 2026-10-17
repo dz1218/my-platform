@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { PageSkeleton, LoadingRegion, Skeleton } from '@/components/page-skeleton';
+import { InlineLoading } from '@/components/page-skeleton';
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -25,7 +25,7 @@ export function ChatRoom({ matchId, inheritedIdentityId, intercepted = false }: 
         id="main-content"
         tabIndex={-1}
       >
-        <PageSkeleton kind="chat" />
+        <InlineLoading label="正在打开聊天…" />
       </main>
     );
   if (!match.data)
@@ -178,7 +178,7 @@ export function Conversation({
           </p>
         )}
         {chat.latest.isPending ? (
-          <LoadingRegion label="正在打开你们的对话…" className="py-6"><div className="space-y-6"><Skeleton className="h-16 w-3/4" /><Skeleton className="ml-auto h-12 w-1/2" /></div></LoadingRegion>
+          <InlineLoading label="正在打开你们的对话…" />
         ) : (
           !chat.messages.length && (
             <p className="my-12 text-center text-sm text-muted">

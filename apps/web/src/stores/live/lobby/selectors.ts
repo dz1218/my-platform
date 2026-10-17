@@ -3,8 +3,6 @@ import type { LiveLobbyStore } from './store';
 export const liveLobbySelectors = {
   view: (s: LiveLobbyStore) => ({
     title: s.title,
-    search: s.search,
-    filter: s.filter,
     isCreating: s.isCreating,
     closingRoomId: s.closingRoomId,
     roomToClose: s.roomToClose,

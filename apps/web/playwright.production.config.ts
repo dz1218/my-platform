@@ -3,7 +3,7 @@ import base from './playwright.config';
 
 export default defineConfig({
   ...base,
-  testMatch: ['navigation-loading.spec.ts', 'performance-resources.spec.ts'],
+  testMatch: ['navigation-loading.spec.ts', 'performance-resources.spec.ts', 'tab-scroll.spec.ts', 'companion-requests.spec.ts'],
   outputDir: 'test-results/production',
   reporter: [['list'], ['json', { outputFile: 'test-results/production/report.json' }]],
   use: { ...base.use, baseURL: 'http://127.0.0.1:3013' },

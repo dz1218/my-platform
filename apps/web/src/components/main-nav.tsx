@@ -1,6 +1,7 @@
 "use client";
 import NextLink, { useLinkStatus } from "next/link";
-import { PageSkeleton, skeletonForPath } from './page-skeleton';
+import { InlineLoading } from './page-skeleton';
+import { BrowseNavigationProvider, BrowsingPages, useBrowseNavigation } from './browse-navigation';
 import {
   BookOpen,
   Info,
@@ -12,6 +13,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/features/identity/avatar";
+import { useCurrentAccount } from '@/features/account/use-current-account';
 import { AuthExitTransition } from "@/features/auth/auth-exit-transition";
 import { logoutAction } from "@/lib/actions";
 import { SubmitButton } from "./submit-button";
@@ -44,21 +46,23 @@ function Link({
   const beginNavigation = useAppUI(s => s.beginNavigation);
   const cancelNavigation = useAppUI(s => s.cancelNavigation);
   const ticket = useRef<number | null>(null);
+  const { prepareNavigation, hrefForTab } = useBrowseNavigation();
+  const targetHref = hrefForTab(href);
   return (
     <NextLink
       {...props}
-      href={href}
+      href={targetHref}
+      scroll={false}
       onNavigate={(event) => {
-        // Next refreshes dynamic server data when navigating to the current URL.
-        // Navigation chrome should simply return to the top of that page.
-        if (new URL(href, window.location.href).href === window.location.href) {
+        // Re-selecting a tab keeps its reading position and does not refresh data.
+        if (new URL(targetHref, window.location.href).href === window.location.href) {
           // A click back to the committed page also supersedes an in-flight route.
           if (!pendingHref) event.preventDefault();
           cancelNavigation();
-          window.scrollTo({ top: 0, behavior: "instant" });
           return;
         }
-        ticket.current = beginNavigation(href);
+        prepareNavigation(targetHref);
+        ticket.current = beginNavigation(targetHref);
       }}
     >
       <LinkPending ticket={ticket} />
@@ -99,13 +103,36 @@ const links = [
   glyph: NavigationGlyphName;
 }[];
 
+/** Account bootstrap has no business controllers and never pretends to be a guest. */
+export function AppStartup() {
+  const path = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  useLayoutEffect(() => {
+    try { setCollapsed(localStorage.getItem('radio-friday:sidebar-collapsed') === 'true'); } catch { /* Optional layout preference. */ }
+  }, []);
+  if (path === '/login' || path === '/register') return <div data-app-startup className="min-h-dvh bg-canvas text-ink"><InlineLoading label="正在加载账户…" /></div>;
+  return <div data-app-startup className="app-shell md:theme-graphite md:bg-canvas md:text-ink" data-nav-collapsed={collapsed}>
+    <header className="site-nav text-ink" data-collapsed={collapsed}>
+      <div className="site-brand"><span className="grid size-11 shrink-0 place-items-center"><RadioMark /></span><span className="site-wordmark nav-collapse-label">Radio Friday</span></div>
+      <nav aria-label="主导航" className="primary-nav">
+        {links.map(({ href, label, glyph }) => <NextLink key={href} href={href} prefetch={false} aria-label={label} aria-current={path.startsWith(href) ? 'page' : undefined} className={cn('nav-item', path.startsWith(href) && 'nav-item-active')}><NavigationGlyph name={glyph} /><span className="nav-collapse-label">{label}</span></NextLink>)}
+      </nav>
+      <div className="nav-footer"><span className="nav-footer-row text-muted"><UserRound aria-hidden="true" className="size-5" /><span className="nav-collapse-label text-sm">正在加载账户…</span></span></div>
+    </header>
+    <div className="app-content relative isolate app-content-ambient md:min-h-dvh md:bg-canvas">
+      <div aria-hidden="true" className="shell-ambient" />
+      <main id="main-content" tabIndex={-1} className="page-shell page-content"><InlineLoading label="正在加载账户…" className="min-h-64" /></main>
+    </div>
+    <nav aria-label="手机主导航" className="mobile-nav">{links.map(({ href, label, icon: Icon }) => <NextLink key={href} href={href} prefetch={false} aria-label={label} aria-current={path.startsWith(href) ? 'page' : undefined} className={cn('nav-item', path.startsWith(href) && 'nav-item-active')}><Icon aria-hidden="true" size={21} /><span>{label}</span></NextLink>)}</nav>
+  </div>;
+}
+
 export function AppShell({
   children,
-  user,
 }: {
   children: ReactNode;
-  user: User | null;
 }) {
+  const user = useCurrentAccount();
   const path = usePathname();
   const cancelNavigation = useAppUI(s => s.cancelNavigation);
   useLayoutEffect(() => { cancelNavigation(); }, [path, cancelNavigation]);
@@ -117,9 +144,7 @@ export function AppShell({
   return <AuthExitTransition>{path === "/login" || path === "/register" ? children : (
     <Suspense
       fallback={
-        <div className="app-shell">
-          <div className="app-content">{children}</div>
-        </div>
+        <AppStartup />
       }
     >
       <AppFrame user={user}>{children}</AppFrame>
@@ -147,7 +172,7 @@ function AppFrame({
     /^\/novels\/[^/]+\/chapters\/[^/]+$/.test(path) ||
     (path === "/operator" && !!params.get("id"));
   return (
-    <div
+    <BrowseNavigationProvider><div
       className="app-shell md:theme-graphite md:bg-canvas md:text-ink"
       data-immersive={immersive}
       data-nav-collapsed={collapsed}
@@ -162,17 +187,15 @@ function AppFrame({
         {!immersive && (
           <div aria-hidden="true" className="shell-ambient" />
         )}
-        <div inert={!!pendingHref} aria-hidden={pendingHref ? true : undefined} className={pendingHref ? 'invisible' : undefined}>
-          {children}
-        </div>
-        {pendingHref && <div data-navigation-pending={pendingHref} className="fixed inset-0 z-20 overflow-y-auto bg-canvas pb-20 md:left-[var(--nav-width)] md:bg-shell-content md:pb-0">
-          <PageSkeleton kind={skeletonForPath(pendingHref)} />
+        <BrowsingPages user={user}>{children}</BrowsingPages>
+        {pendingHref && <div data-navigation-pending={pendingHref} className="pointer-events-none fixed right-4 top-4 z-20 rounded-control border border-line bg-panel px-4 shadow-lg">
+          <InlineLoading label="正在打开页面…" className="min-h-11 py-2" />
         </div>}
       </div>
       <nav aria-label="手机主导航" className="mobile-nav">
         <NavigationLinks path={path} />
       </nav>
-    </div>
+    </div></BrowseNavigationProvider>
   );
 }
 
@@ -198,8 +221,8 @@ function NavigationLinks({
         aria-label={label}
         title={desktop ? label : undefined}
         aria-current={active ? "page" : undefined}
-        aria-busy={pendingHref === href || undefined}
-        data-pending={pendingHref === href || undefined}
+        aria-busy={pendingHref?.split('?')[0] === href || undefined}
+        data-pending={pendingHref?.split('?')[0] === href || undefined}
         className={cn("nav-item", (pendingHref ? pendingHref.split('?')[0] === href : active) && "nav-item-active")}
       >
         {desktop ? (

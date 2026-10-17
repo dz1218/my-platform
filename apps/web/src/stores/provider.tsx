@@ -6,9 +6,10 @@ import { createAppStore, type AppStore } from './app';
 import { createChatStore, type ChatStore } from './chat';
 import { useStoreInstance } from './use-store-instance';
 import { subscribeSidebarPreference } from './app/subscriptions';
+import { createBrowseStore, type BrowseState } from './browse';
 
 function createStores() {
-  return { app: createAppStore(), chat: createChatStore() };
+  return { app: createAppStore(), chat: createChatStore(), browse: createBrowseStore() };
 }
 const StoresContext = createContext<ReturnType<typeof createStores> | null>(null);
 
@@ -31,4 +32,8 @@ export function useAppUI<T>(selector: (state: AppStore) => T) {
 
 export function useChatUI<T>(selector: (state: ChatStore) => T) {
   return useStore(useStores().chat, selector);
+}
+
+export function useBrowseUI<T>(selector: (state: BrowseState) => T) {
+  return useStore(useStores().browse, selector);
 }

@@ -1,5 +1,5 @@
 import { UnsavedChanges } from '@/components/unsaved-changes';
-import { ConfirmForm } from '@/components/confirm-form';
+import { NovelMutationForm } from '@/features/novels/novel-mutation-form';
 import { SubmitButton } from '@/components/submit-button';
 import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
@@ -92,7 +92,7 @@ export default async function EditChapterPage({
 
       {/* Edit form */}
       <div className="surface mb-6 p-5">
-        <form action={updateChapterAction} className="grid gap-5">
+        <NovelMutationForm action={updateChapterAction} className="grid gap-5">
           <UnsavedChanges />
           <input type="hidden" name="chapterId" value={chapterId} />
           <input type="hidden" name="novelId" value={id} />
@@ -140,12 +140,12 @@ export default async function EditChapterPage({
             </svg>
             保存
           </SubmitButton>
-        </form>
+        </NovelMutationForm>
       </div>
 
       {/* Publish / Unpublish */}
       <div className="flex items-center gap-3">
-        <form action={publishChapterAction}>
+        <NovelMutationForm action={publishChapterAction}>
           <input type="hidden" name="chapterId" value={chapterId} />
           <input type="hidden" name="novelId" value={id} />
           <input
@@ -193,9 +193,9 @@ export default async function EditChapterPage({
               </>
             )}
           </SubmitButton>
-        </form>
+        </NovelMutationForm>
 
-        <ConfirmForm action={deleteChapterAction} message="删除后无法恢复，确定删除吗？">
+        <NovelMutationForm action={deleteChapterAction} confirmMessage="删除后无法恢复，确定删除吗？">
           <input type="hidden" name="chapterId" value={chapterId} />
           <input type="hidden" name="novelId" value={id} />
           <SubmitButton className="btn-danger-ghost">
@@ -215,7 +215,7 @@ export default async function EditChapterPage({
             </svg>
             删除章节
           </SubmitButton>
-        </ConfirmForm>
+        </NovelMutationForm>
       </div>
     </main>
   );

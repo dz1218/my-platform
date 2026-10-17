@@ -1,11 +1,11 @@
 'use client';
 import Link from 'next/link';
-import { ListSkeleton } from '@/components/page-skeleton';
+import { InlineLoading } from '@/components/page-skeleton';
 import { useEffect } from 'react';
 import { SceneBanner } from '@/components/scene-banner';
 import { PageHeading } from '@/components/page-heading';
 import { Sheet } from '@/components/sheet';
-import { useViewport, ViewportSkeleton } from '@/components/use-viewport';
+import { useViewport, ViewportLoading } from '@/components/use-viewport';
 import { LiveIcon } from './live-icon';
 import { useLiveLobby, type LiveLobbyProps, type LiveLobbyModel, type Filter } from './use-live-lobby';
 
@@ -15,7 +15,7 @@ export function LiveLobbyClient(props: LiveLobbyProps) {
   const { creating, setCreating } = model;
   useEffect(() => { if (viewport === 'desktop') setCreating(false); }, [viewport, setCreating]);
   return <>
-    {!viewport ? <ViewportSkeleton /> : viewport === 'desktop' ? <DesktopLiveLobby model={model} /> : <MobileLiveLobby model={model} onCreate={() => setCreating(true)} />}
+    {!viewport ? <ViewportLoading /> : viewport === 'desktop' ? <DesktopLiveLobby model={model} /> : <MobileLiveLobby model={model} onCreate={() => setCreating(true)} />}
     <Sheet open={creating && viewport === 'mobile'} onClose={() => setCreating(false)} title="我的直播间"><CreateRoomPanel model={model} /></Sheet>
     <CloseRoomDialog model={model} />
   </>;
@@ -44,8 +44,8 @@ function LobbyDirectory({ model }: { model: LiveLobbyModel }) {
           <div className="live-search-actions"><label className="live-search"><LiveIcon name="search" size={16} /><input type="search" aria-label="搜索直播间" placeholder="搜索直播间" value={search} onChange={(event) => setSearch(event.target.value)} /></label><button type="button" className="live-icon-button" aria-label="刷新列表" title="刷新列表" disabled={roomsQuery.isFetching || isMutating} onClick={() => void roomsQuery.refetch()}><LiveIcon name="refresh" className={roomsQuery.isFetching ? 'live-spin' : undefined} /></button></div>
         </div>
         {roomsQuery.isError && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>直播间列表更新失败，{roomsQuery.error.message}。请刷新列表重试。</p></div>}
-        {roomsQuery.isPending ? <ListSkeleton label="正在加载直播间…" /> : visibleRooms.length ? <div className="live-room-grid">
-          {visibleRooms.map((room) => <article className="live-room-card" key={room.id} aria-label={room.title}>
+        {roomsQuery.isPending ? <InlineLoading label="正在加载直播间…" /> : visibleRooms.length ? <div className="live-room-grid">
+          {visibleRooms.map((room) => <article className="live-room-card" key={room.id} data-browse-anchor={`room:${room.id}`} aria-label={room.title}>
             <Link href={`/live/${encodeURIComponent(room.id)}`} className={`live-room-cover ${room.status === '直播中' ? 'is-live' : ''}`} tabIndex={-1} aria-hidden="true">
               <span className={`live-status ${room.status === '直播中' ? 'is-on' : ''}`}><i />{room.status}</span>
               <div className="live-cover-symbol"><LiveIcon name={room.status === '直播中' ? 'play' : 'video'} size={30} /></div>

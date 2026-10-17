@@ -1,5 +1,6 @@
 import { UnsavedChanges } from "@/components/unsaved-changes";
 import { SubmitButton } from "@/components/submit-button";
+import { NovelMutationForm } from '@/features/novels/novel-mutation-form';
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { isAuthenticated } from "@/lib/auth";
@@ -69,7 +70,7 @@ export default async function CreateNovelPage({
           </div>
         )}
 
-        <form action={createNovelAction} className="grid gap-5">
+        <NovelMutationForm action={createNovelAction} className="grid gap-5">
           <UnsavedChanges />
           <label className="grid gap-[7px]">
             <span className="text-[13px] font-semibold tracking-[0.02em] text-muted">
@@ -114,7 +115,7 @@ export default async function CreateNovelPage({
             </svg>
             创建
           </SubmitButton>
-        </form>
+        </NovelMutationForm>
       </div>
     </main>
   );

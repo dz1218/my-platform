@@ -2,10 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { Suspense } from 'react';
 import { cookies } from 'next/headers';
 import { sessionCookie } from '@/services/api/server';
-import { AppStartupSkeleton } from '@/components/page-skeleton';
 import "./globals.css";
 import { Providers } from "@/components/providers";
-import { AppShell } from "@/components/main-nav";
+import { AppShell, AppStartup } from "@/components/main-nav";
 import { getCurrentUser } from "@/lib/auth";
 export const metadata: Metadata = {
   title: { default: "Radio Friday · 陪伴", template: "%s · Radio Friday" },
@@ -25,9 +24,9 @@ export default async function RootLayout({
         <a href="#main-content" className="skip-link">
           跳到主要内容
         </a>
-        {hasSession ? <Suspense fallback={<AppStartupSkeleton />}>
+        {hasSession ? <Suspense fallback={<AppStartup />}>
           <AccountShell>{children}</AccountShell>
-        </Suspense> : <Providers key="guest"><AppShell user={null}>{children}</AppShell></Providers>}
+        </Suspense> : <Providers key="guest" initialUser={null}><AppShell>{children}</AppShell></Providers>}
       </body>
     </html>
   );
@@ -35,5 +34,5 @@ export default async function RootLayout({
 
 async function AccountShell({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
-  return <Providers key={user?.id ?? 'guest'}><AppShell user={user}>{children}</AppShell></Providers>;
+  return <Providers key={user?.id ?? 'guest'} initialUser={user}><AppShell>{children}</AppShell></Providers>;
 }

@@ -1,3 +1,3 @@
-import { AuthFormSkeleton } from '@/components/page-skeleton';
+import { AuthFormLoading } from '@/components/page-skeleton';
 
-export default AuthFormSkeleton;
+export default AuthFormLoading;

@@ -10,12 +10,16 @@ async function setup(page: Page, recent = true) {
   let matches = recent ? [match] : [];
   let sockets = 0;
   let sends = 0;
+  let matchReads = 0;
   const queries: string[] = [];
   await page.route('**/api/v1/discover?*', route => {
     queries.push(new URL(route.request().url()).search);
     return route.fulfill({ json: { items: [identity, { ...identity, id: 'design-other', name: '沈知远', background: identity.background.repeat(4) }], total: 2, page: 1, nextPage: null, occupations } });
   });
-  await page.route('**/api/v1/matches', route => route.fulfill({ json: route.request().method() === 'POST' ? match : { items: matches } }));
+  await page.route('**/api/v1/matches', route => {
+    if (route.request().method() === 'GET') matchReads++;
+    return route.fulfill({ json: route.request().method() === 'POST' ? match : { items: matches } });
+  });
   await page.route('**/api/v1/matches/*', route => route.fulfill({ json: match }));
   await page.route('**/api/v1/operator/conversations', route => route.fulfill({ json: { items: [{ ...match, participantName: '来信的人' }] } }));
   await page.route('**/api/v1/conversations/*/messages', route => route.fulfill({ json: { items: [] } }));
@@ -31,7 +35,7 @@ async function setup(page: Page, recent = true) {
       socket.send(JSON.stringify({ type: 'accepted', requestId: data.requestId, message: { id: String(100 + sends), sender: { id: 'self', name: '我' }, senderType: 'user', source: 'USER', content: data.content, status: 'complete', requestId: data.requestId, createdAt: new Date().toISOString() } }));
     });
   });
-  return { sockets: () => sockets, sends: () => sends, queries, setRecent: (value: boolean) => { matches = value ? [match] : []; } };
+  return { sockets: () => sockets, sends: () => sends, matchReads: () => matchReads, queries, setRecent: (value: boolean) => { matches = value ? [match] : []; } };
 }
 
 test('mobile defaults, explicit tabs, staged filters and browser history', async ({ page }) => {
@@ -78,6 +82,7 @@ test('empty conversations default to discover and an explicit tab stays selected
   await page.goto('/companion');
   await expect(page.getByRole('button', { name: '发现朋友', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: '最近聊天', exact: true }).click();
+  const reads = state.matchReads();
   state.setRecent(true);
   await page.clock.runFor(16_000);
   await page.evaluate(() => {
@@ -86,7 +91,12 @@ test('empty conversations default to discover and an explicit tab stays selected
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
   });
+  await page.clock.runFor(500);
+  expect(state.matchReads()).toBe(reads);
+  await expect(page.getByRole('link', { name: /林晚/ })).toHaveCount(0);
+  await page.getByRole('button', { name: '刷新最近聊天', exact: true }).click();
   await expect(page.getByRole('link', { name: /林晚/ })).toBeVisible();
+  expect(state.matchReads()).toBe(reads + 1);
   await expect(page.getByRole('heading', { name: '接着上次的故事' })).toBeVisible();
   await expect(page.getByRole('button', { name: '最近聊天', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
@@ -165,7 +175,8 @@ test('four-width page review, warm theme, long content and immersive route cover
     for (const [index, path] of routes.entries()) {
       await page.goto(path);
       await expect(page.getByRole('main')).toBeVisible();
-      await expect(page.getByLabel('正在加载页面', { exact: true })).toHaveCount(0);
+      await expect(page.locator('[data-app-startup]')).toHaveCount(0);
+      await expect(page.getByRole('status', { name: '正在准备页面…', exact: true })).toHaveCount(0);
       if (path.startsWith('/companion?view=discover')) await expect(page.getByRole('button', { name: '和沈知远打个招呼' })).toBeVisible();
       if (path === '/live') await expect(page.getByRole('article')).toBeVisible();
       const immersive = path.startsWith('/chat/') || path.startsWith('/live/') || path.endsWith('/design-chapter');
