@@ -4,6 +4,8 @@
 
 本次测试、本地导入结果和真实模型尚存问题见[验收记录](identity-catalog-verification.md)。
 
+首次导入线上 Supabase 时，按[线上完整人物库导入指南](identity-catalog-production-import.md)操作；包含每步原因、结果判断和超时排查。
+
 ## 文件与数据格式
 
 - `apps/server/config/occupations.json`：100 份职业的初始创作素材，包含最低年龄、工作任务、具体经历、职业目标；需要地域约束的职业还包含 `allowedCities`。
