@@ -1,13 +1,11 @@
 'use client';
 import Link from 'next/link';
-import { InlineLoading } from '@/components/page-skeleton';
 import { useEffect } from 'react';
-import { SceneBanner } from '@/components/scene-banner';
-import { PageHeading } from '@/components/page-heading';
 import { Sheet } from '@/components/sheet';
-import { useViewport, ViewportLoading } from '@/components/use-viewport';
+import { useViewport } from '@/components/use-viewport';
 import { LiveIcon } from './live-icon';
-import { useLiveLobby, type LiveLobbyProps, type LiveLobbyModel, type Filter } from './use-live-lobby';
+import { useLiveLobby, type LiveLobbyProps, type LiveLobbyModel } from './use-live-lobby';
+import { DesktopLiveLobbyFrame, MobileLiveLobbyFrame, LiveDirectoryFrame, LiveCreatePanelFrame, LiveLobbyLoadingContent, LiveDirectorySkeleton } from './live-lobby-frame';
 
 export function LiveLobbyClient(props: LiveLobbyProps) {
   const model = useLiveLobby(props);
@@ -15,36 +13,25 @@ export function LiveLobbyClient(props: LiveLobbyProps) {
   const { creating, setCreating } = model;
   useEffect(() => { if (viewport === 'desktop') setCreating(false); }, [viewport, setCreating]);
   return <>
-    {!viewport ? <ViewportLoading /> : viewport === 'desktop' ? <DesktopLiveLobby model={model} /> : <MobileLiveLobby model={model} onCreate={() => setCreating(true)} />}
+    {!viewport ? <LiveLobbyLoadingContent /> : viewport === 'desktop' ? <DesktopLiveLobby model={model} /> : <MobileLiveLobby model={model} onCreate={() => setCreating(true)} />}
     <Sheet open={creating && viewport === 'mobile'} onClose={() => setCreating(false)} title="我的直播间"><CreateRoomPanel model={model} /></Sheet>
     <CloseRoomDialog model={model} />
   </>;
 }
 function DesktopLiveLobby({ model }: { model: LiveLobbyModel }) {
-  return <>
-    <PageHeading title="直播大厅" description="找个感兴趣的房间，让交流现在发生。" />
-    <SceneBanner scene="live" title="把心事，调到同一个频率。" description="听一个声音，分享一段日常。总有故事正在发生。" />
-    <div className="live-lobby-layout"><LobbyDirectory model={model} /><CreateRoomPanel model={model} /></div>
-  </>;
+  return <DesktopLiveLobbyFrame directory={<LobbyDirectory model={model} />} roomPanel={<CreateRoomPanel model={model} />} />;
 }
 function MobileLiveLobby({ model, onCreate }: { model: LiveLobbyModel; onCreate: () => void }) {
-  return <>
-    <PageHeading title="直播" description="找一个声音，陪你度过此刻。" actions={model.ownedRoom ? <Link href={`/live/${encodeURIComponent(model.ownedRoom.id)}`} className="btn-primary">我的直播间</Link> : model.isLoggedIn ? <button type="button" onClick={onCreate} className="btn-primary">开播</button> : <Link href="/login" className="btn-secondary">登录开播</Link>} />
-    <SceneBanner compact scene="live" title="此刻，有人同频。" description={model.liveCount ? `${model.liveCount} 场直播正在进行` : '好话题，等你来开启。'} />
+  return <MobileLiveLobbyFrame liveCount={model.liveCount} actions={model.ownedRoom ? <Link href={`/live/${encodeURIComponent(model.ownedRoom.id)}`} className="btn-primary">我的直播间</Link> : model.isLoggedIn ? <button type="button" onClick={onCreate} className="btn-primary">开播</button> : <Link href="/login" className="btn-secondary">登录开播</Link>}>
     <LobbyDirectory model={model} />
-  </>;
+  </MobileLiveLobbyFrame>;
 }
 
 function LobbyDirectory({ model }: { model: LiveLobbyModel }) {
-  const { roomsQuery, rooms, title, search, setSearch, filter, setFilter, setRoomToClose, error, setCloseError, isMutating, liveCount, visibleRooms, isLoggedIn } = model;
-  return (      <section className="live-directory" aria-label="直播间列表">
-        <div className="live-directory-top"><h2>发现直播 <span>{rooms.length}</span></h2><span className="live-update-note"><i />每 5 秒自动更新</span></div>
-        <div className="live-directory-toolbar">
-          <div className="live-filters" aria-label="筛选直播间">{(['全部', '直播中', '准备中'] as Filter[]).map((value) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}{value === '直播中' && <span>{liveCount}</span>}</button>)}</div>
-          <div className="live-search-actions"><label className="live-search"><LiveIcon name="search" size={16} /><input type="search" aria-label="搜索直播间" placeholder="搜索直播间" value={search} onChange={(event) => setSearch(event.target.value)} /></label><button type="button" className="live-icon-button" aria-label="刷新列表" title="刷新列表" disabled={roomsQuery.isFetching || isMutating} onClick={() => void roomsQuery.refetch()}><LiveIcon name="refresh" className={roomsQuery.isFetching ? 'live-spin' : undefined} /></button></div>
-        </div>
+  const { roomsQuery, rooms, search, setSearch, filter, setFilter, setRoomToClose, setCloseError, isMutating, liveCount, visibleRooms, isLoggedIn } = model;
+  return (      <LiveDirectoryFrame count={roomsQuery.isPending ? undefined : rooms.length} liveCount={roomsQuery.isPending ? undefined : liveCount} filter={filter} search={search} onFilter={setFilter} onSearch={setSearch} onRefresh={() => void roomsQuery.refetch()} refreshing={roomsQuery.isFetching} refreshDisabled={isMutating} result={!roomsQuery.isPending && `${visibleRooms.length} 个直播间${search || filter !== '全部' ? `，共 ${rooms.length} 个` : ''}`}>
         {roomsQuery.isError && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>直播间列表更新失败，{roomsQuery.error.message}。请刷新列表重试。</p></div>}
-        {roomsQuery.isPending ? <InlineLoading label="正在加载直播间…" /> : visibleRooms.length ? <div className="live-room-grid">
+        {roomsQuery.isPending ? <LiveDirectorySkeleton /> : visibleRooms.length ? <div className="live-room-grid">
           {visibleRooms.map((room) => <article className="live-room-card" key={room.id} data-browse-anchor={`room:${room.id}`} aria-label={room.title}>
             <Link href={`/live/${encodeURIComponent(room.id)}`} className={`live-room-cover ${room.status === '直播中' ? 'is-live' : ''}`} tabIndex={-1} aria-hidden="true">
               <span className={`live-status ${room.status === '直播中' ? 'is-on' : ''}`}><i />{room.status}</span>
@@ -62,16 +49,13 @@ function LobbyDirectory({ model }: { model: LiveLobbyModel }) {
           <p>{rooms.length ? '换个关键词，或看看其他状态的直播间。' : isLoggedIn ? '还没有人开播，创建一个直播间开始分享吧。' : '现在还没有人开播，过会儿再来看看。'}</p>
           {rooms.length > 0 && <button type="button" className="live-button live-button-secondary" onClick={() => { setSearch(''); setFilter('全部'); }}>查看全部直播间</button>}
         </div>}
-        <p className="live-result-count" aria-live="polite">{!roomsQuery.isPending && `${visibleRooms.length} 个直播间${search || filter !== '全部' ? `，共 ${rooms.length} 个` : ''}`}</p>
-      </section>
+      </LiveDirectoryFrame>
   );
 }
 
 function CreateRoomPanel({ model }: { model: LiveLobbyModel }) {
   const { roomsQuery, ownedRooms, ownedRoom, title, setTitle, isCreating, createdRoomId, error, setError, titleRef, isMutating, createRoom, isLoggedIn } = model;
-  return (      <aside className="live-create-panel">
-        <div className="live-create-icon"><LiveIcon name="video" size={24} /></div>
-        <h2>{ownedRoom ? '我的直播间' : '创建直播间'}</h2><p>{ownedRoom ? '每个账号同时只能保留一个直播间。' : '给房间起个名字，邀请大家来聊聊。'}</p>
+  return (      <LiveCreatePanelFrame pending={roomsQuery.isPending} title={ownedRoom ? '我的直播间' : '创建直播间'} description={ownedRoom ? '每个账号同时只能保留一个直播间。' : '给房间起个名字，邀请大家来聊聊。'}>
         {ownedRoom ? <>
           <div className="live-created" role="status"><span><LiveIcon name="check" size={16} />{createdRoomId === ownedRoom.id ? '直播间已创建' : '你已有直播间'}</span><strong>{ownedRoom.title}</strong></div>
           <Link href={`/live/${encodeURIComponent(ownedRoom.id)}`} className="live-button live-button-primary live-create-button">进入我的直播间<LiveIcon name="arrow" size={16} /></Link>
@@ -85,8 +69,7 @@ function CreateRoomPanel({ model }: { model: LiveLobbyModel }) {
           <p className="live-create-hint">进入房间后，自行开启摄像头和麦克风。</p>
           {error && <p id="room-name-error" role="alert" className="live-form-error">{error}</p>}
         </form> : <><Link href="/login" className="live-button live-button-primary live-create-button">登录后创建<LiveIcon name="arrow" size={16} /></Link><p className="live-create-hint">观看直播和发送消息无需登录。</p></>}
-        <div className="live-create-footer"><LiveIcon name="chat" size={17} /><p>进入直播间，就能和大家实时聊天。</p></div>
-      </aside>
+      </LiveCreatePanelFrame>
   );
 }
 

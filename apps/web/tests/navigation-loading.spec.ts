@@ -1,8 +1,17 @@
-import { expect, test, type Page, type APIRequestContext, type Request, type WebSocketRoute } from '@playwright/test';
+import { expect, test, type Page, type Locator, type APIRequestContext, type Request, type WebSocketRoute } from '@playwright/test';
 
 const fixture = 'http://127.0.0.1:18181/__performance';
 async function configure(request: APIRequestContext, config: object = {}) { await request.post(fixture, { data: config }); }
 async function requests(request: APIRequestContext) { return (await (await request.get(fixture)).json()).requests as Array<{ path: string; method: string; startedAt: number; finishedAt: number | null; abortedAt: number | null }>; }
+async function visibleBounds(locator: Locator) {
+  await expect(locator).toBeVisible();
+  // Streaming can replace a node between visibility and measurement. Locator
+  // evaluation retries a detached node instead of returning a null box.
+  return locator.evaluate(element => {
+    const { x, y, width, height } = element.getBoundingClientRect();
+    return { x, y, width, height };
+  });
+}
 async function prepare(page: Page) {
   await page.route('**/api/v1/discover?*', route => route.fulfill({ json: { items: [], total: 0, nextPage: null, occupations: [] } }));
   await page.goto('/companion');
@@ -62,8 +71,18 @@ for (const width of [390, 768, 1440]) {
     });
     await target.click();
     await expect(target).toHaveClass(/nav-item-active/);
-    await expect(page.getByRole('status', { name: '正在加载直播间…', exact: true })).toBeVisible();
-    await expect(page.getByRole('searchbox', { name: '搜索直播间' })).toBeVisible();
+    const loading = page.getByRole('region', { name: '直播间列表', exact: true }).getByRole('status', { name: '正在加载直播间…', exact: true });
+    await expect(loading).toBeVisible();
+    await expect(loading).toHaveAttribute('data-skeleton', 'rooms');
+    await expect(loading).toHaveCSS('position', 'static');
+    const search = page.getByRole('searchbox', { name: '搜索直播间' });
+    await search.fill('等待中的搜索');
+    await expect(search).toHaveValue('等待中的搜索');
+    await search.clear();
+    await target.click({ trial: true });
+    const searchBox = (await search.boundingBox())!;
+    const skeletonBox = (await loading.boundingBox())!;
+    expect(skeletonBox.y).toBeGreaterThanOrEqual(searchBox.y + searchBox.height);
     await expect(page.locator('[data-page-skeleton]')).toHaveCount(0);
     const feedbackMs = await page.evaluate(() => Number(document.documentElement.dataset.navigationFeedbackMs));
     expect(feedbackMs).toBeLessThan(200);
@@ -75,6 +94,40 @@ for (const width of [390, 768, 1440]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await testInfo.attach('navigation-timing', { body: JSON.stringify({ width, feedbackMs, contentReadyMs, requests: await requests(request) }), contentType: 'application/json' });
   });
+}
+
+for (const width of [390, 1440]) {
+  for (const kind of ['catalog', 'bookshelf'] as const) {
+    test(`the first ${kind} load shows content skeletons and keeps controls usable at ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      let release = () => {};
+      const held = new Promise<void>(resolve => { release = resolve; });
+      const isCatalog = kind === 'catalog';
+      await page.route(isCatalog ? '**/api/v1/discover?*' : '**/api/v1/novels', async route => {
+        await held;
+        await route.fulfill({ json: isCatalog ? { items: [], total: 0, nextPage: null, occupations: [] } : { items: [] } }).catch(() => {});
+      });
+      try {
+        await page.goto(isCatalog ? '/companion?view=discover' : '/novels');
+        const loading = page.getByRole('status', { name: isCatalog ? '正在寻找可以认识的人…' : '正在加载书架…', exact: true });
+        await expect(loading).toBeVisible();
+        await expect(loading).toHaveAttribute('data-skeleton', kind);
+        await expect(loading).toHaveCSS('position', 'static');
+        await expect(loading.locator('svg')).toHaveCount(0);
+        await expect(loading.locator('[aria-hidden="true"]').first()).toHaveCSS('animation-name', 'pulse');
+        await expect(page.getByRole('main').locator('[data-loading-overlay]')).toHaveCount(0);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await expect(page.getByRole('heading', { name: isCatalog ? '这里的朋友' : '书架', exact: true })).toBeVisible();
+        const nav = page.getByRole('navigation', { name: width < 768 ? '手机主导航' : '主导航', exact: true });
+        await expect(nav).toBeVisible();
+        if (isCatalog) await page.getByRole('searchbox', { name: '姓名', exact: true }).click({ trial: true });
+        await page.screenshot({ path: testInfo.outputPath(`${kind}-skeleton-${width}.png`) });
+        release();
+        await expect(loading).toHaveCount(0);
+        await expect(page.getByText(isCatalog ? '没有找到符合条件的朋友，试试其他筛选条件。' : '暂无小说', { exact: true })).toBeVisible();
+      } finally { release(); }
+    });
+  }
 }
 
 test('latest navigation wins and history restores the selected tab', async ({ page, request }) => {
@@ -126,7 +179,7 @@ test('keyboard navigation and reduced motion retain immediate feedback', async (
   await expect(target).toHaveClass(/nav-item-active/);
   const loading = page.getByRole('status', { name: '正在加载直播间…', exact: true });
   await expect(loading).toBeVisible();
-  await expect(loading.locator('svg')).toHaveCSS('animation-name', 'none');
+  await expect(loading.locator('[aria-hidden="true"]').first()).toHaveCSS('animation-name', 'none');
   await expect(page.getByRole('searchbox', { name: '搜索直播间' })).toBeVisible();
   await expect(page.locator('[data-page-skeleton]')).toHaveCount(0);
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
@@ -182,6 +235,74 @@ async function signIn(page: Page) {
   await page.context().addCookies([{ name: 'companion_session', value: 'inheritance-test-completed', domain: '127.0.0.1', path: '/' }]);
 }
 
+for (const width of [390, 1440]) {
+  test(`recent chats keep their loading frame through account resolution and reload at ${width}px`, async ({ page, request }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await signIn(page);
+    await configure(request, { delays: { '/api/v1/me': 3000 } });
+    await page.route('**/api/v1/discover?*', route => route.fulfill({ json: { items: [], total: 0, nextPage: null, occupations: [] } }));
+    await page.routeWebSocket('**/ws/matches', () => {});
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    let scriptsHeld: Promise<void>;
+    let chatsHeld: Promise<void>;
+    await page.route('**/_next/static/**', async route => {
+      if (route.request().resourceType() === 'script') await scriptsHeld;
+      await route.continue().catch(() => {});
+    });
+    await page.route('**/api/v1/matches', async route => {
+      await chatsHeld;
+      await route.fulfill({ json: { items: [{ id: 'startup-match', conversationId: 'startup-conversation', identity: { id: 'startup-friend', name: '林晚', age: 26, gender: 'FEMALE', avatarUrl: '' } }] } }).catch(() => {});
+    });
+    for (const phase of ['visit', 'reload']) {
+      let releaseScripts = () => {};
+      let releaseChats = () => {};
+      scriptsHeld = new Promise<void>(resolve => { releaseScripts = resolve; });
+      chatsHeld = new Promise<void>(resolve => { releaseChats = resolve; });
+      try {
+        if (phase === 'visit') await page.goto('/companion?view=recent', { waitUntil: 'commit' });
+        else await page.reload({ waitUntil: 'commit' });
+        const startup = page.locator('[data-app-startup]:visible');
+        await expect(startup).toBeVisible();
+        const recent = page.getByRole('main').getByRole('region', { name: width < 768 ? /^接着上次的故事/ : /^最近聊天/ });
+        const loading = recent.getByRole('status', { name: '正在加载聊天…', exact: true });
+        await expect(loading).toBeVisible({ timeout: 1500 });
+        await expect(loading).toHaveAttribute('aria-busy', 'true');
+        await expect(page.getByRole('button', { name: '刷新最近聊天', exact: true })).toBeDisabled();
+        const footer = recent.getByText('也可以换一种方式放松', { exact: true });
+        await expect(footer).toBeVisible();
+        const firstLoadingBox = await visibleBounds(loading);
+        const firstFooterBox = await visibleBounds(footer);
+        await page.screenshot({ path: testInfo.outputPath(`recent-${phase}-startup-${width}.png`) });
+
+        releaseScripts();
+        await expect(startup).toHaveCount(0, { timeout: 10_000 });
+        // The account boundary can disappear one render before viewport
+        // hydration swaps its presentation. Wait for the live page controls.
+        if (width < 768) await expect(page.getByRole('navigation', { name: '陪伴内容' }).getByRole('button', { name: '最近聊天', exact: true })).toBeEnabled();
+        else await expect(page.getByRole('button', { name: '筛选', exact: true })).toBeEnabled();
+        await expect(loading).toBeVisible();
+        // Authentication and hydration must not resize or replace the waiting
+        // panel; only the eventual chat data should change its content.
+        const hydratedLoadingBox = await visibleBounds(loading);
+        const hydratedFooterBox = await visibleBounds(footer);
+        for (const key of ['x', 'y', 'width', 'height'] as const) {
+          expect(Math.abs(hydratedLoadingBox[key] - firstLoadingBox[key])).toBeLessThanOrEqual(1);
+          expect(Math.abs(hydratedFooterBox[key] - firstFooterBox[key])).toBeLessThanOrEqual(1);
+        }
+        releaseChats();
+        await expect(recent.getByRole('link', { name: /林晚/ })).toBeVisible();
+        await expect(loading).toHaveCount(0);
+        await expect(page.getByRole('button', { name: '刷新最近聊天', exact: true })).toBeEnabled();
+      } finally {
+        releaseScripts();
+        releaseChats();
+      }
+    }
+    expect(errors).toEqual([]);
+  });
+}
+
 test('slow account resolution keeps the themed navigation shell on profile refresh', async ({ page, request }, testInfo) => {
   await signIn(page);
   await page.route('**/api/v1/matches', route => route.fulfill({ json: { items: [] } }));
@@ -190,6 +311,14 @@ test('slow account resolution keeps the themed navigation shell on profile refre
   await page.goto('/me', { waitUntil: 'commit' });
   const startup = page.locator('[data-app-startup]');
   await expect(startup).toBeVisible();
+  await expect(startup.locator('.profile-cover-media img')).toBeVisible();
+  await expect(startup.locator('[data-profile-details]')).toBeVisible();
+  await expect(startup.getByRole('tablist', { name: '个人主页内容' })).toBeVisible();
+  await expect(startup.getByRole('tab', { name: '最近聊天', exact: true })).toBeDisabled();
+  await expect(startup.getByRole('tab', { name: 'AI 身份', exact: true })).toBeDisabled();
+  await expect(startup.getByRole('main').getByRole('status', { name: '正在加载账户…', exact: true })).toHaveAttribute('data-skeleton', 'profile');
+  await expect(startup.locator('[data-skeleton="conversations"]')).toBeVisible();
+  await expect(startup.getByRole('main').locator('[data-loading-overlay]')).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: '主导航', exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '我的', exact: true })).toBeVisible();
   await expect(page.locator('[data-page-skeleton]')).toHaveCount(0);
@@ -201,9 +330,112 @@ test('slow account resolution keeps the themed navigation shell on profile refre
   await expect(page.getByRole('tab', { name: '最近聊天', exact: true })).toBeVisible();
   await page.reload({ waitUntil: 'commit' });
   await expect(startup).toBeVisible();
+  await expect(startup.locator('[data-skeleton="profile"]')).toBeVisible();
+  await expect(startup.locator('[data-skeleton="conversations"]')).toBeVisible();
+  await expect(startup.locator('.profile-cover-media img')).toBeVisible();
+  await expect(startup.getByRole('tablist', { name: '个人主页内容' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: '主导航', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '继承测试用户', exact: true })).toBeVisible();
 });
+
+for (const width of [390, 1440]) {
+  for (const tab of ['companion', 'live', 'novels', 'me'] as const) {
+    test(`the first streamed ${tab} frame retains its page structure before JavaScript at ${width}px`, async ({ page, request }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await signIn(page);
+      await configure(request, { delays: { '/api/v1/me': 5000 } });
+      await page.route('**/api/v1/matches', route => route.fulfill({ json: { items: [] } }));
+      await page.route('**/api/v1/discover?*', route => route.fulfill({ json: { items: [], total: 0, nextPage: null, occupations: [] } }));
+      await page.routeWebSocket('**/ws/matches', () => {});
+      const errors: string[] = [];
+      page.on('pageerror', error => errors.push(error.message));
+      let release = () => {};
+      const scriptsHeld = new Promise<void>(resolve => { release = resolve; });
+      let blockedScripts = 0;
+      await page.route('**/_next/static/**', async route => {
+        if (route.request().resourceType() === 'script') {
+          blockedScripts++;
+          await scriptsHeld;
+        }
+        await route.continue().catch(() => {});
+      });
+      try {
+        // Deliberately inspect streamed HTML before hydration can replace it.
+        await page.goto(`/${tab}`, { waitUntil: 'commit' });
+        const startup = page.locator('[data-app-startup]:visible');
+        await expect(startup).toBeVisible();
+        await expect.poll(() => blockedScripts).toBeGreaterThan(0);
+        const nav = startup.getByRole('navigation', { name: width < 768 ? '手机主导航' : '主导航', exact: true });
+        await expect(nav).toBeVisible();
+        const active = nav.locator('[aria-current="page"]');
+        await expect(active).toHaveAttribute('href', `/${tab}`);
+        expect(await active.evaluate(element => {
+          const bounds = element.getBoundingClientRect();
+          return element.contains(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2));
+        })).toBe(true);
+        await expect(startup.getByRole('link', { name: '登录 / 注册', exact: true })).toHaveCount(0);
+        await expect(page.locator('[data-page-skeleton]')).toHaveCount(0);
+
+        const main = startup.getByRole('main');
+        const label = { companion: '正在加载页面…', live: '正在加载直播间…', novels: '正在加载书架…', me: '正在加载账户…' }[tab];
+        const loading = main.getByRole('status', { name: label, exact: true });
+        await expect(loading).toHaveAttribute('data-skeleton', { companion: width < 768 ? 'conversations' : 'catalog', live: 'rooms', novels: 'bookshelf', me: 'profile' }[tab]);
+        await expect(main.locator('[data-loading-overlay]')).toHaveCount(0);
+        let frameBottom: number;
+        if (tab === 'me') {
+          await expect(main.locator('.profile-cover-media img')).toBeVisible();
+          await expect(main.locator('[data-profile-details]')).toBeVisible();
+          const tabs = main.getByRole('tablist', { name: '个人主页内容' });
+          await expect(tabs).toBeVisible();
+          await expect(tabs.getByRole('tab', { name: '最近聊天', exact: true })).toBeDisabled();
+          await expect(tabs.getByRole('tab', { name: 'AI 身份', exact: true })).toBeDisabled();
+          const details = (await main.locator('[data-profile-details]').boundingBox())!;
+          const skeleton = (await loading.boundingBox())!;
+          expect(skeleton.x).toBeGreaterThanOrEqual(details.x);
+          expect(skeleton.x + skeleton.width).toBeLessThanOrEqual(details.x + details.width + 1);
+          expect(skeleton.y + skeleton.height).toBeLessThanOrEqual(details.y + details.height + 1);
+          frameBottom = details.y;
+        } else {
+          const title = tab === 'companion' ? width < 768 ? '陪伴' : '今天想和谁聊聊？' : tab === 'live' ? width < 768 ? '直播' : '直播大厅' : '小说';
+          await expect(main.getByRole('heading', { name: title, exact: true, level: 1 })).toBeVisible();
+          if (tab === 'companion' && width < 768) {
+            const tabs = main.getByRole('navigation', { name: '陪伴内容', exact: true });
+            await expect(tabs).toBeVisible();
+            await expect(tabs.getByRole('button', { name: '最近聊天', exact: true })).toBeDisabled();
+            await expect(tabs.getByRole('button', { name: '发现朋友', exact: true })).toBeDisabled();
+            const bounds = (await tabs.boundingBox())!;
+            frameBottom = bounds.y + bounds.height;
+          } else {
+            const scene = main.getByRole('region', { name: tab === 'companion' ? '温暖陪伴' : tab === 'live' ? '深夜电台' : '故事漫游', exact: true });
+            await expect(scene).toBeVisible();
+            const bounds = (await scene.boundingBox())!;
+            frameBottom = bounds.y + bounds.height;
+          }
+          if (tab === 'companion' && width >= 768) {
+            await expect(main.getByRole('heading', { name: '这里的朋友', exact: true })).toBeVisible();
+            await expect(main.getByRole('searchbox', { name: '姓名', exact: true })).toBeDisabled();
+          }
+          if (tab === 'live') await expect(main.getByRole('searchbox', { name: '搜索直播间', exact: true })).toBeDisabled();
+          if (tab === 'novels') await expect(main.getByRole('heading', { name: '书架', exact: true })).toBeVisible();
+        }
+        const loadingBox = (await loading.boundingBox())!;
+        expect(loadingBox.y).toBeGreaterThanOrEqual(frameBottom);
+        await page.screenshot({ path: testInfo.outputPath(`first-frame-${tab}-${width}.png`) });
+
+        release();
+        // The fixture holds authentication for 5 seconds; allow its response
+        // and the deliberately paused scripts to finish, then require removal.
+        await expect(startup).toHaveCount(0, { timeout: 10_000 });
+        await expect(page.getByRole('navigation', { name: width < 768 ? '手机主导航' : '主导航', exact: true })).toBeVisible();
+        if (tab === 'me') await expect(page.getByRole('heading', { name: '继承测试用户', exact: true })).toBeVisible();
+        else if (tab === 'companion') await expect(page.getByRole('searchbox', { name: '姓名', exact: true })).toBeEnabled();
+        else if (tab === 'live') await expect(page.getByRole('searchbox', { name: '搜索直播间', exact: true })).toBeEnabled();
+        else await expect(page.getByRole('button', { name: '刷新小说', exact: true })).toBeEnabled();
+        expect(errors).toEqual([]);
+      } finally { release(); }
+    });
+  }
+}
 
 test('profile waits for conversations inside the page while its cover and tabs remain available', async ({ page }, testInfo) => {
   await signIn(page);
@@ -219,10 +451,17 @@ test('profile waits for conversations inside the page while its cover and tabs r
     await expect(page.getByRole('heading', { name: '继承测试用户', exact: true })).toBeVisible();
     await expect(page.locator('.profile-cover-media')).toBeVisible();
     await expect(page.getByRole('tab', { name: 'AI 身份', exact: true })).toBeVisible();
-    await expect(page.getByRole('status', { name: '正在加载聊天…', exact: true })).toBeVisible();
+    const panel = page.getByRole('tabpanel', { name: '最近聊天', exact: true });
+    const loading = panel.getByRole('status', { name: '正在加载聊天…', exact: true });
+    await expect(loading).toBeVisible();
+    await expect(loading).toHaveAttribute('data-skeleton', 'conversations');
+    const tabBox = (await page.getByRole('tab', { name: 'AI 身份', exact: true }).boundingBox())!;
+    expect((await loading.boundingBox())!.y).toBeGreaterThanOrEqual(tabBox.y + tabBox.height);
     await page.screenshot({ path: testInfo.outputPath('profile-list-loading.png') });
     await expect(page.locator('[data-page-skeleton]')).toHaveCount(0);
     await page.getByRole('tab', { name: 'AI 身份', exact: true }).click();
+    await expect(panel).toBeHidden();
+    await expect(loading).toBeHidden();
     await expect(page.getByRole('link', { name: '选择 AI 身份', exact: true })).toBeVisible();
   } finally { release(); }
 });
@@ -268,11 +507,11 @@ test('four tabs reuse ordinary data and one account subscription until an explic
   if (testInfo.config.configFile?.includes('production')) expect(initialConnections).toBe(1);
   await page.evaluate(() => {
     const observer = new MutationObserver(() => requestAnimationFrame(() => {
-      const boundary = Array.from(document.querySelectorAll('[data-page-loading]')).find(element =>
+      const boundary = Array.from(document.querySelectorAll('[data-page-loading], [data-loading-overlay], [data-skeleton]')).find(element =>
         element.getBoundingClientRect().height > 0 && getComputedStyle(element).visibility !== 'hidden');
-      if (boundary) document.documentElement.dataset.cachedLoadingFrame = boundary.getAttribute('data-page-loading') ?? 'unknown';
+      if (boundary) document.documentElement.dataset.cachedLoadingFrame = boundary.getAttribute('data-page-loading') ?? boundary.getAttribute('aria-label') ?? 'unknown';
     }));
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'hidden', 'class'] });
     document.addEventListener('stop-loading-observer', () => observer.disconnect(), { once: true });
   });
   for (const label of ['陪伴', '我的', '小说', '直播', '小说']) {
@@ -318,6 +557,7 @@ test('failed manual refresh retains the bookshelf and retries only its data', as
   await refresh.click();
   await expect(refresh).toBeDisabled();
   await expect(book).toBeVisible();
+  await expect(page.getByRole('main').locator('[data-loading-overlay]')).toHaveCount(0);
   await expect(page.locator('[data-page-skeleton]')).toHaveCount(0);
   await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
   await expect(book).toBeVisible();
@@ -343,6 +583,7 @@ test('live polling stops when its tab is hidden and cached rooms survive a slow 
   await nav.getByRole('link', { name: '直播', exact: true }).click();
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
   await expect(page.getByRole('status', { name: '正在加载直播间…', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('main').locator('[data-loading-overlay]')).toHaveCount(0);
   await expect.poll(async () => (await requests(request)).some(item => item.path === '/api/v1/rooms' && item.finishedAt === null)).toBe(true);
 });
 

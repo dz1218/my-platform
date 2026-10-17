@@ -1,31 +1,20 @@
-import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { LoaderCircle } from 'lucide-react';
 import { PageHeading } from './page-heading';
 
 export type LoadingKind = 'chat' | 'operator' | 'room' | 'book' | 'reading' | 'identity' | 'form' | 'page';
 
-export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden="true" className={cn('rounded-control bg-surface-soft motion-safe:animate-pulse', className)} />;
-}
-
-export function LoadingRegion({ children, label = '正在加载页面…', className }: { children: ReactNode; label?: string; className?: string }) {
-  return <div role="status" aria-label={label} aria-busy="true" className={className}>
-    <span className="sr-only">{label}</span>
-    <div aria-hidden="true">{children}</div>
+/** The nearest positioned content region owns the scrim, never the whole app. */
+export function LoadingOverlay({ label = '正在加载…', className }: { label?: string; className?: string }) {
+  return <div data-loading-overlay role="status" aria-label={label} aria-busy="true" className={cn('pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-canvas/65 p-6 text-sm text-muted', className)}>
+    <LoaderCircle aria-hidden="true" className="size-7 shrink-0 text-ink motion-safe:animate-spin" />
+    <span>{label}</span>
   </div>;
 }
 
-export function ListSkeleton({ books = false, count = 6, label = '正在加载列表…' }: { books?: boolean; count?: number; label?: string }) {
-  return <LoadingRegion label={label} className="py-4">
-    <div className={books ? 'grid grid-cols-2 gap-5 md:grid-cols-4' : 'grid gap-4 md:grid-cols-2 xl:grid-cols-3'}>
-      {Array.from({ length: count }, (_, i) => <div key={i} className="min-w-0 space-y-4 rounded-panel bg-panel p-5">
-        <Skeleton className={books ? 'aspect-[3/4] w-full' : 'size-12 rounded-full'} />
-        <Skeleton className="h-5 w-2/3" /><Skeleton className="h-3 w-full" />
-        {!books && <><Skeleton className="h-3 w-4/5" /><Skeleton className="mt-6 h-11 w-full" /></>}
-      </div>)}
-    </div>
-  </LoadingRegion>;
+/** Reserve a stable waiting area without inventing cards or hiding page controls. */
+export function LoadingPlaceholder({ label, className }: { label?: string; className?: string }) {
+  return <div className={cn('relative isolate min-h-48', className)}><LoadingOverlay label={label} /></div>;
 }
 
 export function InlineLoading({ label = '正在加载…', className }: { label?: string; className?: string }) {
@@ -51,10 +40,10 @@ export function PageLoading({ kind = 'page' }: { kind?: LoadingKind }) {
   const page = pages[kind];
   return <main id="main-content" tabIndex={-1} data-page-loading={kind} className={cn(kind === 'reading' ? 'page-reading page-content' : 'page-shell page-content', 'min-h-[60dvh]')}>
     {page.title && <PageHeading title={page.title} description={page.description} />}
-    <InlineLoading label={page.label} />
+    <LoadingPlaceholder label={page.label} className="min-h-[40dvh]" />
   </main>;
 }
 
 export function AuthFormLoading() {
-  return <div className="auth-panel"><InlineLoading label="正在加载表单…" /></div>;
+  return <div className="auth-panel"><LoadingPlaceholder label="正在加载表单…" /></div>;
 }

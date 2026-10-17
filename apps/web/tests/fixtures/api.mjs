@@ -91,12 +91,13 @@ createServer(async (request, response) => {
     let body = '';
     for await (const part of request) body += part;
     const data = JSON.parse(body);
-    if (data.phone !== '13800138000' || data.password !== 'only-for-browser-test') {
+    if (!['13800138000', '13800138004'].includes(data.phone) || data.password !== 'only-for-browser-test') {
       response.statusCode = 401;
       return response.end(JSON.stringify({ error: { code: 'invalid', message: '测试账户信息不正确' } }));
     }
-    response.setHeader('Set-Cookie', 'companion_session=inheritance-test-second; HttpOnly; Path=/; SameSite=Lax');
-    return response.end(JSON.stringify({ user: inheritanceUser('inheritance-test-second') }));
+    const loginSession = data.phone === '13800138004' ? 'inheritance-test-female' : 'inheritance-test-second';
+    response.setHeader('Set-Cookie', `companion_session=${loginSession}; HttpOnly; Path=/; SameSite=Lax`);
+    return response.end(JSON.stringify({ user: inheritanceUser(loginSession) }));
   }
   if (request.url === '/api/v1/auth/register' && request.method === 'POST') {
     let body = '';

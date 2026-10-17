@@ -38,56 +38,58 @@ async function verifyPhone(page: Page, phone = '13800138002') {
   await expect(page.getByRole('heading', { name: /为相遇，设置一把钥匙。|认识一下你。/ })).toBeVisible();
 }
 
-test('phone login errors clear on refresh and a subsequent login succeeds', async ({ page }) => {
-  const pageErrors: string[] = [];
-  page.on('pageerror', error => pageErrors.push(error.message));
-  await page.route('**/api/v1/matches', route => route.fulfill({ json: { items: [] } }));
-  await page.route('**/api/v1/discover?*', route => route.fulfill({ json: {
-    items: [{ id: 'login-friend', name: '登录测试朋友', age: 24, avatarUrl: '' }],
-    total: 1, availableTotal: 1, page: 1, pageSize: 24, nextPage: null, occupations: [],
-  } }));
-  await page.goto('/login');
-  await expect(page.locator('input[type=email]')).toHaveCount(0);
-  await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138000');
-  await page.getByLabel('密码', { exact: true }).fill('wrong-password');
-  await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page.getByRole('main').getByRole('alert')).toHaveText('手机号或密码不正确，请重新输入。');
-  await expect(page.getByLabel('手机号', { exact: true })).toHaveValue('13800138000');
-  await expect(page.getByLabel('密码', { exact: true })).toHaveValue('wrong-password');
-  await page.reload();
-  await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
-  await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138000');
-  await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');
-  await page.getByRole('button', { name: '显示密码' }).click();
-  await expect(page.getByLabel('密码', { exact: true })).toHaveAttribute('type', 'text');
-  await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL('/companion');
-  // A successful redirect alone also passes when the destination has crashed.
-  const expectCompanion = async () => {
-    await expect(page.getByRole('heading', { name: '今天想和谁聊聊？' })).toBeVisible();
-    await expect(page.getByRole('button', { name: '和登录测试朋友打个招呼' })).toBeEnabled();
-    await expect(page.getByText('你们的故事，从这里开始')).toBeVisible();
+for (const phone of ['13800138000', '13800138004']) {
+  test(`phone login errors clear on refresh and login opens companion for ${phone}`, async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    await page.route('**/api/v1/matches', route => route.fulfill({ json: { items: [] } }));
+    await page.route('**/api/v1/discover?*', route => route.fulfill({ json: {
+      items: [{ id: 'login-friend', name: '登录测试朋友', age: 24, avatarUrl: '' }],
+      total: 1, availableTotal: 1, page: 1, pageSize: 24, nextPage: null, occupations: [],
+    } }));
+    await page.goto('/login');
+    await expect(page.locator('input[type=email]')).toHaveCount(0);
+    await page.getByRole('textbox', { name: '手机号', exact: true }).fill(phone);
+    await page.getByLabel('密码', { exact: true }).fill('wrong-password');
+    await page.getByRole('button', { name: '登录', exact: true }).click();
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText('手机号或密码不正确，请重新输入。');
+    await expect(page.getByLabel('手机号', { exact: true })).toHaveValue(phone);
+    await expect(page.getByLabel('密码', { exact: true })).toHaveValue('wrong-password');
+    await page.reload();
     await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
-  };
-  await expectCompanion();
-  await page.reload();
-  await expectCompanion();
-  await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '我的', exact: true }).click();
-  await page.getByRole('button', { name: /账户与身份 ·/ }).click();
-  await page.getByRole('navigation', { name: '账户与身份', exact: true }).getByRole('button', { name: '退出登录' }).click();
-  await expect(page).toHaveURL('/companion');
-  await expect(page.getByRole('button', { name: '和登录测试朋友打个招呼' })).toBeEnabled();
-  await expect(page.getByRole('link', { name: '登录后聊天', exact: true })).toBeVisible();
-  expect((await page.context().cookies()).some(cookie => cookie.name === 'companion_session')).toBe(false);
-  await page.getByRole('link', { name: '登录 / 注册', exact: true }).click();
-  await expect(page).toHaveURL('/login');
-  await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138000');
-  await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');
-  await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL('/companion');
-  await expectCompanion();
-  expect(pageErrors).toEqual([]);
-});
+    await page.getByRole('textbox', { name: '手机号', exact: true }).fill(phone);
+    await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');
+    await page.getByRole('button', { name: '显示密码' }).click();
+    await expect(page.getByLabel('密码', { exact: true })).toHaveAttribute('type', 'text');
+    await page.getByRole('button', { name: '登录', exact: true }).click();
+    await expect(page).toHaveURL('/companion');
+    // A successful redirect alone also passes when the destination has crashed.
+    const expectCompanion = async () => {
+      await expect(page.getByRole('heading', { name: '今天想和谁聊聊？' })).toBeVisible();
+      await expect(page.getByRole('button', { name: '和登录测试朋友打个招呼' })).toBeEnabled();
+      await expect(page.getByText('你们的故事，从这里开始')).toBeVisible();
+      await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+    };
+    await expectCompanion();
+    await page.reload();
+    await expectCompanion();
+    await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '我的', exact: true }).click();
+    await page.getByRole('button', { name: /账户与身份 ·/ }).click();
+    await page.getByRole('navigation', { name: '账户与身份', exact: true }).getByRole('button', { name: '退出登录' }).click();
+    await expect(page).toHaveURL('/companion');
+    await expect(page.getByRole('button', { name: '和登录测试朋友打个招呼' })).toBeEnabled();
+    await expect(page.getByRole('link', { name: '登录后聊天', exact: true })).toBeVisible();
+    expect((await page.context().cookies()).some(cookie => cookie.name === 'companion_session')).toBe(false);
+    await page.getByRole('link', { name: '登录 / 注册', exact: true }).click();
+    await expect(page).toHaveURL('/login');
+    await page.getByRole('textbox', { name: '手机号', exact: true }).fill(phone);
+    await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');
+    await page.getByRole('button', { name: '登录', exact: true }).click();
+    await expect(page).toHaveURL('/companion');
+    await expectCompanion();
+    expect(pageErrors).toEqual([]);
+  });
+}
 
 test('registration requires verification, shows resend cooldown, and rejects a wrong code', async ({ page }) => {
   await page.goto('/register');

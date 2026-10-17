@@ -1,6 +1,8 @@
 "use client";
 import NextLink, { useLinkStatus } from "next/link";
-import { InlineLoading } from './page-skeleton';
+import { InlineLoading, LoadingPlaceholder } from './page-skeleton';
+import { AccountStartupContent } from './account-startup-content';
+import { SkeletonBlock, SkeletonRegion } from './skeleton';
 import { BrowseNavigationProvider, BrowsingPages, useBrowseNavigation } from './browse-navigation';
 import {
   BookOpen,
@@ -110,18 +112,28 @@ export function AppStartup() {
   useLayoutEffect(() => {
     try { setCollapsed(localStorage.getItem('radio-friday:sidebar-collapsed') === 'true'); } catch { /* Optional layout preference. */ }
   }, []);
-  if (path === '/login' || path === '/register') return <div data-app-startup className="min-h-dvh bg-canvas text-ink"><InlineLoading label="正在加载账户…" /></div>;
+  if (path === '/login' || path === '/register') return <div data-app-startup className="min-h-dvh bg-canvas text-ink"><LoadingPlaceholder label="正在加载账户…" className="min-h-dvh" /></div>;
   return <div data-app-startup className="app-shell md:theme-graphite md:bg-canvas md:text-ink" data-nav-collapsed={collapsed}>
     <header className="site-nav text-ink" data-collapsed={collapsed}>
       <div className="site-brand"><span className="grid size-11 shrink-0 place-items-center"><RadioMark /></span><span className="site-wordmark nav-collapse-label">Radio Friday</span></div>
       <nav aria-label="主导航" className="primary-nav">
         {links.map(({ href, label, glyph }) => <NextLink key={href} href={href} prefetch={false} aria-label={label} aria-current={path.startsWith(href) ? 'page' : undefined} className={cn('nav-item', path.startsWith(href) && 'nav-item-active')}><NavigationGlyph name={glyph} /><span className="nav-collapse-label">{label}</span></NextLink>)}
       </nav>
-      <div className="nav-footer"><span className="nav-footer-row text-muted"><UserRound aria-hidden="true" className="size-5" /><span className="nav-collapse-label text-sm">正在加载账户…</span></span></div>
+      <div className="nav-footer">
+        <div className="nav-identity-card">
+          <SkeletonRegion kind="account-navigation" label="正在加载账户…" className="nav-identity-link pointer-events-none w-full">
+            <SkeletonBlock className={cn('shrink-0 rounded-full', collapsed ? 'size-8' : 'size-10')} />
+            <div className="nav-collapse-label min-w-0 flex-1">
+              <div className="flex h-5 items-center"><SkeletonBlock className="h-3 w-20 max-w-full" /></div>
+              <div className="mt-0.5 flex h-4 items-center"><SkeletonBlock className="h-2.5 w-16 max-w-full" /></div>
+            </div>
+          </SkeletonRegion>
+        </div>
+      </div>
     </header>
     <div className="app-content relative isolate app-content-ambient md:min-h-dvh md:bg-canvas">
       <div aria-hidden="true" className="shell-ambient" />
-      <main id="main-content" tabIndex={-1} className="page-shell page-content"><InlineLoading label="正在加载账户…" className="min-h-64" /></main>
+      <AccountStartupContent path={path} />
     </div>
     <nav aria-label="手机主导航" className="mobile-nav">{links.map(({ href, label, icon: Icon }) => <NextLink key={href} href={href} prefetch={false} aria-label={label} aria-current={path.startsWith(href) ? 'page' : undefined} className={cn('nav-item', path.startsWith(href) && 'nav-item-active')}><Icon aria-hidden="true" size={21} /><span>{label}</span></NextLink>)}</nav>
   </div>;

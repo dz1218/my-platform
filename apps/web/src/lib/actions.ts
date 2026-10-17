@@ -4,7 +4,6 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { novelRequest } from '@/services/novels';
 import { serverFetch, sessionCookie } from '@/services/api/server';
-import type { User } from '@/types/companion';
 
 export type AuthFormState = { error?: string };
 
@@ -16,7 +15,7 @@ async function authenticate(kind: 'register' | 'login', formData: FormData): Pro
   const gender = String(formData.get('gender') ?? '');
   if (kind === 'register' && gender !== 'FEMALE' && gender !== 'MALE') return { error: 'gender_required' };
   let failure = '';
-  let destination = kind === 'register' ? '/choose-identity' : '/companion';
+  const destination = kind === 'register' ? '/choose-identity' : '/companion';
   try {
     const result = await serverFetch(`/auth/${kind}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -26,8 +25,6 @@ async function authenticate(kind: 'register' | 'login', formData: FormData): Pro
       const body = await result.json();
       failure = body.error?.code ?? 'invalid';
     } else {
-      const { user } = await result.json() as { user: User };
-      if (user.onboardingCompleted === false) destination = '/choose-identity';
       const cookie = result.headers.get('set-cookie');
       const token = cookie?.match(/companion_session=([^;]+)/)?.[1];
       if (!token) throw new Error('Missing session');

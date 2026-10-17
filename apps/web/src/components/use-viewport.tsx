@@ -1,6 +1,6 @@
 'use client';
 import { useSyncExternalStore } from 'react';
-import { InlineLoading } from './page-skeleton';
+import { LoadingPlaceholder } from './page-skeleton';
 
 export type ViewportMode = 'mobile' | 'desktop';
 const query = '(min-width: 768px)';
@@ -18,5 +18,5 @@ export function useViewport(): ViewportMode | null {
 }
 
 export function ViewportLoading() {
-  return <InlineLoading label="正在准备页面…" />;
+  return <LoadingPlaceholder label="正在准备页面…" />;
 }

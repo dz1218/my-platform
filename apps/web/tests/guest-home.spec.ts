@@ -72,14 +72,17 @@ for (const width of [390, 1440]) {
   });
 }
 
-test('private routes still require login and existing accounts keep identity onboarding', async ({ page }) => {
+test('private routes require login and accounts without an identity enter companion', async ({ page }) => {
   for (const path of ['/chat/private-match', '/me', '/operator', '/choose-identity']) {
     await page.goto(path);
     await expect(page).toHaveURL('/login');
   }
   await page.context().addCookies([{ name: 'companion_session', value: 'inheritance-test-female', domain: '127.0.0.1', path: '/' }]);
-  await page.goto('/');
-  await expect(page).toHaveURL('/choose-identity');
+  for (const path of ['/', '/login', '/register']) {
+    await page.goto(path);
+    await expect(page).toHaveURL('/companion');
+    await expect(page.getByRole('heading', { name: '今天想和谁聊聊？' })).toBeVisible();
+  }
 });
 
 for (const mode of ['reduced motion', 'animation fallback']) {
