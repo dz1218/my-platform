@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import WebSocket from 'next/dist/compiled/ws/index.js';
 
 // Isolated SSR fixture: browser requests are controlled by each test. This
@@ -13,6 +14,8 @@ let performanceRequests = [];
 const roomSockets = new Set();
 let roomSocketConnections = 0;
 let roomSocketPongs = 0;
+const roomSocketTickets = new Map();
+let roomSocketTicketsIssued = 0;
 function snapshot(socket) {
   if (socket.readyState !== WebSocket.OPEN) return;
   if (!socket.roomId) {
@@ -21,7 +24,10 @@ function snapshot(socket) {
     const items = performanceConfig.rooms.map(room => ({ ...room, canManage: Boolean(room.canManage && socket.session === 'live-test-host') }));
     socket.send(JSON.stringify({ type: 'rooms.updated', items }));
   } else if (performanceConfig.roomDetails[socket.roomId]) {
-    socket.send(JSON.stringify({ type: 'room.updated', detail: performanceConfig.roomDetails[socket.roomId] }));
+    const detail = performanceConfig.roomDetails[socket.roomId];
+    socket.send(JSON.stringify({ type: 'room.updated', detail: { ...detail,
+      item: { ...detail.item, canManage: Boolean(detail.item.canManage && socket.session === 'live-test-host') },
+    } }));
   }
 }
 const inheritanceUser = (session) => session === 'inheritance-test-second' ? {
@@ -53,7 +59,7 @@ const server = createServer(async (request, response) => {
       fixtureNovels = createFixtureNovels();
       for (const socket of roomSockets) snapshot(socket);
     }
-    return response.end(JSON.stringify({ requests: performanceRequests, roomSockets: roomSockets.size, roomSocketConnections, roomSocketPongs }));
+    return response.end(JSON.stringify({ requests: performanceRequests, roomSockets: roomSockets.size, roomSocketConnections, roomSocketPongs, roomSocketTicketsIssued }));
   }
   if (request.url === '/__rooms/disconnect' && request.method === 'POST') {
     for (const socket of roomSockets) socket.close(1012, 'test reconnect');
@@ -79,7 +85,9 @@ const server = createServer(async (request, response) => {
   }
   // Voice browser tests exercise the real Go handlers against temporary LiveKit
   // rooms. Existing regressions keep their isolated fixtures and mocked joins.
-  if (process.env.LIVEKIT_INTEGRATION === '1' && /^\/api\/v1\/rooms\/voice-e2e-[a-zA-Z0-9-]+(?:\/|$)/.test(request.url ?? '')) {
+  const url = new URL(request.url, 'http://127.0.0.1:18181');
+  const realRoomTicket = url.pathname === '/api/v1/rooms/socket-ticket' && url.searchParams.get('roomId')?.startsWith('voice-e2e-');
+  if (process.env.LIVEKIT_INTEGRATION === '1' && (realRoomTicket || /^\/api\/v1\/rooms\/voice-e2e-[a-zA-Z0-9-]+(?:\/|$)/.test(request.url ?? ''))) {
     let body = '';
     for await (const part of request) body += part;
     try {
@@ -96,6 +104,15 @@ const server = createServer(async (request, response) => {
     }
   }
   const session = request.headers.cookie?.match(/(?:^|;\s*)companion_session=([^;]+)/)?.[1];
+  if (url.pathname === '/api/v1/rooms/socket-ticket' && request.method === 'POST') {
+    for (const [ticket, claims] of roomSocketTickets) {
+      if (claims.expires <= Date.now()) roomSocketTickets.delete(ticket);
+    }
+    const ticket = randomUUID();
+    roomSocketTickets.set(ticket, { session, roomId: url.searchParams.get('roomId'), expires: Date.now() + 60_000 });
+    roomSocketTicketsIssued++;
+    return response.end(JSON.stringify({ ticket }));
+  }
   if (request.url === '/api/v1/me' && /^inheritance-test-(female|male|legacy|completed|inherited|second)$/.test(session ?? '')) {
     return response.end(JSON.stringify({ user: { ...inheritanceUser(session), ...performanceConfig.user } }));
   }
@@ -221,11 +238,17 @@ const roomSocketServer = new WebSocket.Server({ noServer: true });
 server.on('upgrade', (request, socket, head) => {
   const url = new URL(request.url, 'http://127.0.0.1:18181');
   if (url.pathname !== '/api/v1/rooms/socket') return socket.destroy();
+  const roomId = url.searchParams.get('roomId');
+  const realRoom = process.env.LIVEKIT_INTEGRATION === '1' && roomId?.startsWith('voice-e2e-');
+  const claims = roomSocketTickets.get(url.searchParams.get('ticket'));
+  if (!realRoom && (!claims || claims.expires <= Date.now() || claims.roomId !== roomId)) {
+    socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+    return;
+  }
   roomSocketServer.handleUpgrade(request, socket, head, client => {
-    const roomId = url.searchParams.get('roomId');
-    if (process.env.LIVEKIT_INTEGRATION === '1' && roomId?.startsWith('voice-e2e-')) {
+    if (realRoom) {
       const upstream = new WebSocket(`ws://127.0.0.1:18182${request.url}`, { headers: {
-        Cookie: request.headers.cookie || '', Origin: request.headers.origin || 'http://127.0.0.1:3012',
+        Origin: request.headers.origin || 'http://127.0.0.1:3012',
       } });
       const queued = [];
       client.on('message', message => {
@@ -241,7 +264,8 @@ server.on('upgrade', (request, socket, head) => {
     }
     roomSocketConnections++;
     client.roomId = roomId;
-    client.session = request.headers.cookie?.match(/(?:^|;\s*)companion_session=([^;]+)/)?.[1];
+    // Cross-origin sockets authenticate from the ticket, never browser cookies.
+    client.session = claims.session;
     roomSockets.add(client);
     client.on('close', () => roomSockets.delete(client));
     client.on('message', message => {

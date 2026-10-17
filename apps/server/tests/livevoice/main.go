@@ -118,7 +118,7 @@ func main() {
 			c.Request.Body = io.NopCloser(bytes.NewReader(data))
 			eventName, eventRoom = event.Event, event.Room.Name
 		}
-		if c.Request.URL.Path != "/health" && c.Request.URL.Path != "/__sync" && c.Request.URL.Path != "/api/v1/livekit/webhook" && c.Request.URL.Path != "/api/v1/rooms/socket" {
+		if c.Request.URL.Path != "/health" && c.Request.URL.Path != "/__sync" && c.Request.URL.Path != livekit.WebhookPath && c.Request.URL.Path != livekit.RoomSocketPath && c.Request.URL.Path != livekit.RoomSocketTicketPath {
 			parts := strings.Split(c.Request.URL.Path, "/")
 			if len(parts) < 5 || !strings.HasPrefix(parts[4], "voice-e2e-") {
 				c.AbortWithStatus(404)

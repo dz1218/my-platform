@@ -19,6 +19,7 @@ function isDetail(value: unknown): value is LiveRoomDetail {
 /** One lobby or room owner creates and disposes its own connection. */
 export class RoomsConnection {
   private socket?: WebSocket;
+  private pending?: AbortController;
   private retry?: ReturnType<typeof setTimeout>;
   private watchdog?: ReturnType<typeof setTimeout>;
   private attempts = 0;
@@ -37,19 +38,46 @@ export class RoomsConnection {
     this.connect();
   }
 
-  private connect() {
+  private async connect() {
     if (this.stopped) return;
     if (!navigator.onLine) { this.options.onState?.('reconnecting'); return; }
     clearTimeout(this.retry);
     this.retry = undefined;
-    const url = new URL('/ws/rooms', window.location.href);
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    if (this.options.roomId) url.searchParams.set('roomId', this.options.roomId);
+    const pending = new AbortController();
+    this.pending = pending;
+    this.lastReceived = Date.now();
+    this.watchdog = setTimeout(() => this.reconnect(), CONNECT_TIMEOUT);
     let socket: WebSocket;
-    try { socket = new WebSocket(url); }
-    catch { this.scheduleRetry(); return; }
+    try {
+      const endpoint = new URL('/api/live/connection', window.location.href);
+      if (this.options.roomId) endpoint.searchParams.set('roomId', this.options.roomId);
+      const response = await fetch(endpoint, {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: pending.signal,
+      });
+      if (!response.ok) throw new Error('Room connection unavailable');
+      const data: unknown = await response.json();
+      if (this.stopped || this.pending !== pending) return;
+      if (!data || typeof data !== 'object' || !('url' in data) || typeof data.url !== 'string') {
+        throw new Error('Invalid room connection');
+      }
+      const url = new URL(data.url);
+      if (!['ws:', 'wss:'].includes(url.protocol) || url.username || url.password ||
+        (window.location.protocol === 'https:' && url.protocol !== 'wss:')) {
+        throw new Error('Invalid room connection address');
+      }
+      socket = new WebSocket(url);
+    } catch {
+      if (!this.stopped && this.pending === pending) {
+        this.pending = undefined;
+        clearTimeout(this.watchdog);
+        this.scheduleRetry();
+      }
+      return;
+    }
+    this.pending = undefined;
     this.socket = socket;
     this.lastReceived = Date.now();
+    clearTimeout(this.watchdog);
     this.watchdog = setTimeout(() => this.reconnect(), CONNECT_TIMEOUT);
     socket.onmessage = event => {
       if (this.stopped || this.socket !== socket) return;
@@ -84,6 +112,8 @@ export class RoomsConnection {
 
   private disconnect() {
     clearTimeout(this.watchdog);
+    this.pending?.abort();
+    this.pending = undefined;
     const socket = this.socket;
     this.socket = undefined;
     if (!socket) return;
@@ -107,6 +137,7 @@ export class RoomsConnection {
 
   private resume = () => {
     if (this.stopped || document.visibilityState !== 'visible' || !navigator.onLine) return;
+    if (this.pending && Date.now() - this.lastReceived < CONNECT_TIMEOUT) return;
     if (this.socket?.readyState === WebSocket.OPEN && Date.now() - this.lastReceived < HEARTBEAT_TIMEOUT) return;
     if (this.socket?.readyState === WebSocket.CONNECTING && Date.now() - this.lastReceived < CONNECT_TIMEOUT) return;
     this.disconnect();

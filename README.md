@@ -113,19 +113,27 @@ corrects it, state can remain stale. Webhook configuration is therefore required
 for automatic host-departure handling; WebSocket delivery cannot discover a
 change that the backend never received.
 
-The lobby and room page use same-origin `/ws/rooms`, forwarded to the Go API's
-`/api/v1/rooms/socket`. An optional `roomId` selects room details; without it the
-socket sends the lobby list. Initial connections and reconnects receive a full
-snapshot. Guests can receive public data; `canManage` is computed per connection
-from the signed login session. Snapshots remain in React Query, and an incoming
+The lobby and room page obtain a connection URL from same-origin
+`POST /api/live/connection`, then connect directly to the Go API's
+`/api/v1/rooms/socket`. The server exchanges the existing login cookie for a
+60-second read-only ticket scoped to the lobby or selected `roomId`; each reconnect
+gets a new ticket. The long-lived login credential stays HttpOnly. The public
+WebSocket origin is derived from server-side `COMPANION_API_URL`; set
+`COMPANION_WS_URL` only when that API URL uses an internal address.
+Initial connections and reconnects receive a full snapshot. Guests can receive
+public data; `canManage` is computed per connection from the verified ticket.
+Snapshots remain in React Query, and an incoming
 push cancels stale HTTP reads. Ordinary list/detail reads and WebSocket snapshots
 do not query LiveKit. The previous five-second lobby, detail and voice polling
 has been removed. `POST /api/v1/rooms/refresh` and
 `POST /api/v1/rooms/:roomId/refresh` explicitly verify upstream state; repeated
 requests are coalesced and limited rather than multiplied by viewer count.
 
-For local development using LiveKit Cloud, automatic notifications require a
-public HTTPS tunnel forwarding to the local Go API on port 8080, with
+Use separate PostgreSQL, Redis and LiveKit environments for local development
+and production. Sharing a LiveKit Cloud project shares its room list, even when
+the frontend URLs differ. Local Docker LiveKit is the default development setup.
+For local development using a separate LiveKit Cloud test project, automatic
+notifications require a public HTTPS tunnel forwarding to the local Go API on port 8080, with
 `/api/v1/livekit/webhook` configured in Cloud. A localhost callback cannot be
 reached from Cloud. Alternatively, local Docker LiveKit already points to
 `http://host.docker.internal:8080/api/v1/livekit/webhook`; restart LiveKit after

@@ -75,6 +75,7 @@ func roomSocketFixture(t *testing.T) (*snapshotFixture, *httptest.Server) {
 	}
 	h := Handler{Client: NewClient(Config{URL: "ws://unused", APIKey: "key", APISecret: "secret"}), Auth: auth.Handler{Service: auth.Service{Secret: "socket-test-secret"}}}
 	r := gin.New()
+	r.POST(RoomSocketTicketPath, h.roomSocketTicket("http://web"))
 	r.GET(RoomSocketPath, h.roomSocket(f, "http://web"))
 	server := httptest.NewServer(r)
 	t.Cleanup(server.Close)

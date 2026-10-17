@@ -26,6 +26,7 @@ type roomSnapshotSource interface {
 // for this connection; no user-specific data is placed on the shared bus.
 func RegisterRealtime(r gin.IRouter, cfg Config, authentication auth.Handler, cache *redis.Client, origin string) {
 	h := Handler{Client: NewClient(cfg), Auth: authentication, RoomCache: cache}
+	r.POST(RoomSocketTicketPath, h.roomSocketTicket(origin))
 	r.GET(RoomSocketPath, h.roomSocket(h, origin))
 }
 
@@ -40,7 +41,21 @@ func (h Handler) roomSocket(source roomSnapshotSource, origin string) gin.Handle
 			fail(c, http.StatusBadRequest, "Invalid room id")
 			return
 		}
-		userID, err := h.sessionUser(c)
+		var userID string
+		var err error
+		if tickets, supplied := c.Request.URL.Query()["ticket"]; supplied {
+			if len(tickets) != 1 || c.GetHeader("Origin") != origin {
+				err = errors.New("invalid socket ticket")
+			} else {
+				userID, err = h.verifyRoomSocketTicket(tickets[0], id, origin)
+			}
+			if err != nil {
+				failRoom(c, http.StatusUnauthorized, "socket_ticket_invalid", "连接凭据已失效，请重新连接")
+				return
+			}
+		} else {
+			userID, err = h.sessionUser(c)
+		}
 		if err != nil {
 			fail(c, http.StatusUnauthorized, "登录已失效，请重新登录")
 			return
