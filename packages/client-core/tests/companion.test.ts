@@ -45,6 +45,11 @@ for (const firstToFinish of ['a', 'b']) {
       responses.get(lastToFinish)!.resolve(match(lastToFinish));
       await Promise.all([a, b]);
       assert.deepEqual(store.getState().pendingIds, []);
+      assert.equal(store.getState().enteringId, 'b');
+      await store.getState().meetIdentity('b');
+      assert.deepEqual(calls, ['a', 'b']);
+      store.getState().finishEntry();
+      assert.equal(store.getState().enteringId, null);
       assert.deepEqual(opened, ['match-b']);
       assert.equal(client.getQueryData<{ items: Match[] }>(['matches', 'account'])!.items.length, 2);
     } finally { client.clear(); }
@@ -64,6 +69,7 @@ test('failed greetings release only their own button and can be retried without 
     await b;
     assert.equal(store.getState().error?.message, 'current failure');
     assert.deepEqual(store.getState().pendingIds, []);
+    assert.equal(store.getState().enteringId, null);
     const retry = store.getState().meetIdentity('b');
     assert.equal(store.getState().error, null);
     responses.get('b')!.resolve(match('b'));

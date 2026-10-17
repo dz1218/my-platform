@@ -11,6 +11,7 @@ export type CompanionActions = {
   applyFilters: (filters: CatalogFilters) => void;
   meetIdentity: (id: string) => Promise<void>;
   clearError: () => void;
+  finishEntry: () => void;
 };
 export const createCompanionActions = ({ client, service, accountId, isOwnerActive, captureNavigationIntent, openChat, prepareChat, openLogin }: CompanionDependencies): StateCreator<CompanionStore, [['zustand/subscribeWithSelector', never]], [], CompanionActions> => (set, get) => ({
   applyFilters: value => {
@@ -20,15 +21,16 @@ export const createCompanionActions = ({ client, service, accountId, isOwnerActi
     set({ filters });
   },
   clearError: () => set({ error: null }),
+  finishEntry: () => set({ enteringId: null }),
   meetIdentity: async id => {
     if (!isOwnerActive()) return;
     if (!accountId) { openLogin(); return; }
     // A failed background refresh can leave usable cached matches with status=error.
-    if (get().pendingIds.includes(id) || !client.getQueryData(['matches', accountId])) return;
+    if (get().pendingIds.includes(id) || get().enteringId === id || !client.getQueryData(['matches', accountId])) return;
     // Capture focus before the pending state disables/replaces the trigger.
     prepareChat();
     const canNavigate = captureNavigationIntent();
-    set(state => ({ pendingIds: [...state.pendingIds, id], error: null }));
+    set(state => ({ pendingIds: [...state.pendingIds, id], enteringId: null, error: null }));
     try {
       const match = await service.meet(id);
       if (!isOwnerActive()) return;
@@ -36,8 +38,13 @@ export const createCompanionActions = ({ client, service, accountId, isOwnerActi
       client.setQueryData<{ items: Match[] }>(['matches', accountId], previous => ({ items: [match, ...(previous?.items.filter(item => item.id !== match.id) ?? [])] }));
       // A successful greeting still belongs in this account's list. Navigation
       // belongs to its original intent; another greeting or leaving invalidates it.
-      if (canNavigate()) openChat(match.id);
-    } catch (error) { if (isOwnerActive() && canNavigate()) set({ error: error instanceof Error ? error : new Error('暂时无法开始聊天') }); }
+      if (canNavigate()) {
+        // Request completion is not route completion. Keep this card busy until
+        // the browser owner commits a destination or starts another entry.
+        set({ enteringId: id });
+        openChat(match.id);
+      }
+    } catch (error) { if (isOwnerActive() && canNavigate()) set({ enteringId: null, error: error instanceof Error ? error : new Error('暂时无法开始聊天') }); }
     finally { if (isOwnerActive()) set(state => ({ pendingIds: state.pendingIds.filter(pending => pending !== id) })); }
   },
 });
