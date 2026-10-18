@@ -118,7 +118,8 @@ export function AppStartup() {
     try { setCollapsed(localStorage.getItem('radio-friday:sidebar-collapsed') === 'true'); } catch { /* Optional layout preference. */ }
   }, []);
   if (path === '/login' || path === '/register') return <div data-app-startup className="min-h-dvh bg-canvas text-ink"><LoadingPlaceholder label="正在加载账户…" className="min-h-dvh" /></div>;
-  return <div data-app-startup className="app-shell md:theme-graphite md:bg-canvas md:text-ink" data-nav-collapsed={collapsed}>
+  const liveRoom = /^\/live\/[^/]+$/.test(path);
+  return <div data-app-startup className="app-shell md:theme-graphite md:bg-canvas md:text-ink" data-nav-collapsed={collapsed} data-immersive={liveRoom}>
     <header className="site-nav text-ink" data-collapsed={collapsed}>
       <div className="site-brand"><span className="grid size-11 shrink-0 place-items-center"><RadioMark /></span><span className="site-wordmark nav-collapse-label">Radio Friday</span></div>
       <nav aria-label="主导航" className="primary-nav">
@@ -136,8 +137,8 @@ export function AppStartup() {
         </div>
       </div>
     </header>
-    <div className="app-content relative isolate app-content-ambient md:min-h-dvh md:bg-canvas">
-      <div aria-hidden="true" className="shell-ambient" />
+    <div className={cn('app-content md:min-h-dvh md:bg-canvas', !liveRoom && 'relative isolate app-content-ambient')}>
+      {!liveRoom && <div aria-hidden="true" className="shell-ambient" />}
       <AccountStartupContent path={path} />
     </div>
     <MobileNavigation path={path} Link={StartupMobileLink} />

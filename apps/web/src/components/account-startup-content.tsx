@@ -6,6 +6,7 @@ import { ProfileLoading } from '@/features/account/profile-frame';
 import { CompanionLoading } from '@/features/companion/companion-frame';
 import { NovelShelfLoading } from '@/features/novels/novel-shelf-frame';
 import { LiveLobbyLoading } from './live/live-lobby-frame';
+import { LiveRoomLoading } from './live/live-room-loading';
 import { PageLoading } from './page-skeleton';
 
 function CompanionStartup() {
@@ -20,7 +21,7 @@ export function AccountStartupContent({ path }: { path: string }) {
   if (path === '/live') return <LiveLobbyLoading />;
   if (path === '/novels') return <NovelShelfLoading />;
   if (path.startsWith('/chat/')) return <PageLoading kind="chat" />;
-  if (path.startsWith('/live/')) return <PageLoading kind="room" />;
+  if (path.startsWith('/live/')) return <LiveRoomLoading />;
   if (/^\/novels\/[^/]+\/chapters\/[^/]+$/.test(path)) return <PageLoading kind="reading" />;
   if (path === '/novels/create' || /\/edit$|\/manage(?:\/|$)/.test(path)) return <PageLoading kind="form" />;
   if (path.startsWith('/novels/')) return <PageLoading kind="book" />;

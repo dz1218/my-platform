@@ -3,18 +3,19 @@
 import type { ReactNode } from 'react';
 import { AudioLines, Share2, Users } from 'lucide-react';
 import { Sheet } from '@my-platform/web-ui/sheet';
+import { SkeletonBlock } from '@my-platform/web-ui/skeleton';
 
-export function MobileLiveRoomHeader({ back, title, role, status, count, onShare }: {
-  back: ReactNode; title: string; role: string | null; status: string;
-  count: number | null; onShare: () => void;
+export function MobileLiveRoomHeader({ back, title, pendingTitle = false, role, status, count, onShare }: {
+  back: ReactNode; title: string; pendingTitle?: boolean; role: string | null; status: string;
+  count: number | null; onShare?: () => void;
 }) {
   return <header className="mb-4 flex min-w-0 items-center gap-3">
     {back}
     <div className="min-w-0 flex-1">
-      <h1 className="truncate text-lg font-semibold" title={title}>{title}</h1>
-      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted"><span role="status">{status}</span>{role && <span>{role}</span>}{count !== null && <span>{count} 人在房间</span>}</p>
+      <h1 data-room-title-pending={pendingTitle || undefined} className="flex h-7 items-center truncate text-lg font-semibold" title={pendingTitle ? undefined : title}>{pendingTitle ? <><span className="sr-only">直播间</span><span aria-hidden="true" className="h-4 w-28 max-w-full rounded bg-surface-soft" /></> : <span className="truncate">{title}</span>}</h1>
+      <div className="mt-1 flex h-4 items-center gap-x-3 overflow-hidden whitespace-nowrap text-xs text-muted">{status ? <span role="status">{status}</span> : <SkeletonBlock className="h-2.5 w-20" />}{role && <span>{role}</span>}{count !== null && <span>{count} 人在房间</span>}</div>
     </div>
-    <button type="button" onClick={onShare} aria-label="分享直播间" className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-soft text-muted hover:bg-surface-hover hover:text-ink"><Share2 size={19} /></button>
+    <button type="button" disabled={!onShare} onClick={onShare} aria-label="分享直播间" className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-soft text-muted hover:bg-surface-hover hover:text-ink"><Share2 size={19} /></button>
   </header>;
 }
 

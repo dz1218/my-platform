@@ -11,6 +11,7 @@ import type { VoiceSlot } from './use-live-voice';
 type Camera = { track: Track | null; name: string; local: boolean };
 type Props = {
   room: Room | null;
+  pending?: boolean;
   isHost: boolean;
   hostRecovering?: boolean;
   slot: VoiceSlot | null;
@@ -43,7 +44,7 @@ function CameraVideo({ camera, label }: { camera: Camera; label: string }) {
   return <div ref={ref} className={`live-camera-video ${camera.local ? 'is-local' : ''}`} />;
 }
 
-export function LiveStageMedia({ room, isHost, hostRecovering, slot, cameraDisabled, onEnableCamera }: Props) {
+export function LiveStageMedia({ room, pending = false, isHost, hostRecovering, slot, cameraDisabled, onEnableCamera }: Props) {
   const [cameras, setCameras] = useState<{ host: Camera | null; caller: Camera | null }>({ host: null, caller: null });
   const ui = useStoreInstance(createLiveStageStore);
   const focusedCall = useStore(ui, s => s.focusedCall);
@@ -75,7 +76,7 @@ export function LiveStageMedia({ room, isHost, hostRecovering, slot, cameraDisab
   const swap = () => { if (call) setFocusedCall(callerIsMain ? null : call.requestId); };
   const hasVideo = !!cameras.host?.track || (!!call && !!cameras.caller?.track);
   return <>
-    <div className="live-stage-top">
+    <div className={`live-stage-top ${pending ? 'invisible' : ''}`} aria-hidden={pending || undefined}>
       <span><LiveIcon name="video" size={15} />{call ? '连麦画面' : isHost ? '本地预览' : '直播画面'}</span>
       {call ? <button type="button" className="live-stage-swap" onClick={swap}><LiveIcon name="swap" size={15} />切换大小画面</button>
         : <span>{room ? hasVideo ? '实时画面' : '等待画面' : '尚未连接'}</span>}

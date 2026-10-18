@@ -8,8 +8,9 @@ import { useShallow } from 'zustand/react/shallow';
 import { createLiveChatStore, liveChatSelectors, liveChatTopic, liveChatMaxLength } from '@/stores/live/chat';
 import { useStoreInstance } from '@/stores/use-store-instance';
 import { LiveIcon } from './live-icon';
+import { LiveChatLoading } from './live-room-loading';
 
-export function LiveChat({ room, connected, nickname, visible }: { room: Room | null; connected: boolean; nickname: string; visible: boolean }) {
+export function LiveChat({ room, connected, nickname, visible, pending = false }: { pending?: boolean; room: Room | null; connected: boolean; nickname: string; visible: boolean }) {
   const viewport = useViewport();
   const ui = useStoreInstance(createLiveChatStore);
   const { messages, draft, sending, error, unread } = useStore(ui, useShallow(liveChatSelectors.view));
@@ -48,6 +49,8 @@ export function LiveChat({ room, connected, nickname, visible }: { room: Room | 
     const sent = await sendMessage(author, payload => room.localParticipant.publishData(payload, { reliable: true, topic: liveChatTopic }));
     if (sent) inputRef.current?.focus();
   }
+
+  if (pending) return <LiveChatLoading />;
 
   return <div className="live-chat">
     <div className="live-chat-log" ref={scrollRef} role="log" aria-label="直播间消息" aria-live="polite" aria-relevant="additions" onScroll={() => {

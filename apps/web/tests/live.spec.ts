@@ -197,7 +197,8 @@ test('temporary join errors allow retry; leaving waits for identity and cancels 
   await page.setViewportSize({ width: 1440, height: 980 });
   await page.screenshot({ path: test.info().outputPath('room-unavailable.png'), fullPage: true });
   await page.getByRole('button', { name: '重新加入' }).click();
-  await expect(page.getByRole('button', { name: '正在进入直播间…' })).toBeDisabled();
+  await expect(page.getByRole('status', { name: '正在连接直播间', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '取消连接', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '直播大厅', exact: true }).click();
   await expect(page.getByText('正在确认房间身份，请稍候…')).toBeVisible();
   await expect(page).toHaveURL('/live/room-missing');
@@ -284,7 +285,8 @@ for (const { host, status } of entryScenarios) {
     });
     await lobby(page, [{ ...room, status, viewers: status === '直播中' ? 1 : 0 }]);
     await page.getByRole('link', { name: host ? '进入直播间' : '观看', exact: true }).click();
-    await expect(page.getByRole('button', { name: '正在进入直播间…' })).toBeDisabled();
+    await expect(page.getByRole('status', { name: '正在连接直播间', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '取消连接', exact: true })).toBeEnabled();
     await expect.poll(() => attempts).toBe(1);
     await expect(page.getByRole('button', { name: /^(进入直播间|进入观看|开始直播|开启直播)$/ })).toHaveCount(0);
     release();

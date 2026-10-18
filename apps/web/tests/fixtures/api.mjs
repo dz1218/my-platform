@@ -97,6 +97,7 @@ const server = createServer(async (request, response) => {
         body: request.method === 'GET' ? undefined : body,
       });
       response.statusCode = upstream.status;
+      if (upstream.headers.has('retry-after')) response.setHeader('Retry-After', upstream.headers.get('retry-after'));
       return response.end(await upstream.text());
     } catch {
       response.statusCode = 502;

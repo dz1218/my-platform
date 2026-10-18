@@ -109,14 +109,14 @@
 .live-button-danger:hover { @apply bg-danger-hover; }
 .live-room-page { padding-top: 26px; }
 .live-room-nav { display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 12px; margin-bottom: 14px; @apply text-muted; }
-.live-room-nav a { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; }
+.live-room-nav a, .live-room-nav button { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; }
 .live-room-nav a:hover { @apply text-action; }
 .live-room-nav > span { font-size: 11px; }
 .live-room-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 23px; }
 .live-room-title { min-width: 0; }
-.live-room-title h1 { font-size: 25px; font-weight: 600; letter-spacing: -.7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-room-title h1 { display: flex; align-items: center; height: 38px; font-size: 25px; font-weight: 600; letter-spacing: -.7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .live-room-heading > button { flex-shrink: 0; }
-.live-room-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 12px; font-size: 11px; @apply text-muted; }
+.live-room-meta { min-height: 24px; display: flex; align-items: center; flex-wrap: wrap; gap: 15px; margin-top: 12px; font-size: 11px; @apply text-muted; }
 .live-room-meta > span { display: inline-flex; align-items: center; gap: 5px; }
 .live-role { padding: 3px 7px; border-radius: 4px; font-size: 11px; flex-shrink: 0; @apply bg-surface-soft text-muted; }
 .live-role.is-host { @apply bg-success-soft text-success; }
@@ -124,7 +124,7 @@
 .live-connection.is-connected i { @apply bg-success; }
 .live-studio { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 20px; align-items: stretch; }
 .live-stage-column { min-width: 0; }
-.live-stage { position: relative; display: flex; flex-direction: column; width: 100%; aspect-ratio: 16 / 9; min-height: 340px; max-height: 560px; border-radius: 16px 16px 0 0; overflow: hidden; @apply theme-night bg-canvas text-ink; }
+.live-stage { position: relative; display: flex; flex-direction: column; width: 100%; aspect-ratio: 16 / 9; min-height: 340px; max-height: 560px; border-radius: 16px 16px 0 0; overflow: hidden; @apply theme-night md:theme-graphite bg-media-canvas text-ink; }
 .live-stage:fullscreen { width: 100%; height: 100%; max-height: none; border-radius: 0; }
 .live-stage-top, .live-stage-bottom { z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 20px; font-size: 11px; @apply text-muted bg-photo-shade/85; }
 .live-stage-top > span, .live-stage-bottom > span { display: inline-flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -148,11 +148,11 @@
 .live-stage-media { position: relative; flex: 1; min-height: 0; }
 .live-stage-swap { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; min-height: 44px; margin-block: -9px; padding: 0 9px; border-radius: 6px; font-size: 11px; @apply border border-control text-ink; }
 .live-stage-swap:hover { @apply bg-surface-hover; }
-.live-camera-pane { position: absolute; overflow: hidden; @apply bg-panel; }
+.live-camera-pane { position: absolute; overflow: hidden; @apply bg-media-canvas; }
 .live-camera-pane.is-main { inset: 0; }
 .live-camera-pane.is-small { z-index: 1; right: 16px; bottom: 16px; width: clamp(120px, 28%, 240px); aspect-ratio: 16 / 10; border-radius: 9px; @apply border border-control shadow-popover; }
 .live-camera-video { position: absolute; inset: 0; }
-.live-stage .live-media-track { display: block; width: 100%; height: 100%; max-width: none; min-height: 0; object-fit: contain; border-radius: 0; @apply bg-panel; }
+.live-stage .live-media-track { display: block; width: 100%; height: 100%; max-width: none; min-height: 0; object-fit: contain; border-radius: 0; @apply bg-media-canvas; }
 .live-stage .live-camera-video.is-local video { transform: scaleX(-1); }
 .live-camera-label { position: absolute; bottom: 10px; left: 10px; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 7px; border-radius: 4px; font-size: 11px; pointer-events: none; @apply bg-photo-shade/75 text-photo-ink; }
 .live-camera-swap { position: absolute; inset: 0; width: 100%; height: 100%; display: flex; justify-content: flex-end; align-items: flex-start; padding: 8px; cursor: pointer; @apply text-photo-ink; }
@@ -175,8 +175,9 @@
 .live-button-leave:hover { @apply bg-danger-soft; }
 .live-viewer-note { display: flex; align-items: center; gap: 8px; font-size: 12px; @apply text-muted; }
 .live-stage-column > .live-notice { margin-top: 14px; }
-.live-studio-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; font-size: 11px; @apply text-muted; }
+.live-studio-footer { min-height: 80px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 0; font-size: 11px; @apply text-muted; }
 .live-studio-footer > div { display: flex; align-items: center; gap: 7px; }
+.live-studio-footer[data-pending] > * { visibility: hidden; }
 .live-studio-footer svg { flex-shrink: 0; }
 .live-agent-button { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; font-size: 11px; @apply text-muted; }
 .live-sidebar { display: flex; flex-direction: column; min-width: 0; height: 100%; min-height: 440px; max-height: 700px; border-radius: 16px; overflow: hidden; @apply bg-panel border border-line; }
@@ -401,6 +402,11 @@
   .live-room-page .live-studio { gap: 20px; }
   .live-room-page .live-sidebar { height: min(580px, 70dvh); min-height: 380px; @apply rounded-scene border-line/60 bg-panel; }
   .live-room-page .live-control-bar { @apply rounded-panel border-0 bg-surface-soft; }
-  .live-room-page .live-studio-footer { padding-inline: 4px; }
+  .live-room-page .live-studio-footer { min-height: 136px; padding-inline: 4px; align-content: center; }
   .live-room-page .live-stage-empty > p { font-size: 12px; }
+}
+
+/* Reserve the second control row before the host role is known on narrow phones. */
+@media (max-width: 375px) {
+  .live-room-page .live-control-bar { min-height: 116px; }
 }

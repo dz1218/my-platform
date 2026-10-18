@@ -1,5 +1,5 @@
-import { PageLoading } from '@/components/page-skeleton';
+import { LiveRoomLoading } from '@/components/live/live-room-loading';
 
 export default function Loading() {
-  return <PageLoading kind="room" />;
+  return <LiveRoomLoading />;
 }

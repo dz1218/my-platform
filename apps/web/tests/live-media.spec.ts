@@ -427,3 +427,77 @@ test('lobby return stays put on an unaccepted close and confirms a lost accepted
     await expect(page).toHaveURL(/\/live$/);
   } finally { await rpc('DeleteRoom', { room: roomId }, { roomCreate: true }); }
 });
+
+for (const width of [320, 390, 1440]) {
+  test(`player and chat become ready independently of room metadata at ${width}px`, async ({ page, context, browser }, testInfo) => {
+    test.skip(process.env.LIVEKIT_INTEGRATION !== '1', 'Requires local LiveKit');
+    test.setTimeout(90_000);
+    const roomId = `voice-e2e-${randomUUID()}`;
+    const title = '区域加载测试';
+    await rpc('CreateRoom', { name: roomId, metadata: JSON.stringify({ title, ownerId: 'live-test-host' }) }, { roomCreate: true });
+    const guestContext = await browser.newContext({ baseURL: 'http://127.0.0.1:3012', viewport: { width, height: 1000 } });
+    let releaseHost!: () => void;
+    let releaseGuest!: () => void;
+    let releaseMetadata!: () => void;
+    const hostGate = new Promise<void>(resolve => { releaseHost = resolve; });
+    const guestGate = new Promise<void>(resolve => { releaseGuest = resolve; });
+    const metadataGate = new Promise<void>(resolve => { releaseMetadata = resolve; });
+    // Typing may scroll a phone viewport; compare document coordinates, not scroll offsets.
+    const bounds = async (target: Page) => Promise.all(['.live-stage', '.live-sidebar'].map(selector => target.locator(selector).evaluate(element => {
+      const box = element.getBoundingClientRect();
+      return { x: box.x + window.scrollX, y: box.y + window.scrollY, width: box.width, height: box.height };
+    })));
+    const expectStable = (before: Awaited<ReturnType<typeof bounds>>, after: Awaited<ReturnType<typeof bounds>>) => {
+      before.forEach((box, index) => {
+        expect(box).not.toBeNull();
+        expect(after[index]).not.toBeNull();
+        for (const key of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(box![key] - after[index]![key]), `${index === 0 ? 'stage' : 'chat'} ${key}`).toBeLessThanOrEqual(2);
+      });
+    };
+    try {
+      await login(context);
+      await page.setViewportSize({ width, height: 1000 });
+      await page.route(`**/api/v1/rooms/${roomId}/join`, async route => { await hostGate; await route.continue().catch(() => {}); });
+      await page.goto(`/live/${roomId}`);
+      await expect(page.locator('[data-player-loading]')).toBeVisible();
+      const hostBefore = await bounds(page);
+      releaseHost();
+      await expect(page.getByText('已连接', { exact: true })).toBeVisible();
+      expectStable(hostBefore, await bounds(page));
+      await page.getByRole('button', { name: '开启摄像头' }).click();
+      await expect(page.locator('video')).toHaveCount(1);
+
+      const guest = await guestContext.newPage();
+      await guest.route(`**/api/v1/rooms/${roomId}`, async route => { await metadataGate; await route.continue().catch(() => {}); });
+      await guest.route('**/api/live/connection?*', route => route.fulfill({ status: 503, json: { error: { message: '测试延迟房间信息' } } }));
+      await guest.route(`**/api/v1/rooms/${roomId}/join`, async route => { await guestGate; await route.continue().catch(() => {}); });
+      await guest.goto(`/live/${roomId}`);
+      await expect(guest.locator('[data-player-loading]')).toBeVisible();
+      const guestBefore = await bounds(guest);
+      releaseGuest();
+      await expect(guest.locator('video')).toHaveCount(1);
+      await expect.poll(() => guest.locator('video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(2);
+      await expect(guest.locator('[data-player-loading]')).toHaveCount(0);
+      await expect(guest.locator('[data-room-title-pending]')).toBeVisible();
+      await expect(guest.getByRole('textbox', { name: '发送消息' })).toBeEnabled();
+      expectStable(guestBefore, await bounds(guest));
+      await expect(page.getByRole('button', { name: '在线 2', exact: true })).toBeVisible();
+      await guest.getByRole('textbox', { name: '发送消息' }).fill('画面和聊天已经就绪');
+      await guest.getByRole('button', { name: '发送', exact: true }).click();
+      await expect(guest.getByRole('log')).toContainText('画面和聊天已经就绪');
+      await expect(page.getByRole('log')).toContainText('画面和聊天已经就绪', { timeout: 10_000 });
+      await guest.locator('video').evaluate(video => { video.dataset.stableMedia = 'true'; });
+      await guest.evaluate(() => window.scrollTo(0, 0));
+      await guest.screenshot({ path: testInfo.outputPath(`media-before-metadata-${width}.png`), fullPage: true });
+      releaseMetadata();
+      await expect(guest.getByRole('heading', { name: title, exact: true })).toBeVisible();
+      await expect(guest.locator('video')).toHaveAttribute('data-stable-media', 'true');
+      expectStable(guestBefore, await bounds(guest));
+      await guest.screenshot({ path: testInfo.outputPath(`media-ready-${width}.png`), fullPage: true });
+    } finally {
+      releaseHost(); releaseGuest(); releaseMetadata();
+      await guestContext.close();
+      await rpc('DeleteRoom', { room: roomId }, { roomCreate: true });
+    }
+  });
+}
