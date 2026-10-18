@@ -12,6 +12,7 @@ type Camera = { track: Track | null; name: string; local: boolean };
 type Props = {
   room: Room | null;
   isHost: boolean;
+  hostRecovering?: boolean;
   slot: VoiceSlot | null;
   cameraDisabled: boolean;
   onEnableCamera: () => void;
@@ -42,7 +43,7 @@ function CameraVideo({ camera, label }: { camera: Camera; label: string }) {
   return <div ref={ref} className={`live-camera-video ${camera.local ? 'is-local' : ''}`} />;
 }
 
-export function LiveStageMedia({ room, isHost, slot, cameraDisabled, onEnableCamera }: Props) {
+export function LiveStageMedia({ room, isHost, hostRecovering, slot, cameraDisabled, onEnableCamera }: Props) {
   const [cameras, setCameras] = useState<{ host: Camera | null; caller: Camera | null }>({ host: null, caller: null });
   const ui = useStoreInstance(createLiveStageStore);
   const focusedCall = useStore(ui, s => s.focusedCall);
@@ -81,10 +82,10 @@ export function LiveStageMedia({ room, isHost, slot, cameraDisabled, onEnableCam
     </div>
     {room && <div className={`live-stage-media ${call ? 'has-call' : ''}`}>
       <div className={`live-camera-pane ${callerIsMain ? 'is-small' : 'is-main'}`} role="group" aria-label="主播画面">
-        {cameras.host?.track ? <CameraVideo camera={cameras.host} label="主播画面" />
+        {!hostRecovering && cameras.host?.track ? <CameraVideo camera={cameras.host} label="主播画面" />
           : <div className="live-stage-empty">
             <div className="live-stage-symbol"><LiveIcon name={isHost ? 'videoOff' : 'screen'} size={36} /></div>
-            <h2>{isHost ? '摄像头尚未开启' : '等主播开启画面'}</h2>
+            <h2>{isHost ? '摄像头尚未开启' : hostRecovering ? '主播连接暂时中断，正在等待恢复…' : '等主播开启画面'}</h2>
             {!callerIsMain && <><p>{isHost ? '准备好后，开启摄像头与大家见面。' : '先聊聊天，画面准备好后会自动显示。'}</p>
               {isHost && <button type="button" className="live-button live-button-stage" disabled={cameraDisabled} onClick={onEnableCamera}><LiveIcon name="video" size={16} />打开画面</button>}</>}
           </div>}

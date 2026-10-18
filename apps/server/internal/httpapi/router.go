@@ -24,7 +24,7 @@ import (
 func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies behavior.Catalog, updates *matchupdates.Hub) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
-	_ = r.SetTrustedProxies(nil)
+	_ = r.SetTrustedProxies(cfg.TrustedProxies)
 	r.Use(func(c *gin.Context) {
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("Cache-Control", "no-store")
@@ -38,6 +38,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 			c.Header("Vary", "Origin")
 			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Live-Voice-Token")
+			c.Header("Access-Control-Expose-Headers", "Retry-After")
 			c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		}
 		if c.Request.Method == "OPTIONS" {

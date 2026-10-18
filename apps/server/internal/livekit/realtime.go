@@ -60,6 +60,14 @@ func (h Handler) roomSocket(source roomSnapshotSource, origin string) gin.Handle
 			fail(c, http.StatusUnauthorized, "登录已失效，请重新登录")
 			return
 		}
+		if !h.allowRate(c, "ip", c.ClientIP(), h.limit("ip_total")) || !h.allowAccountRate(c, "socket", userID) {
+			return
+		}
+		lease, ok := h.acquireRoomLease(c, userID)
+		if !ok {
+			return
+		}
+		defer lease.release()
 		server := websocket.Server{
 			Handshake: func(_ *websocket.Config, req *http.Request) error {
 				if req.Header.Get("Origin") != origin {
@@ -152,6 +160,12 @@ func (h Handler) roomSocket(source roomSnapshotSource, origin string) gin.Handle
 							}
 						}
 					case <-heartbeat.C:
+						leaseCtx, stop := context.WithTimeout(ctx, 2*time.Second)
+						valid := lease.renew(leaseCtx)
+						stop()
+						if !valid {
+							return
+						}
 						if write([]byte(`{"type":"ping"}`)) != nil {
 							return
 						}

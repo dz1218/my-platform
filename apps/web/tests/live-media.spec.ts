@@ -19,7 +19,7 @@ async function rpc(method: string, body: Record<string, unknown>, grant: Record<
   const response = await fetch(`${livekitUrl.replace(/^ws/, 'http')}/twirp/livekit.RoomService/${method}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token(grant)}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify(method === 'CreateRoom' ? { departureTimeout: 120, ...body } : body),
   });
   if (method === 'DeleteRoom' && response.status === 404) return {};
   expect(response.ok, `${method}: ${response.status}`).toBe(true);
@@ -48,7 +48,7 @@ async function join(page: Page, roomId: string, host: boolean) {
 }
 
 async function expectEnded(page: Page) {
-  await expect(page.getByRole('heading', { name: '直播间已结束' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: '直播间已结束' })).toBeVisible({ timeout: 80_000 });
   await expect(page.getByRole('button', { name: /^(重新加入|结束直播)$/ })).toHaveCount(0);
   await expect(page.getByRole('link', { name: '返回直播大厅', exact: true }).filter({ hasText: '返回直播大厅' })).toBeVisible();
 }
@@ -157,7 +157,7 @@ test('real host/viewer media, viewer rejoin and confirmed host ending', async ({
 
 test('one host page owns the room while the same account can watch another host', async ({ page, context, browser }) => {
   test.skip(process.env.LIVEKIT_INTEGRATION !== '1', 'Requires local LiveKit');
-  test.setTimeout(90_000);
+  test.setTimeout(150_000);
   const ownRoom = `voice-e2e-${randomUUID()}`;
   const otherRoom = `voice-e2e-${randomUUID()}`;
   const viewerContext = await browser.newContext({ baseURL: 'http://127.0.0.1:3012' });
@@ -210,31 +210,76 @@ test('one host page owns the room while the same account can watch another host'
   }
 });
 
-test('refreshing the only host page closes its room rather than creating a replacement host', async ({ page, context, browser }) => {
+for (const width of [1440, 390]) {
+  test(`host refresh restores the same room with devices off and lobby confirmation at ${width}px`, async ({ page, context, browser }) => {
+    test.skip(process.env.LIVEKIT_INTEGRATION !== '1', 'Requires local LiveKit');
+    test.setTimeout(100_000);
+    const roomId = `voice-e2e-${randomUUID()}`;
+    const viewerContext = await browser.newContext({ baseURL: 'http://127.0.0.1:3012', viewport: { width, height: 980 } });
+    await page.setViewportSize({ width, height: 980 });
+    const created = await rpc('CreateRoom', { name: roomId, metadata: JSON.stringify({ title: '恢复连接测试', ownerId: 'live-test-host' }) }, { roomCreate: true });
+    try {
+      await login(context);
+      await join(page, roomId, true);
+      const viewer = await viewerContext.newPage();
+      await join(viewer, roomId, false);
+      await page.getByRole('button', { name: '开启摄像头', exact: true }).click();
+      await expect(viewer.locator('video')).toHaveCount(1);
+      let release!: () => void;
+      const held = new Promise<void>(resolve => { release = resolve; });
+      await page.route(`**/rooms/${roomId}/join`, async route => { await held; await route.continue(); });
+      await page.reload();
+      await expect(viewer.getByRole('heading', { name: '主播连接暂时中断，正在等待恢复…' })).toBeVisible({ timeout: 20_000 });
+      await expect(viewer.locator('video')).toHaveCount(0);
+      await viewer.getByRole('textbox', { name: '发送消息' }).fill('等主播回来');
+      await viewer.getByRole('button', { name: '发送', exact: true }).click();
+      await expect(viewer.getByRole('log')).toContainText('等主播回来');
+      await viewer.screenshot({ path: test.info().outputPath(`waiting-${width}.png`), fullPage: true });
+      release();
+      await expect(page.getByText('已连接', { exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole('button', { name: '开启摄像头', exact: true })).toBeEnabled();
+      await expect(page.getByRole('button', { name: '开启麦克风', exact: true })).toBeEnabled();
+      await expect(viewer.getByRole('heading', { name: '等主播开启画面' })).toBeVisible();
+      const rooms = await rpc('ListRooms', { names: [roomId] }, { roomList: true });
+      expect(rooms.rooms[0].sid).toBe(created.sid);
+      await page.getByRole('button', { name: '开启摄像头', exact: true }).click();
+      await expect(viewer.locator('video')).toHaveCount(1);
+      const back = page.getByRole('button', { name: width < 768 ? '返回直播大厅' : '直播大厅', exact: true });
+      await back.click();
+      await page.getByRole('button', { name: '继续直播', exact: true }).click();
+      await expect(page.getByText('已连接', { exact: true })).toBeVisible();
+      await back.click();
+      await page.screenshot({ path: test.info().outputPath(`return-dialog-${width}.png`), fullPage: true });
+      await page.getByRole('button', { name: '结束并返回大厅', exact: true }).click();
+      await expect(page).toHaveURL(/\/live$/);
+      await expectEnded(viewer);
+    } finally {
+      await viewerContext.close();
+      await rpc('DeleteRoom', { room: roomId }, { roomCreate: true });
+    }
+  });
+}
+
+test('a solo host can repeatedly refresh without replacing the underlying room', async ({ page, context }) => {
   test.skip(process.env.LIVEKIT_INTEGRATION !== '1', 'Requires local LiveKit');
-  test.setTimeout(60_000);
+  test.setTimeout(100_000);
   const roomId = `voice-e2e-${randomUUID()}`;
-  const viewerContext = await browser.newContext({ baseURL: 'http://127.0.0.1:3012' });
-  await rpc('CreateRoom', { name: roomId, metadata: JSON.stringify({ title: '刷新结束测试', ownerId: 'live-test-host' }) }, { roomCreate: true });
+  const created = await rpc('CreateRoom', { name: roomId, metadata: JSON.stringify({ title: '单主播刷新', ownerId: 'live-test-host' }) }, { roomCreate: true });
   try {
-    await login(context);
-    await join(page, roomId, true);
-    const viewer = await viewerContext.newPage();
-    await join(viewer, roomId, false);
-    await page.reload();
-    await expectEnded(viewer);
-    await expectEnded(page);
+    await login(context); await join(page, roomId, true);
+    for (let i = 0; i < 3; i++) {
+      await page.reload();
+      await expect(page.getByText('已连接', { exact: true })).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByRole('button', { name: '开启摄像头', exact: true })).toBeEnabled();
+    }
     const rooms = await rpc('ListRooms', { names: [roomId] }, { roomList: true });
-    expect(rooms.rooms ?? []).toHaveLength(0);
-  } finally {
-    await viewerContext.close();
-    await rpc('DeleteRoom', { room: roomId }, { roomCreate: true });
-  }
+    expect(rooms.rooms[0].sid).toBe(created.sid);
+  } finally { await rpc('DeleteRoom', { room: roomId }, { roomCreate: true }); }
 });
 
-test('a signed LiveKit departure webhook closes the room without sweep or detail polling', async ({ page, context }) => {
+test('a signed departure persists a real 60-second recovery deadline before closing', async ({ page, context }) => {
   test.skip(process.env.LIVEKIT_INTEGRATION !== '1', 'Requires webhook-enabled local LiveKit');
-  test.setTimeout(60_000);
+  test.setTimeout(110_000);
   const roomId = `voice-e2e-${randomUUID()}`;
   await rpc('CreateRoom', { name: roomId, metadata: JSON.stringify({ title: 'Webhook关闭测试', ownerId: 'live-test-host' }) }, { roomCreate: true });
   const sdkViewer = await context.newPage();
@@ -257,11 +302,13 @@ test('a signed LiveKit departure webhook closes the room without sweep or detail
     }, { url: livekitUrl.replace(/^http/, 'ws'), token: token({ roomJoin: true, room: roomId, canPublish: false, canSubscribe: true }, `viewer_webhook_${randomUUID()}`) });
     const before = await rpc('ListParticipants', { room: roomId }, { roomAdmin: true, room: roomId });
     expect(before.participants).toHaveLength(2);
+    const departedAt = Date.now();
     await page.close();
     await expect.poll(async () => {
       const rooms = await rpc('ListRooms', { names: [roomId] }, { roomList: true });
       return rooms.rooms ?? [];
-    }, { timeout: 15_000 }).toHaveLength(0);
+    }, { timeout: 80_000 }).toHaveLength(0);
+    expect(Date.now() - departedAt).toBeGreaterThanOrEqual(59_000);
     await expect.poll(async () => {
       const health = await (await fetch('http://127.0.0.1:18182/health')).json();
       return health.webhookEvents?.[roomId]?.participant_left ?? 0;
@@ -311,4 +358,72 @@ test('idle connected rooms and cached detail reads make no periodic HTTP or Live
     await viewerContext.close();
     await rpc('DeleteRoom', { room: roomId }, { roomCreate: true });
   }
+});
+
+test('refresh during the first admission waits beyond 60 seconds and recovers after its 90-second reservation', async ({ page, context }) => {
+  test.skip(process.env.LIVEKIT_INTEGRATION !== '1', 'Requires local LiveKit');
+  test.setTimeout(130_000);
+  const roomId = `voice-e2e-${randomUUID()}`;
+  const created = await rpc('CreateRoom', { name: roomId, metadata: JSON.stringify({ title: '首次入场恢复', ownerId: 'live-test-host' }) }, { roomCreate: true });
+  let first = true;
+  let joinAttempts = 0;
+  let reserved!: () => void;
+  const admitted = new Promise<void>(resolve => { reserved = resolve; });
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  try {
+    await login(context);
+    await page.route(`**/rooms/${roomId}/join`, async route => {
+      joinAttempts++;
+      if (!first) return route.continue();
+      first = false;
+      const response = await route.fetch();
+      expect(response.status()).toBe(201);
+      reserved();
+      await held;
+      await route.fulfill({ response }).catch(() => {});
+    });
+    await page.goto(`/live/${roomId}`);
+    await admitted;
+    const waiting = page.waitForResponse(response => response.url().endsWith(`/rooms/${roomId}/join`) && response.status() === 409);
+    await page.reload();
+    release();
+    const result = await waiting;
+    expect((await result.json()).error.code).toBe('host_admission_pending');
+    expect(Number(result.headers()['retry-after'])).toBeGreaterThan(60);
+    await page.getByRole('button', { name: '重新加入', exact: true }).click();
+    await page.waitForTimeout(500);
+    expect(joinAttempts).toBe(2); // Manual retry also respects the server deadline.
+    await page.waitForTimeout(61_000);
+    await expect(page.getByRole('heading', { name: '直播间已结束' })).toHaveCount(0);
+    await expect(page.getByText('已连接', { exact: true })).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByRole('button', { name: '开启摄像头', exact: true })).toBeEnabled();
+    const rooms = await rpc('ListRooms', { names: [roomId] }, { roomList: true });
+    expect(rooms.rooms[0].sid).toBe(created.sid);
+  } finally { release?.(); await rpc('DeleteRoom', { room: roomId }, { roomCreate: true }); }
+});
+
+test('lobby return stays put on an unaccepted close and confirms a lost accepted response', async ({ page, context }) => {
+  test.skip(process.env.LIVEKIT_INTEGRATION !== '1', 'Requires local LiveKit');
+  test.setTimeout(60_000);
+  const roomId = `voice-e2e-${randomUUID()}`;
+  await rpc('CreateRoom', { name: roomId, metadata: JSON.stringify({ title: '关闭结果确认', ownerId: 'live-test-host' }) }, { roomCreate: true });
+  try {
+    await login(context); await join(page, roomId, true);
+    let accepted = false;
+    await page.route(`**/api/v1/rooms/${roomId}`, async route => {
+      if (route.request().method() !== 'DELETE') return route.continue();
+      if (!accepted) return route.fulfill({ status: 503, json: { error: { message: '测试关闭尚未接受' } } });
+      await route.fetch();
+      await route.abort('failed');
+    });
+    await page.getByRole('button', { name: '直播大厅', exact: true }).click();
+    await page.getByRole('button', { name: '结束并返回大厅', exact: true }).click();
+    await expect(page.getByRole('dialog').getByRole('alert')).toContainText('测试关闭尚未接受');
+    await expect(page).toHaveURL(new RegExp(`/live/${roomId}$`));
+    await expect(page.getByText('已连接', { exact: true })).toBeVisible();
+    accepted = true;
+    await page.getByRole('button', { name: '结束并返回大厅', exact: true }).click();
+    await expect(page).toHaveURL(/\/live$/);
+  } finally { await rpc('DeleteRoom', { room: roomId }, { roomCreate: true }); }
 });

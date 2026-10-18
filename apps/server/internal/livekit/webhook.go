@@ -159,7 +159,7 @@ func (h Handler) webhook(reconcile func(context.Context, RoomLifecycleEvent) err
 		}
 		if err != nil {
 			// LiveKit retries failed deliveries. Persisted closing tasks retry
-			// only known failed closes; there is no periodic room sweep.
+			// known failed closes; observation deadlines repair missed events.
 			slog.Warn("LiveKit webhook processing failed", "event", event.Event, "error", err)
 			fail(c, http.StatusServiceUnavailable, "Webhook processing is temporarily unavailable")
 			return

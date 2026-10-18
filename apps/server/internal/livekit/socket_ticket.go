@@ -88,6 +88,16 @@ func (h Handler) roomSocketTicket(origin string) gin.HandlerFunc {
 			fail(c, http.StatusUnauthorized, "登录已失效，请重新登录")
 			return
 		}
+		if !h.allowRate(c, "ip", c.ClientIP(), h.limit("ip_total")) || !h.allowAccountRate(c, "socket", userID) {
+			return
+		}
+		// HTTP bootstrap makes lease-limit Retry-After observable to browsers,
+		// whose WebSocket API cannot read a rejected upgrade response.
+		lease, ok := h.acquireRoomLease(c, userID)
+		if !ok {
+			return
+		}
+		lease.release()
 		ticket, err := h.signRoomSocketTicket(userID, id, origin)
 		if err != nil {
 			fail(c, http.StatusServiceUnavailable, "Live room connections are unavailable")

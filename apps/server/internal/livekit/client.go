@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,11 +19,18 @@ import (
 
 type Config struct {
 	URL, InternalURL, APIKey, APISecret, AgentName string
+	Limits                                         map[string]int
+	ScopedLocks                                    bool
 }
 
 func (c Config) Enabled() bool { return c.URL != "" && c.APIKey != "" && c.APISecret != "" }
 
 func (c Config) Validate() error {
+	for name, limit := range c.Limits {
+		if _, ok := defaultRoomLimits[name]; !ok || limit < 1 || limit > 100000 {
+			return fmt.Errorf("invalid LIVE_ROOM_LIMITS entry %s", name)
+		}
+	}
 	if c.URL == "" && c.InternalURL == "" && c.APIKey == "" && c.APISecret == "" {
 		return nil
 	}
@@ -75,6 +83,15 @@ func (c *Client) JoinToken(room, identity, name string, canPublish bool) (string
 }
 
 func (c *Client) call(ctx context.Context, service, method string, grant map[string]any, input, output any) error {
+	started := time.Now()
+	defer func() {
+		elapsed := time.Since(started)
+		if elapsed >= 500*time.Millisecond {
+			slog.Info("slow LiveKit RPC", "method", method, "duration_ms", elapsed.Milliseconds())
+		} else {
+			slog.Debug("LiveKit RPC completed", "method", method, "duration_ms", elapsed.Milliseconds())
+		}
+	}()
 	body, err := json.Marshal(input)
 	if err != nil {
 		return err
@@ -167,7 +184,7 @@ func (c *Client) ListRooms(ctx context.Context, names ...string) ([]RoomItem, er
 func (c *Client) CreateRoom(ctx context.Context, id, title, ownerID string) (RoomItem, error) {
 	metadata, _ := json.Marshal(map[string]string{"title": title, "ownerId": ownerID})
 	var result room
-	err := c.call(ctx, "RoomService", "CreateRoom", map[string]any{"roomCreate": true}, map[string]any{"name": id, "metadata": string(metadata), "maxParticipants": 50, "emptyTimeout": 600}, &result)
+	err := c.call(ctx, "RoomService", "CreateRoom", map[string]any{"roomCreate": true}, map[string]any{"name": id, "metadata": string(metadata), "maxParticipants": 50, "emptyTimeout": 600, "departureTimeout": 120}, &result)
 	return result.item(), err
 }
 func (c *Client) DeleteRoom(ctx context.Context, id string) error {

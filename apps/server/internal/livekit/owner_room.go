@@ -51,25 +51,24 @@ func (h Handler) loadOwnerRoom(ctx context.Context, owner string) (ownerRoom, er
 }
 
 func (h Handler) saveOwnerRoom(ctx context.Context, owner string, room ownerRoom) error {
-	key := h.ownerRoomKey(owner)
-	if h.RoomCache == nil {
-		localOwnerRooms.Lock()
-		defer localOwnerRooms.Unlock()
-		if room.ID == "" {
-			delete(localOwnerRooms.items, key)
-		} else {
-			localOwnerRooms.items[key] = room
+	if room.ID != "" {
+		if room.Title == "" {
+			if r, err := h.loadLifecycle(ctx, room.ID); err != nil {
+				return err
+			} else if r != nil {
+				room.Title = r.Title
+			}
 		}
-		return nil
+		return h.reserveResources(ctx, owner, room, false)
 	}
-	if room.ID == "" {
-		return h.RoomCache.Del(ctx, key).Err()
-	}
-	data, err := json.Marshal(room)
+	previous, err := h.loadOwnerRoom(ctx, owner)
 	if err != nil {
 		return err
 	}
-	return h.RoomCache.Set(ctx, key, data, 0).Err()
+	if previous.ID == "" {
+		return nil
+	}
+	return h.releaseResources(ctx, owner, previous)
 }
 
 func (h Handler) lockRoomCreation(ctx context.Context, closingRoom ...string) (func(), error) {

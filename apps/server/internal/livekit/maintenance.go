@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"companion/server/internal/auth"
@@ -47,7 +48,7 @@ func closeBackoff(attempt int) time.Duration {
 // Only explicitly closing records enter this path. It never enumerates normal
 // rooms and never clears another room incarnation using a stale room SID.
 func (h Handler) retryRoomClose(ctx context.Context, id string) error {
-	unlock, err := h.lockRoomCreation(ctx, id)
+	unlock, err := h.lockClosing(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -65,6 +66,7 @@ func (h Handler) retryRoomClose(ctx context.Context, id string) error {
 	if r.RetryAt > h.clock().UnixMilli() {
 		return nil
 	}
+	slog.Info("room close retry started", "room", id, "attempt", r.Retries+1)
 	return h.attemptCloseLocked(ctx, r)
 }
 
@@ -187,8 +189,8 @@ func waitRoomRetry(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-// RunRoomMaintenance performs one startup synchronization, then only retries
-// persisted failed closes. It deliberately has no periodic room/host sweep.
+// RunRoomMaintenance repairs startup failures and consumes durable close and
+// observation deadlines, with at most two observation workers per process.
 func RunRoomMaintenance(ctx context.Context, cfg Config, authentication auth.Handler, cache ...*redis.Client) {
 	if !cfg.Enabled() {
 		return
@@ -197,8 +199,23 @@ func RunRoomMaintenance(ctx context.Context, cfg Config, authentication auth.Han
 	if len(cache) > 0 {
 		h.RoomCache = cache[0]
 	}
-	if err := h.refreshOnce(ctx, "all", h.SyncRooms); err != nil && ctx.Err() == nil {
-		slog.Warn("initial room synchronization failed", "error", err)
+	var workers sync.WaitGroup
+	workers.Add(3)
+	go func() { defer workers.Done(); h.RunRoomRetries(ctx) }()
+	for i := 0; i < 2; i++ {
+		go func() { defer workers.Done(); h.runRoomChecks(ctx) }()
 	}
-	h.RunRoomRetries(ctx)
+	for attempt := 1; ctx.Err() == nil; attempt++ {
+		// Do not use the manual-refresh cooldown: a skipped attempt is not a
+		// successful startup synchronization.
+		if err := h.syncAndPrepare(ctx); err == nil {
+			break
+		} else {
+			slog.Warn("initial room synchronization failed", "error", err)
+		}
+		if !waitRoomRetry(ctx, closeBackoff(min(attempt, 5))) {
+			break
+		}
+	}
+	workers.Wait()
 }

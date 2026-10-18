@@ -13,9 +13,11 @@ import (
 )
 
 type RoomSnapshot struct {
-	Item   RoomItem `json:"item"`
-	State  string   `json:"state"`
-	Reason string   `json:"reason,omitempty"`
+	Item              RoomItem `json:"item"`
+	State             string   `json:"state"`
+	Reason            string   `json:"reason,omitempty"`
+	HostConnection    string   `json:"hostConnection,omitempty"`
+	ReconnectDeadline int64    `json:"reconnectDeadline,omitempty"`
 }
 
 var ErrRoomSnapshotsNotReady = errors.New("room snapshots have not been initialized")
@@ -68,7 +70,14 @@ func (h Handler) CachedRoom(ctx context.Context, id string) (*RoomSnapshot, erro
 		}
 		return nil, nil
 	}
-	return &RoomSnapshot{Item: r.item(), State: r.State, Reason: r.Reason}, nil
+	connection := r.HostConnection
+	if connection == "" {
+		connection = "waiting"
+		if r.HadHost {
+			connection = "connected"
+		}
+	}
+	return &RoomSnapshot{Item: r.item(), State: r.State, Reason: r.Reason, HostConnection: connection, ReconnectDeadline: r.ReconnectDeadline}, nil
 }
 
 func (h Handler) CachedRooms(ctx context.Context) ([]RoomItem, error) {

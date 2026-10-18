@@ -269,6 +269,13 @@ func (h Handler) voice(action string) gin.HandlerFunc {
 			fail(c, 400, "无效的连线申请")
 			return
 		}
+		scope := "voice_write"
+		if action == "state" {
+			scope = "voice_read"
+		}
+		if !h.allowRate(c, scope, actor.Subject, h.limit(scope)) {
+			return
+		}
 		room := c.Param("roomId")
 		unlock, err := h.lockVoice(c.Request.Context(), room)
 		if upstreamFailed(c, err) {

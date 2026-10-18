@@ -67,7 +67,14 @@ export const createLobbyActions = ({ client, apiBaseUrl, isLoggedIn, service }: 
       if (!isLoggedIn || busy() || !room?.canManage) return;
       set({ closingRoomId: room.id, closeError: null });
       try {
-        await service.close(room.id);
+        try { await service.close(room.id); }
+        catch (error) {
+          const detail = await service.detail?.(room.id).catch(() => null);
+          if (detail?.state === 'open') throw error;
+          if (detail?.state !== 'closing' && detail?.state !== 'closed') {
+            throw new Error('关闭结果尚未确认，请稍后重试。');
+          }
+        }
         await client.cancelQueries({ queryKey });
         client.setQueryData<ApiRoomItem[]>(queryKey, (rooms = []) => rooms.filter(item => item.id !== room.id));
         set(s => ({ createdRoomId: s.createdRoomId === room.id ? null : s.createdRoomId, error: null, roomToClose: null }));

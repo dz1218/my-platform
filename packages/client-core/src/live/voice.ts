@@ -13,6 +13,7 @@ export type LiveVoiceState = {
   state: VoiceState;
   sessionVersion: number;
   ready: boolean;
+  retryAt: number;
   busy: boolean;
   mediaBusy: Device | null;
   microphoneEnabled: boolean;
@@ -28,6 +29,7 @@ export type LiveVoiceStore = LiveVoiceState & {
   setMicrophoneEnabled: (value: LiveVoiceState['microphoneEnabled']) => void;
   setCameraEnabled: (value: LiveVoiceState['cameraEnabled']) => void;
   setSpeakerEnabled: (value: LiveVoiceState['speakerEnabled']) => void;
+  setRetryAfter: (delay: number) => void;
   setError: (value: LiveVoiceState['error']) => void;
   resetSession: () => void;
   act: (action: VoiceAction, isHost: boolean, transport: VoiceTransport) => Promise<void>;
@@ -36,6 +38,7 @@ const initialState = (): LiveVoiceState => ({
   state: { slot: null, hasHost: false },
   sessionVersion: 0,
   ready: false,
+  retryAt: 0,
   busy: false,
   mediaBusy: null,
   microphoneEnabled: false,
@@ -65,11 +68,12 @@ export function createLiveVoiceStore({ createRequestId }: { createRequestId: () 
     setMicrophoneEnabled: (microphoneEnabled) => set({ microphoneEnabled }),
     setCameraEnabled: (cameraEnabled) => set({ cameraEnabled }),
     setSpeakerEnabled: (speakerEnabled) => set({ speakerEnabled }),
+    setRetryAfter: delay => set({ retryAt: Date.now() + delay }),
     setError: (error) => set({ error }),
     resetSession: () => set(s => ({ ...initialState(), sessionVersion: s.sessionVersion + 1 })),
     act: async (action, isHost, transport) => {
       const { busy, sessionVersion, state } = get();
-      if (busy || !transport.isCurrent()) return;
+      if (busy || Date.now() < get().retryAt || !transport.isCurrent()) return;
       if ((action === 'approve' || action === 'reject') && !isHost) return;
       if ((action === 'request' || action === 'cancel') && isHost) return;
       const requestId = action === 'request' ? createRequestId() : state.slot?.requestId;
@@ -79,6 +83,8 @@ export function createLiveVoiceStore({ createRequestId }: { createRequestId: () 
       set({ busy: true, error: '' });
       try { await transport.request(action, requestId); }
       catch (error) {
+        const delay = (error as { retryAfterMs?: number })?.retryAfterMs;
+        if (isCurrent() && delay) set({ retryAt: Date.now() + delay });
         if (isCurrent()) set({ error: error instanceof Error ? error.message : '连线操作失败，请重试' });
       } finally {
         if (isCurrent()) {

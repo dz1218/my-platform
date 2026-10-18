@@ -1,7 +1,7 @@
 import { RoomConnectionState as ConnectionState, type LiveUpdatesState } from '@my-platform/shared';
 export type Role = '主播' | '观众';
 export type ParticipantItem = { identity: string; displayName: string; role: Role | 'AI助手'; isLocal: boolean };
-export type RoomJoinFailure = 'retryable' | 'in-use' | 'closed' | 'missing' | 'host-disconnected' | null;
+export type RoomJoinFailure = 'retryable' | 'in-use' | 'closed' | 'missing' | 'auth' | null;
 
 export type LiveRoomState = {
   sessionVersion: number;
@@ -15,6 +15,10 @@ export type LiveRoomState = {
   joinPending: boolean;
   joinAttemptId: string | null;
   joinFailure: RoomJoinFailure;
+  joinRetryAt: number;
+  joinRetries: number;
+  recovering: boolean;
+  returnToLobby: boolean;
   closeConfirmOpen: boolean;
   isClosing: boolean;
   closeError: string | null;
@@ -42,6 +46,10 @@ export const initialLiveRoomState = (nickname = ''): LiveRoomState => ({
   joinPending: false,
   joinAttemptId: null,
   joinFailure: null,
+  joinRetryAt: 0,
+  joinRetries: 0,
+  recovering: false,
+  returnToLobby: false,
   closeConfirmOpen: false,
   isClosing: false,
   closeError: null,
@@ -65,6 +73,10 @@ export const resetLiveRoomSession = (state: LiveRoomState): LiveRoomState => ({
   isJoining: state.isJoining,
   joinAttemptId: state.joinAttemptId,
   joinFailure: state.joinFailure,
+  joinRetryAt: state.joinRetryAt,
+  joinRetries: state.joinRetries,
+  recovering: state.recovering,
+  returnToLobby: state.returnToLobby,
   closeConfirmOpen: state.closeConfirmOpen,
   isClosing: state.isClosing,
   closeError: state.closeError,

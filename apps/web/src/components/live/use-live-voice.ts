@@ -7,6 +7,8 @@ import { createLiveVoiceStore, liveVoiceSelectors } from '@/stores/live/voice';
 import { useEffect, useRef } from 'react';
 import { ConnectionState, createLocalAudioTrack, createLocalVideoTrack, ParticipantKind, Room, RoomEvent, Track, type LocalTrack, type Participant } from 'livekit-client';
 
+import { APIError, check } from '@/services/api/client';
+
 const ATTRIBUTE = 'live.voice';
 import type { VoiceSlot, VoiceState, Device, VoiceAction } from '@/stores/live/voice';
 export type { VoiceSlot } from '@/stores/live/voice';
@@ -19,10 +21,6 @@ function participantRequest(participant: Participant): VoiceSlot | null {
   } catch { return null; }
 }
 
-async function apiError(response: Response) {
-  try { return (await response.json()).error?.message || '连线操作失败，请重试'; }
-  catch { return '连线操作失败，请重试'; }
-}
 
 export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room: Room | null; token: string; apiBaseUrl: string; roomId: string; isHost: boolean }) {
   const ui = useStoreInstance(createLiveVoiceStore);
@@ -114,20 +112,21 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
       const version = versionRef.current;
       try {
         const response = await fetch(base, { headers: { 'X-Live-Voice-Token': token }, signal: controller.signal, cache: 'no-store' });
-        if (!response.ok) throw new Error(await apiError(response));
+        await check(response);
         const next = await response.json() as VoiceState;
         if (sessionRef.current !== room || controller.signal.aborted) return;
         if (version === versionRef.current) apply(next);
         setReady(true);
       } catch (err) {
         if (!controller.signal.aborted && sessionRef.current === room) {
+          if (err instanceof APIError && err.retryAfterMs) ui.getState().setRetryAfter(err.retryAfterMs);
           setReady(false);
           setError(err instanceof Error ? err.message : '连线状态更新失败，请稍后重试');
         }
       }
     }
     function refresh(): Promise<void> {
-      if (controller.signal.aborted || room!.state !== ConnectionState.Connected) return Promise.resolve();
+      if (Date.now() < ui.getState().retryAt || controller.signal.aborted || room!.state !== ConnectionState.Connected) return Promise.resolve();
       if (refreshPromise) { refreshAgain = true; return refreshPromise; }
       refreshPromise = (async () => {
         do {
@@ -174,7 +173,7 @@ export function useLiveVoice({ room, token, apiBaseUrl, roomId, isHost }: { room
           method: requestedAction === 'cancel' ? 'DELETE' : 'POST', headers: { 'Content-Type': 'application/json', 'X-Live-Voice-Token': token },
           body: JSON.stringify({ requestId }), signal: controller.signal,
         });
-        if (!response.ok) throw new Error(await apiError(response));
+        await check(response);
       },
     });
   }

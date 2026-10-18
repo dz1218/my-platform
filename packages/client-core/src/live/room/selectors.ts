@@ -10,6 +10,8 @@ export const liveRoomSelectors = {
     error: s.error,
     isJoining: s.isJoining,
     joinFailure: s.joinFailure,
+    recovering: s.recovering,
+    returnToLobby: s.returnToLobby,
     closeConfirmOpen: s.closeConfirmOpen,
     isClosing: s.isClosing,
     closeError: s.closeError,

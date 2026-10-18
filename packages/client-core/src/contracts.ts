@@ -16,7 +16,8 @@ export type AutoReplyService = {
 export type PreferencesService = { write: (id: string, path: string, body: unknown, method: string) => Promise<unknown> };
 export type LiveLobbyService = {
   create: (title: string) => Promise<{ item: ApiRoomItem; conflict?: string }>;
-  close: (id: string) => Promise<void>;
+  close: (id: string) => Promise<import('@my-platform/shared').LiveRoomClose | void>;
+  detail?: (id: string) => Promise<import('@my-platform/shared').LiveRoomDetail>;
   refresh?: () => Promise<ApiRoomItem[]>;
 };
 export type MediaDevice = 'camera' | 'microphone';

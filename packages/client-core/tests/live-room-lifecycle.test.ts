@@ -47,6 +47,7 @@ test('a lost join response retries the same in-memory attempt and never sends co
 });
 
 for (const [status, code, failure] of [
+  [401, 'unauthorized', 'auth'],
   [409, 'host_session_in_use', 'in-use'],
   [410, 'room_closed', 'closed'],
   [404, 'room_not_found', 'missing'],
@@ -86,15 +87,16 @@ test('cancelled join responses cannot restore host permissions or open an SDK co
   assert.equal(store.getState().voiceToken, '');
 });
 
-test('a disconnected host cannot create a new session while closure is being confirmed', async () => {
+test('a disconnected host schedules recovery and can establish a fresh session', async () => {
   let requests = 0;
   const store = createLiveRoomStore('主播', { ...defaults, session: {
     createAttemptId: () => 'attempt', join: async () => { requests++; return joined; },
   } });
   store.getState().handleHostDisconnected();
-  assert.equal(await store.getState().joinSession(async () => {}), false);
-  assert.equal(requests, 0);
-  assert.equal(store.getState().joinFailure, 'host-disconnected');
+  assert.ok(store.getState().joinRetryAt > 0);
+  assert.equal(await store.getState().joinSession(async () => {}), true);
+  assert.equal(requests, 1);
+  assert.equal(store.getState().joinFailure, null);
 });
 
 test('ending requires host confirmation, guards duplicate requests, and closes both query caches', async () => {
@@ -142,9 +144,59 @@ test('a failed end keeps the active host and confirmation available for retry', 
   store.getState().setConnectionState(RoomConnectionState.Connected);
   store.getState().setCloseConfirmOpen(true);
   assert.equal(await store.getState().endRoom(), false);
-  assert.equal(store.getState().closeError, '服务暂不可用');
+  assert.match(store.getState().closeError!, /结束结果尚未确认/);
   assert.equal(store.getState().closeConfirmOpen, true);
   assert.equal(store.getState().connectionState, RoomConnectionState.Connected);
   assert.equal(await store.getState().endRoom(), true);
   assert.equal(requests, 2);
+});
+
+test('pending admission respects the independent 90-second wait and rate retry headers', async () => {
+  const until = Date.now() + 90_000;
+  const store = createLiveRoomStore('主播', { ...defaults, session: {
+    createAttemptId: () => 'attempt',
+    join: async () => { throw Object.assign(apiError(409, 'host_admission_pending'), { pendingUntil: until, retryAfterMs: 90_000 }); },
+  } });
+  await store.getState().joinSession(async () => {});
+  assert.equal(store.getState().joinFailure, 'retryable');
+  assert.ok(store.getState().joinRetryAt >= until);
+  store.getState().cancelJoinRecovery();
+  assert.equal(store.getState().joinRetryAt, 0);
+});
+
+test('a lost close response confirms closing from durable state before permitting a lobby return', async () => {
+  const client = new QueryClient();
+  const item: ApiRoomItem = { id: 'room', title: '今晚', status: '准备中', viewers: 1, canManage: true };
+  client.setQueryData(['live-room', '/api', 'room'], { item, state: 'open' });
+  const store = createLiveRoomStore('主播', { ...defaults,
+    close: async () => { throw new Error('response lost'); },
+    detail: async () => ({ item, state: 'closing' }),
+    query: { client, apiBaseUrl: '/api', roomId: 'room' },
+  });
+  store.getState().setRole('主播');
+  assert.equal(store.getState().requestLobbyReturn(), false);
+  assert.equal(store.getState().returnToLobby, true);
+  assert.equal(await store.getState().endRoom(), true);
+  assert.equal(client.getQueryData<LiveRoomDetail>(['live-room', '/api', 'room'])?.state, 'closing');
+  assert.equal(store.getState().joinRetryAt, 0);
+  client.clear();
+});
+
+test('an unconfirmed close stays on the page and a duplicate-page viewer never ends the host', async () => {
+  let requests = 0;
+  const store = createLiveRoomStore('主播', { ...defaults,
+    close: async () => { requests++; throw new Error('response lost'); },
+    detail: async () => { throw new Error('state unavailable'); },
+  });
+  store.getState().setRole('主播');
+  store.getState().requestLobbyReturn();
+  assert.equal(await store.getState().endRoom(), false);
+  assert.equal(store.getState().closeConfirmOpen, true);
+  assert.match(store.getState().closeError!, /尚未确认/);
+  store.getState().setCloseConfirmOpen(false);
+  assert.equal(store.getState().returnToLobby, false);
+  store.getState().resetSession();
+  store.getState().setIsJoining(false);
+  assert.equal(store.getState().requestLobbyReturn(), true);
+  assert.equal(requests, 1);
 });

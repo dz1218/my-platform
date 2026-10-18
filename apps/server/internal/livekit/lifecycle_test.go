@@ -146,7 +146,7 @@ func TestHostAdmissionConcurrentPagesAndViewerScope(t *testing.T) {
 			created++
 		case 409:
 			conflicts++
-			if !strings.Contains(res.Body.String(), "host_session_in_use") || strings.Contains(res.Body.String(), `"token"`) {
+			if !strings.Contains(res.Body.String(), "host_admission_pending") || strings.Contains(res.Body.String(), `"token"`) {
 				t.Fatal(res.Body.String())
 			}
 		default:
@@ -216,6 +216,10 @@ func TestConnectedHostLeavesClosesRoomWithViewersAndReleasesOwner(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	expireHostRecovery(t, f.h, "room-host")
+	if err := f.h.ReconcileRoom(ctx, "room-host"); err != nil {
+		t.Fatal(err)
+	}
 	detail := request(t, f.router, "GET", "/rooms/room-host", "", 200)
 	if detail["state"] != "closed" || detail["reason"] != "host_left" {
 		t.Fatal(detail)
@@ -260,6 +264,10 @@ func TestLifecycleShortSessionsAndDelayedEvents(t *testing.T) {
 		f := newLifecycleFixture(t)
 		joined := request(t, f.router, "POST", "/rooms/room-host/join", `{"attemptId":"attempt-short-1234"}`, 201)
 		err := f.h.ReconcileRoomEvent(context.Background(), RoomLifecycleEvent{Event: "participant_left", RoomID: "room-host", RoomSID: "RM_host", Identity: joined["identity"].(string), ParticipantSID: "PA_short"})
+		expireHostRecovery(t, f.h, "room-host")
+		if closeErr := f.h.ReconcileRoom(context.Background(), "room-host"); closeErr != nil {
+			t.Fatal(closeErr)
+		}
 		if err != nil || f.deletes != 1 {
 			t.Fatal(err, f.deletes)
 		}
@@ -324,6 +332,10 @@ func TestLifecycleFailuresAndRestartDoNotReleaseOrReopen(t *testing.T) {
 	f.failParticipants = false
 	f.failDelete = true
 	f.Unlock()
+	if err := f.h.ReconcileRoom(ctx, "room-host"); err != nil {
+		t.Fatal(err)
+	}
+	expireHostRecovery(t, f.h, "room-host")
 	if err := f.h.ReconcileRoom(ctx, "room-host"); err == nil {
 		t.Fatal("delete failure hidden")
 	}
@@ -512,6 +524,10 @@ func TestHostAdmissionAcrossRedisClientsAndDatabaseLocks(t *testing.T) {
 	if err = handlers[1].ReconcileRoom(ctx, "room-host"); err != nil {
 		t.Fatal(err)
 	}
+	expireHostRecovery(t, handlers[0], "room-host")
+	if err := handlers[1].checkRoomDue(ctx, "room-host"); err != nil {
+		t.Fatal(err)
+	}
 	record, err = handlers[0].loadLifecycle(ctx, "room-host")
 	if err != nil || record.State != "closed" || f.deletes != 1 {
 		t.Fatal(record, err, f.deletes)
@@ -522,7 +538,7 @@ func cleanupLifecycleKeys(t *testing.T, h Handler) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	it := h.RoomCache.Scan(ctx, 0, h.lifecycleKey("*"), 100).Iterator()
+	it := h.RoomCache.Scan(ctx, 0, h.ownerRoomKey("")+"*", 100).Iterator()
 	var keys []string
 	for it.Next(ctx) {
 		keys = append(keys, it.Val())
@@ -533,5 +549,20 @@ func cleanupLifecycleKeys(t *testing.T, h Handler) {
 	keys = append(keys, h.lifecycleIndexKey(), h.snapshotReadyKey(), h.closeRetryKey(), h.ownerRoomKey("")+":refresh:all")
 	if err := h.RoomCache.Del(ctx, keys...).Err(); err != nil {
 		t.Error(err)
+	}
+}
+
+// Change only the persisted deadline; production still uses a real 60-second
+// grace period, covered separately by the browser integration suite.
+func expireHostRecovery(t *testing.T, h Handler, id string) {
+	t.Helper()
+	r, err := h.loadLifecycle(context.Background(), id)
+	if err != nil || r == nil || r.ReconnectDeadline == 0 {
+		t.Fatal("missing recovery", r, err)
+	}
+	r.ReconnectDeadline = h.clock().Add(-time.Second).UnixMilli()
+	r.CheckAt = r.ReconnectDeadline
+	if err := h.saveLifecycle(context.Background(), r); err != nil {
+		t.Fatal(err)
 	}
 }

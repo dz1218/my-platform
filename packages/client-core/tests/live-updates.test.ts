@@ -10,6 +10,24 @@ const detail: LiveRoomDetail = { item, state: 'open' };
 const listKey = ['live-rooms', '/api'];
 const detailKey = ['live-room', '/api', 'room'];
 
+test('lobby confirms a lost close response and retains an uncertain room', async () => {
+  for (const state of ['closing', 'open', undefined] as const) {
+    const client = makeClient();
+    client.setQueryData(listKey, [item]);
+    const store = createLiveLobbyStore({ client, apiBaseUrl: '/api', isLoggedIn: true, service: {
+      create: async () => ({ item }), close: async () => { throw new Error('response lost'); },
+      detail: async () => { if (!state) throw new Error('offline'); return { item, state }; },
+    } });
+    store.getState().setRoomToClose(item);
+    await store.getState().closeRoom();
+    assert.deepEqual(client.getQueryData(listKey), state === 'closing' ? [] : [item]);
+    assert.equal(store.getState().roomToClose, state === 'closing' ? null : item);
+    if (!state) assert.match(store.getState().closeError!, /尚未确认/);
+    if (state === 'open') assert.equal(store.getState().closeError, 'response lost');
+    client.clear();
+  }
+});
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>(accept => { resolve = accept; });

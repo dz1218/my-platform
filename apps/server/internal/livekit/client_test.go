@@ -17,6 +17,9 @@ func TestConfigValidation(t *testing.T) {
 		valid bool
 	}{
 		{Config{}, true},
+		{Config{Limits: map[string]int{"join_account": 30}}, true},
+		{Config{Limits: map[string]int{"join_account": 0}}, false},
+		{Config{Limits: map[string]int{"unknown": 30}}, false},
 		{Config{URL: "ws://localhost:7880", APIKey: "key", APISecret: "secret"}, true},
 		{Config{URL: "wss://public.example", InternalURL: "http://livekit:7880", APIKey: "key", APISecret: "secret"}, true},
 		{Config{URL: "ws://localhost:7880"}, false},

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { serverOrigin, sessionCookie } from '@/services/api/server';
+import { forwardLiveClientIP, serverOrigin, sessionCookie } from '@/services/api/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       ticketURL.searchParams.set('roomId', roomId);
     }
     const upstreamHeaders = new Headers();
+    forwardLiveClientIP(request.headers, upstreamHeaders);
     const session = request.cookies.get(sessionCookie)?.value;
     if (session) upstreamHeaders.set('Cookie', `${sessionCookie}=${session}`);
     const upstream = await fetch(ticketURL, {
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]),
     });
     if (!upstream.ok) {
-      return Response.json({ error: { message: '暂时无法连接直播间' } }, { status: upstream.status, headers });
+      return Response.json({ error: { message: '暂时无法连接直播间' } }, { status: upstream.status, headers: { ...headers, ...(upstream.headers.has('Retry-After') ? { 'Retry-After': upstream.headers.get('Retry-After')! } : {}) } });
     }
     const data: unknown = await upstream.json();
     if (!data || typeof data !== 'object' || !('ticket' in data) || typeof data.ticket !== 'string' || !data.ticket) {

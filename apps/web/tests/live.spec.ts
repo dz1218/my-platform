@@ -32,7 +32,7 @@ test('create and close update immediately even when subsequent list requests fai
       ? { status: 503, json: { error: { message: '测试服务暂不可用' } } }
       : { json: { items: [] } });
   });
-  await page.route(`**/api/v1/rooms/${room.id}`, (route) => route.fulfill({ json: { ok: true } }));
+  await page.route(`**/api/v1/rooms/${room.id}`, (route) => route.fulfill({ json: { ok: true, state: 'closed' } }));
   await page.goto('/live');
   await page.getByRole('textbox', { name: '房间名称' }).fill(room.title);
   await page.getByRole('button', { name: '创建直播间', exact: true }).click();
@@ -77,7 +77,7 @@ for (const status of ['准备中', '直播中']) {
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({ path: test.info().outputPath(`owned-room-${width}.png`), fullPage: true });
     }
-    await page.route(`**/api/v1/rooms/${room.id}`, (route) => { items.pop(); return route.fulfill({ json: { ok: true } }); });
+    await page.route(`**/api/v1/rooms/${room.id}`, (route) => { items.pop(); return route.fulfill({ json: { ok: true, state: 'closed' } }); });
     await page.getByRole('button', { name: `关闭直播间：${room.title}` }).click();
     await page.getByRole('button', { name: '确认关闭' }).click();
     await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toBeEnabled();
@@ -174,11 +174,11 @@ test('returning to the lobby checks current room data in the background', async 
   await expect(page).toHaveURL(`/live/${room.id}`);
   items.pop();
   await page.request.post(fixture, { data: { rooms: items } });
-  await page.getByRole('link', { name: '直播大厅' }).click();
+  await page.getByRole('button', { name: '直播大厅', exact: true }).click();
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible({ timeout: 8_000 });
 });
 
-test('temporary join errors allow retry and leaving cancels an unfinished join', async ({ page }) => {
+test('temporary join errors allow retry; leaving waits for identity and cancels recovery', async ({ page }) => {
   let attempts = 0;
   let release!: () => void;
   const delayed = new Promise<void>((resolve) => { release = resolve; });
@@ -198,10 +198,17 @@ test('temporary join errors allow retry and leaving cancels an unfinished join',
   await page.screenshot({ path: test.info().outputPath('room-unavailable.png'), fullPage: true });
   await page.getByRole('button', { name: '重新加入' }).click();
   await expect(page.getByRole('button', { name: '正在进入直播间…' })).toBeDisabled();
-  await page.getByRole('link', { name: '直播大厅' }).click();
+  await page.getByRole('button', { name: '直播大厅', exact: true }).click();
+  await expect(page.getByText('正在确认房间身份，请稍候…')).toBeVisible();
+  await expect(page).toHaveURL('/live/room-missing');
   release();
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('直播服务暂时不可用');
+  await page.getByRole('button', { name: '直播大厅', exact: true }).click();
   await expect(page).toHaveURL('/live');
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+  const requestsAtExit = attempts;
+  await page.waitForTimeout(1500);
+  expect(attempts).toBe(requestsAtExit);
 });
 
 for (const width of [390, 1440]) {
@@ -342,7 +349,9 @@ test('filters and search work together; closing can be cancelled with Escape', a
 test('failed close keeps the confirmation and the room available', async ({ page, context }) => {
   await login(context);
   await lobby(page, [room]);
-  await page.route(`**/api/v1/rooms/${room.id}`, (route) => route.fulfill({ status: 503, json: { error: { message: '关闭失败，请重试' } } }));
+  await page.route(`**/api/v1/rooms/${room.id}`, (route) => route.request().method() === 'DELETE'
+    ? route.fulfill({ status: 503, json: { error: { message: '关闭失败，请重试' } } })
+    : route.fulfill({ json: { item: room, state: 'open' } }));
   await page.getByRole('button', { name: `关闭直播间：${room.title}` }).click();
   await page.getByRole('button', { name: '确认关闭' }).click();
   await expect(page.getByRole('dialog').getByRole('alert')).toContainText('关闭失败');

@@ -11,7 +11,11 @@ export type LiveRoomDetail = {
   item: ApiRoomItem;
   state: 'open' | 'closing' | 'closed';
   reason?: 'host_left' | 'owner_closed' | 'room_finished';
+  hostConnection?: 'waiting' | 'connected' | 'reconnecting';
+  reconnectDeadline?: number;
 };
+
+export type LiveRoomClose = { ok: boolean; state: 'closing' | 'closed' };
 
 export type LiveRoomJoin = {
   token: string;

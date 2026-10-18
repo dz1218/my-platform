@@ -337,7 +337,8 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       await host.getByRole('button', { name: '同意连麦', exact: true }).click();
       await viewer.page.getByRole('switch', { name: '麦克风', exact: true }).click();
       await expect(host.locator('audio')).toHaveCount(1);
-      await host.getByRole('link', { name: '直播大厅', exact: true }).click();
+      await host.getByRole('button', { name: '直播大厅', exact: true }).click();
+      await host.getByRole('button', { name: '结束并返回大厅', exact: true }).click();
       await expect(viewer.page.getByRole('heading', { name: '直播间已结束' })).toBeVisible({ timeout: 20_000 });
       await expect(viewer.page.getByRole('button', { name: '重新加入' })).toHaveCount(0);
       await expect.poll(() => viewer.page.evaluate(() => (window as unknown as MediaWindow).voiceMedia.tracks.every((track) => track.readyState === 'ended'))).toBe(true);

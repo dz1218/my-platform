@@ -14,7 +14,7 @@ export type LiveLobbyProps = { apiBaseUrl: string; isLoggedIn: boolean; hostNick
 export type Filter = '全部' | '直播中' | '准备中';
 export function useLiveLobby({ apiBaseUrl, isLoggedIn, hostNickname }: LiveLobbyProps) {
   const queryClient = useQueryClient();
-  const service = liveRoomService(apiBaseUrl);
+  const service = useStoreInstance(() => liveRoomService(apiBaseUrl));
   const refreshRequestRef = useRef<AbortController | null>(null);
   const queryKey = ['live-rooms', apiBaseUrl];
   const roomsQuery = useQuery({
@@ -28,6 +28,7 @@ export function useLiveLobby({ apiBaseUrl, isLoggedIn, hostNickname }: LiveLobby
   const ownedRoom = ownedRooms[0];
   const ui = useStoreInstance(() => createLiveLobbyStore({ client: queryClient, apiBaseUrl, isLoggedIn, service: {
     ...service,
+    detail: id => service.detail(id, AbortSignal.timeout(10_000)),
     refresh: async () => {
       const controller = new AbortController();
       refreshRequestRef.current = controller;

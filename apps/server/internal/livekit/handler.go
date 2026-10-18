@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +52,7 @@ func Register(r gin.IRouter, cfg Config, authentication auth.Handler, cache ...*
 		}
 		c.Next()
 	})
+	rooms.Use(h.httpRate())
 	rooms.GET("", h.list)
 	rooms.POST("/refresh", h.refreshRooms)
 	rooms.GET("/:roomId", h.roomDetail)
@@ -65,7 +67,7 @@ func Register(r gin.IRouter, cfg Config, authentication auth.Handler, cache ...*
 	rooms.POST("/:roomId/voice/end", h.voice("end"))
 	rooms.Use(authentication.Require)
 	rooms.POST("", h.create)
-	rooms.DELETE("/:roomId", h.requireOwner, h.close)
+	rooms.DELETE("/:roomId", h.close)
 	rooms.POST("/:roomId/agent/dispatch", h.dispatch)
 	rooms.GET("/:roomId/agent/dispatch", h.dispatches)
 	rooms.DELETE("/:roomId/agent/dispatch/:dispatchId", h.deleteDispatch)
@@ -191,7 +193,7 @@ func (h Handler) create(c *gin.Context) {
 	if !hasID {
 		id = "room-" + database.ID()[:12]
 	}
-	unlock, err := h.lockRoomCreation(c.Request.Context())
+	unlock, id, title, err := h.lockMutation(c.Request.Context(), auth.UserID(c), id, title, true)
 	if upstreamFailed(c, err) {
 		return
 	}
@@ -288,7 +290,12 @@ func (h Handler) create(c *gin.Context) {
 		failRoom(c, http.StatusConflict, "room_id_unavailable", "该直播间编号已结束，请创建新的直播间")
 		return
 	}
-	if upstreamFailed(c, h.saveOwnerRoom(ctx, owner, ownerRoom{ID: id, Title: title, Pending: true})) {
+	if err := h.saveOwnerRoom(ctx, owner, ownerRoom{ID: id, Title: title, Pending: true}); err != nil {
+		if errors.Is(err, errRoomReserved) {
+			failRoom(c, 409, "room_reserved", "这个房间名称或编号正在使用或确认中，请换一个名称或编号")
+			return
+		}
+		upstreamFailed(c, err)
 		return
 	}
 	item, err := h.Client.CreateRoom(ctx, id, title, owner)
@@ -376,10 +383,21 @@ func (h Handler) join(c *gin.Context) {
 		closedRoom(c)
 		return
 	}
+	if record != nil && record.Viewers >= 50 {
+		c.Header("Retry-After", "5")
+		failRoom(c, http.StatusConflict, "room_full", "直播间人数已满（50 人），请稍后再试")
+		return
+	}
 	identity, role, hostUserID, notice := "viewer_"+database.ID(), "viewer", "", ""
 	var token string
 	if userID != "" && item.OwnerID == userID {
 		admission, err := h.admitHost(ctx, *item, attempt, name)
+		var pending *hostPendingError
+		if errors.As(err, &pending) {
+			c.Header("Retry-After", strconv.FormatInt(max(1, (pending.Until-h.clock().UnixMilli()+999)/1000), 10))
+			c.JSON(http.StatusConflict, gin.H{"error": gin.H{"code": "host_admission_pending", "message": "上次入场仍在确认，将自动重新连接", "pendingUntil": pending.Until}})
+			return
+		}
 		if errors.Is(err, errHostBusy) {
 			busyHost(c)
 			return
@@ -416,8 +434,17 @@ func (h Handler) join(c *gin.Context) {
 }
 
 func (h Handler) close(c *gin.Context) {
+	var expected struct {
+		HostIdentity string `json:"hostIdentity"`
+	}
+	if c.Request.ContentLength != 0 {
+		if err := json.NewDecoder(c.Request.Body).Decode(&expected); err != nil {
+			fail(c, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+	}
 	ctx := c.Request.Context()
-	unlock, err := h.lockRoomCreation(ctx, c.Param("roomId"))
+	unlock, err := h.lockClosing(ctx, c.Param("roomId"))
 	if upstreamFailed(c, err) {
 		return
 	}
@@ -441,10 +468,32 @@ func (h Handler) close(c *gin.Context) {
 		fail(c, http.StatusForbidden, "只有直播间创建者可以执行此操作")
 		return
 	}
-	if upstreamFailed(c, h.deleteLifecycleRoom(ctx, record, "owner_closed")) {
+	if record.State == "closed" {
+		c.JSON(http.StatusOK, gin.H{"ok": true, "state": "closed"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	if record.State == "closing" {
+		c.JSON(http.StatusAccepted, gin.H{"ok": true, "state": "closing"})
+		return
+	}
+	if record.State == "open" {
+		// Room-page actions are fenced to their admission. Lobby management
+		// intentionally omits this field and remains an account-level action.
+		if expected.HostIdentity != "" && (record.Host == nil || record.Host.Identity != expected.HostIdentity) {
+			failRoom(c, http.StatusConflict, "host_session_changed", "主播会话已变更，请刷新状态后重试")
+			return
+		}
+		if err := h.queueRoomClose(ctx, record, "owner_closed"); !errors.Is(err, errCloseRequired) {
+			upstreamFailed(c, err)
+			return
+		}
+	}
+	if err := h.attemptCloseLocked(ctx, record); err != nil {
+		slog.Warn("room close accepted; cleanup pending", "room", record.ID, "error", err)
+		c.JSON(http.StatusAccepted, gin.H{"ok": true, "state": "closing"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "state": "closed"})
 }
 
 func (h Handler) dispatch(c *gin.Context) {

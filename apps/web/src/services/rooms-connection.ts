@@ -1,3 +1,4 @@
+import { APIError, check } from './api/client';
 import type { ApiRoomItem, LiveRoomDetail, LiveRoomsUpdate, LiveUpdatesState } from '@my-platform/shared';
 
 const CONNECT_TIMEOUT = 10_000;
@@ -24,6 +25,7 @@ export class RoomsConnection {
   private watchdog?: ReturnType<typeof setTimeout>;
   private attempts = 0;
   private stopped = false;
+  private retryNotBefore = 0;
   private lastReceived = 0;
 
   constructor(private options: {
@@ -54,7 +56,7 @@ export class RoomsConnection {
       const response = await fetch(endpoint, {
         method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: pending.signal,
       });
-      if (!response.ok) throw new Error('Room connection unavailable');
+      await check(response);
       const data: unknown = await response.json();
       if (this.stopped || this.pending !== pending) return;
       if (!data || typeof data !== 'object' || !('url' in data) || typeof data.url !== 'string') {
@@ -66,11 +68,11 @@ export class RoomsConnection {
         throw new Error('Invalid room connection address');
       }
       socket = new WebSocket(url);
-    } catch {
+    } catch (error) {
       if (!this.stopped && this.pending === pending) {
         this.pending = undefined;
         clearTimeout(this.watchdog);
-        this.scheduleRetry();
+        this.scheduleRetry(error instanceof APIError ? error.retryAfterMs : undefined);
       }
       return;
     }
@@ -123,20 +125,30 @@ export class RoomsConnection {
     socket.close();
   }
 
-  private scheduleRetry() {
+  private scheduleRetry(minDelay = 0) {
     if (this.stopped) return;
     this.options.onState?.('reconnecting');
     if (!navigator.onLine || this.retry) return;
+    this.retryNotBefore = Date.now() + Math.max(minDelay, Math.min(1000 * 2 ** Math.min(this.attempts, 4), 15_000));
     this.retry = setTimeout(() => {
       this.retry = undefined;
       this.connect();
-    }, Math.min(1000 * 2 ** Math.min(this.attempts++, 4), 15_000));
+    }, Math.max(minDelay, Math.min(1000 * 2 ** Math.min(this.attempts++, 4), 15_000)) + Math.random() * 250);
   }
 
   private reconnect() { this.disconnect(); this.scheduleRetry(); }
 
   private resume = () => {
     if (this.stopped || document.visibilityState !== 'visible' || !navigator.onLine) return;
+    if (Date.now() < this.retryNotBefore) {
+      // Going offline clears the old retry timer. Restore it on online even
+      // when Retry-After has not elapsed; do not wait for another browser event.
+      if (!this.retry) this.retry = setTimeout(() => {
+        this.retry = undefined;
+        this.connect();
+      }, this.retryNotBefore - Date.now());
+      return;
+    }
     if (this.pending && Date.now() - this.lastReceived < CONNECT_TIMEOUT) return;
     if (this.socket?.readyState === WebSocket.OPEN && Date.now() - this.lastReceived < HEARTBEAT_TIMEOUT) return;
     if (this.socket?.readyState === WebSocket.CONNECTING && Date.now() - this.lastReceived < CONNECT_TIMEOUT) return;

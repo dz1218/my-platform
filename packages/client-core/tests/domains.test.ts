@@ -234,3 +234,20 @@ test('catalog validation is shared by web and mobile and matches API integer bou
   }
   assert.equal(validateCatalogFilters({ ...emptyCatalogFilters, ageMin: '40', ageMax: '20' }), '最大年龄不能小于最小年龄。');
 });
+
+
+test('live receive throttling is per sender, expires, and resets with the room', () => {
+  let now = 100;
+  const codec = { encode: (value: string) => new TextEncoder().encode(value), decode: (value: Uint8Array) => new TextDecoder().decode(value) };
+  const store = createLiveChatStore({ createRequestId: makeIds(), codec, now: () => now });
+  const receive = (identity: string, id: number) => store.getState().receivePayload(codec.encode(JSON.stringify({ v: 1, id: String(id), text: '消息' })), { identity, name: identity }, false);
+  for (let i = 0; i < 100; i++) receive('sender-a', i);
+  receive('sender-b', 101);
+  assert.equal(store.getState().messages.length, 21);
+  now += 10_001;
+  receive('sender-a', 102);
+  assert.equal(store.getState().messages.length, 22);
+  store.getState().resetSession();
+  receive('sender-a', 103);
+  assert.equal(store.getState().messages.length, 1);
+});

@@ -138,6 +138,10 @@ func TestSnapshotsAndPersistentRetriesAcrossRedisClients(t *testing.T) {
 	f.Lock()
 	f.failDelete = true
 	f.Unlock()
+	if err := h1.ReconcileRoom(ctx, "room-host"); err != nil {
+		t.Fatal(err)
+	}
+	expireHostRecovery(t, h1, "room-host")
 	if err := h1.ReconcileRoom(ctx, "room-host"); err == nil {
 		t.Fatal("expected delete failure")
 	}

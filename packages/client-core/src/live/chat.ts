@@ -26,6 +26,9 @@ export const liveChatSelectors = {
 };
 
 export function createLiveChatStore({ createRequestId, codec, now = Date.now }: { createRequestId: () => string; codec: import('../contracts').LiveChatCodec; now?: () => number }) {
+  // Per mounted room, bound both sender count and burst size. This protects
+  // rendering only; LiveKit data-channel traffic still reaches the browser.
+  const received = new Map<string, { count: number; until: number }>();
   const makeMessage = (author: Author, id: string, text: string, own: boolean): LiveMessage => ({
     ...author, id: `${author.identity}:${id}`, host: author.identity.startsWith('host_'), text, time: now(), own,
   });
@@ -38,6 +41,15 @@ export function createLiveChatStore({ createRequestId, codec, now = Date.now }: 
     })),
     receivePayload: (payload, author, unread) => {
       if (payload.byteLength > 4096) return;
+      const time = now();
+      for (const [id, bucket] of received) if (bucket.until <= time) received.delete(id);
+      let bucket = received.get(author.identity);
+      if (!bucket) {
+        if (received.size >= 200) return;
+        bucket = { count: 0, until: time + 10_000 };
+        received.set(author.identity, bucket);
+      }
+      if (++bucket.count > 20) return;
       try {
         const data: unknown = JSON.parse(codec.decode(payload));
         if (!data || typeof data !== 'object') return;
@@ -68,6 +80,6 @@ export function createLiveChatStore({ createRequestId, codec, now = Date.now }: 
         return false;
       }
     },
-    resetSession: () => set(s => ({ ...initialState(), sessionVersion: s.sessionVersion + 1 })),
+    resetSession: () => { received.clear(); set(s => ({ ...initialState(), sessionVersion: s.sessionVersion + 1 })); },
   }));
 }

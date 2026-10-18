@@ -98,3 +98,22 @@ for (const leave of ['close', 'navigate'] as const) {
     expect(sockets).toEqual([]);
   });
 }
+
+test('room socket bootstrap respects Retry-After and resumes after an offline event', async ({ page, request }) => {
+  await request.post(`${controls}/__performance`, { data: { rooms: [] } });
+  const attempts: number[] = [];
+  await page.route('**/api/live/connection', route => {
+    attempts.push(Date.now());
+    if (attempts.length === 1) return route.fulfill({ status: 429, headers: { 'Retry-After': '2' }, json: { error: { code: 'rate_limit', message: '稍后重试' } } });
+    return route.continue();
+  });
+  await page.goto('/live');
+  await expect(page.getByText('重新连接中…', { exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('offline'));
+    window.dispatchEvent(new Event('online'));
+  });
+  await expect.poll(() => attempts.length).toBeGreaterThanOrEqual(2);
+  expect(attempts[1] - attempts[0]).toBeGreaterThanOrEqual(1900);
+  await expect(page.getByText('实时更新', { exact: true })).toBeVisible();
+});

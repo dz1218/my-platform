@@ -174,6 +174,10 @@ func TestCloseRetriesResumeOnlyKnownClosingRoom(t *testing.T) {
 	f.people["room-host"] = nil
 	f.failDelete = true
 	f.Unlock()
+	if err := f.h.ReconcileRoom(context.Background(), "room-host"); err != nil {
+		t.Fatal(err)
+	}
+	expireHostRecovery(t, f.h, "room-host")
 	if err := f.h.ReconcileRoom(context.Background(), "room-host"); err == nil {
 		t.Fatal("expected close failure")
 	}
@@ -230,7 +234,7 @@ func TestCreateDuringFailedCloseDoesNotReturnEnterableRoom(t *testing.T) {
 	f.Lock()
 	f.failDelete = true
 	f.Unlock()
-	request(t, f.router, "DELETE", "/rooms/room-host", "", 502)
+	request(t, f.router, "DELETE", "/rooms/room-host", "", 202)
 	response := request(t, f.router, "POST", "/rooms", `{"title":"下一个直播间"}`, 409)
 	if response["error"].(map[string]any)["code"] != "room_closing" || response["item"] != nil {
 		t.Fatal("failed close was exposed as an enterable owner room", response)

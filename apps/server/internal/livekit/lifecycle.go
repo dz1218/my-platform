@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -16,9 +17,10 @@ import (
 )
 
 const (
-	hostJoinLifetime    = time.Minute
-	hostPendingLifetime = 90 * time.Second
-	closedRoomRetention = 24 * time.Hour
+	hostJoinLifetime     = time.Minute
+	hostPendingLifetime  = 90 * time.Second
+	hostRecoveryLifetime = 60 * time.Second
+	closedRoomRetention  = 24 * time.Hour
 )
 
 // RoomLifecycleEvent is accepted only after the webhook transport verifies it.
@@ -38,19 +40,23 @@ type hostAdmission struct {
 }
 
 type roomLifecycle struct {
-	ID       string         `json:"id"`
-	SID      string         `json:"sid"`
-	OwnerID  string         `json:"ownerId"`
-	Title    string         `json:"title"`
-	Status   string         `json:"status"`
-	Viewers  int            `json:"viewers"`
-	State    string         `json:"state"`
-	Reason   string         `json:"reason,omitempty"`
-	HadHost  bool           `json:"hadHost"`
-	Host     *hostAdmission `json:"host,omitempty"`
-	ClosedAt int64          `json:"closedAt,omitempty"`
-	RetryAt  int64          `json:"retryAt,omitempty"`
-	Retries  int            `json:"retries,omitempty"`
+	ID                string         `json:"id"`
+	SID               string         `json:"sid"`
+	OwnerID           string         `json:"ownerId"`
+	Title             string         `json:"title"`
+	Status            string         `json:"status"`
+	Viewers           int            `json:"viewers"`
+	State             string         `json:"state"`
+	Reason            string         `json:"reason,omitempty"`
+	HadHost           bool           `json:"hadHost"`
+	Host              *hostAdmission `json:"host,omitempty"`
+	ClosedAt          int64          `json:"closedAt,omitempty"`
+	RetryAt           int64          `json:"retryAt,omitempty"`
+	Retries           int            `json:"retries,omitempty"`
+	HostConnection    string         `json:"hostConnection,omitempty"`
+	ReconnectDeadline int64          `json:"reconnectDeadline,omitempty"`
+	CheckAt           int64          `json:"checkAt,omitempty"`
+	CheckRetries      int            `json:"checkRetries,omitempty"`
 }
 
 // The process fallback is for local fixtures without Redis. Production always
@@ -105,6 +111,16 @@ func (h Handler) loadLifecycle(ctx context.Context, id string) (*roomLifecycle, 
 }
 
 func (h Handler) saveLifecycle(ctx context.Context, record *roomLifecycle) error {
+	if record.State == "open" && record.CheckAt == 0 {
+		delay := time.Minute
+		if !record.HadHost {
+			delay = 10 * time.Minute
+		}
+		record.CheckAt = h.clock().Add(delay).UnixMilli()
+	}
+	if record.State == "open" && record.ReconnectDeadline > h.clock().UnixMilli() && record.CheckAt > record.ReconnectDeadline {
+		record.CheckAt = record.ReconnectDeadline
+	}
 	data, err := json.Marshal(record)
 	if err != nil {
 		return err
@@ -134,6 +150,11 @@ func (h Handler) saveLifecycle(ctx context.Context, record *roomLifecycle) error
 		} else {
 			pipe.ZRem(ctx, h.closeRetryKey(), record.ID)
 		}
+		if record.State == "open" {
+			pipe.ZAdd(ctx, h.checkQueueKey(), redis.Z{Score: float64(record.CheckAt), Member: record.ID})
+		} else {
+			pipe.ZRem(ctx, h.checkQueueKey(), record.ID)
+		}
 		pipe.Publish(ctx, h.RoomUpdatesChannel(), record.ID)
 		return nil
 	})
@@ -144,6 +165,7 @@ func (h Handler) saveLifecycle(ctx context.Context, record *roomLifecycle) error
 // returns. Initialize without overwriting an admission established meanwhile.
 func (h Handler) initLifecycle(ctx context.Context, item RoomItem) error {
 	record := lifecycleForRoom(item)
+	record.CheckAt = h.clock().Add(10 * time.Minute).UnixMilli()
 	if h.RoomCache == nil {
 		localRoomLifecycles.Lock()
 		key := h.lifecycleKey(item.ID)
@@ -161,6 +183,7 @@ func (h Handler) initLifecycle(ctx context.Context, item RoomItem) error {
 	_, err = h.RoomCache.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 		pipe.SetNX(ctx, h.lifecycleKey(item.ID), data, 0)
 		pipe.SAdd(ctx, h.lifecycleIndexKey(), item.ID)
+		pipe.ZAddNX(ctx, h.checkQueueKey(), redis.Z{Score: float64(record.CheckAt), Member: item.ID})
 		pipe.Publish(ctx, h.RoomUpdatesChannel(), item.ID)
 		return nil
 	})
@@ -184,7 +207,25 @@ func (h Handler) lifecycleRoomIDs(ctx context.Context) ([]string, error) {
 }
 
 func lifecycleForRoom(item RoomItem) *roomLifecycle {
-	return &roomLifecycle{ID: item.ID, SID: item.SID, OwnerID: item.OwnerID, Title: item.Title, Status: item.Status, Viewers: item.Viewers, State: "open"}
+	return &roomLifecycle{ID: item.ID, SID: item.SID, OwnerID: item.OwnerID, Title: item.Title, Status: item.Status, Viewers: item.Viewers, State: "open", HostConnection: "waiting"}
+}
+
+func (h Handler) hostRestored(r *roomLifecycle) {
+	if r.ReconnectDeadline != 0 {
+		slog.Info("room host recovered", "room", r.ID)
+	}
+	r.HadHost, r.HostConnection, r.ReconnectDeadline = true, "connected", 0
+	r.Host.PendingUntil = 0
+	r.CheckAt = h.clock().Add(time.Minute).UnixMilli()
+}
+
+func (h Handler) hostAbsent(r *roomLifecycle) {
+	if r.ReconnectDeadline == 0 {
+		r.ReconnectDeadline = h.clock().Add(hostRecoveryLifetime).UnixMilli()
+		slog.Info("room host recovery started", "room", r.ID, "deadline", r.ReconnectDeadline)
+	}
+	r.HostConnection = "reconnecting"
+	r.CheckAt = r.ReconnectDeadline
 }
 
 func (r *roomLifecycle) item() RoomItem {
@@ -258,7 +299,9 @@ func (h Handler) admitHost(ctx context.Context, item RoomItem, attempt, name str
 					record.Host = &hostAdmission{Identity: p.Identity}
 				}
 				record.Host.SID = p.SID
-				record.HadHost = record.HadHost || hostConnected(p)
+				if hostConnected(p) {
+					h.hostRestored(record)
+				}
 				if err := h.saveLifecycle(ctx, record); err != nil {
 					return nil, err
 				}
@@ -266,17 +309,18 @@ func (h Handler) admitHost(ctx context.Context, item RoomItem, attempt, name str
 			return nil, errHostBusy
 		}
 	}
-	// Once a connected host has departed, this room must close, not admit a
-	// replacement before its departure notification has caught up.
 	if record.HadHost {
-		return nil, errRoomClosed
+		h.hostAbsent(record)
+		if h.clock().UnixMilli() >= record.ReconnectDeadline {
+			return nil, errRoomClosed
+		}
 	}
 	now := h.clock().Unix()
 	if current := record.Host; current != nil && now < current.PendingUntil {
 		if attempt == current.AttemptID && now < current.ExpiresAt {
 			return current, nil
 		}
-		return nil, errHostBusy
+		return nil, &hostPendingError{Until: current.PendingUntil * 1000}
 	}
 	if attempt == "" {
 		attempt = database.ID()
@@ -286,6 +330,12 @@ func (h Handler) admitHost(ctx context.Context, item RoomItem, attempt, name str
 	}
 	admission := &hostAdmission{AttemptID: attempt, Identity: "host_" + item.OwnerID + "_" + database.ID()[:12], Name: name,
 		IssuedAt: now, ExpiresAt: now + int64(hostJoinLifetime.Seconds()), PendingUntil: now + int64(hostPendingLifetime.Seconds())}
+	if record.HadHost {
+		// A lost recovery admission must leave time for another attempt. Initial
+		// admission retains its independent 90-second protection.
+		admission.ExpiresAt = min(now+10, record.ReconnectDeadline/1000)
+		admission.PendingUntil = min(now+15, record.ReconnectDeadline/1000)
+	}
 	record.Host = admission
 	if err := h.saveLifecycle(ctx, record); err != nil {
 		return nil, err
@@ -295,6 +345,10 @@ func (h Handler) admitHost(ctx context.Context, item RoomItem, attempt, name str
 
 var errHostBusy = errors.New("host session in use")
 var errRoomClosed = errors.New("room closed")
+
+type hostPendingError struct{ Until int64 }
+
+func (e *hostPendingError) Error() string { return "host admission pending" }
 
 func (c *Client) hostJoinToken(room string, host *hostAdmission) (string, error) {
 	return c.tokenAt(host.Identity, host.Name, map[string]any{"roomJoin": true, "room": room, "canPublish": true, "canSubscribe": true, "canPublishData": true},
@@ -373,6 +427,7 @@ func (h Handler) reconcileRoomLocked(ctx context.Context, event RoomLifecycleEve
 		return h.queueRoomClose(ctx, record, "room_finished")
 	}
 	if record.OwnerID == "" {
+		record.CheckAt = h.clock().Add(time.Minute).UnixMilli()
 		return h.saveLifecycle(ctx, record)
 	}
 	people, err := h.Client.ListParticipants(ctx, event.RoomID)
@@ -413,9 +468,13 @@ func (h Handler) reconcileRoomLocked(ctx context.Context, event RoomLifecycleEve
 		}
 	}
 	if host != nil {
+		joinedEvent := record.Host.SID == "" && event.Event == "participant_joined" && event.Identity == host.Identity && event.ParticipantSID == host.SID
 		record.Host.SID = host.SID
-		joinedEvent := event.Event == "participant_joined" && event.Identity == host.Identity && event.ParticipantSID == host.SID
-		record.HadHost = record.HadHost || hostConnected(*host) || joinedEvent
+		if hostConnected(*host) || joinedEvent {
+			h.hostRestored(record)
+		} else if record.ReconnectDeadline > 0 && h.clock().UnixMilli() >= record.ReconnectDeadline {
+			return h.queueRoomClose(ctx, record, "host_left")
+		}
 		if err := h.saveLifecycle(ctx, record); err != nil {
 			return err
 		}
@@ -428,23 +487,37 @@ func (h Handler) reconcileRoomLocked(ctx context.Context, event RoomLifecycleEve
 			return nil
 		}
 		if event.ParticipantSID != "" && (event.Event == "participant_joined" || event.Event == "participant_left") {
+			// A repeated/out-of-order join for an already observed session is
+			// not fresh presence. It must not erase a later recovery deadline.
+			if event.Event == "participant_joined" && record.Host.SID != "" {
+				return nil
+			}
 			record.HadHost = true // also covers a short session absent from this RPC
 			record.Host.SID = event.ParticipantSID
+			record.Host.PendingUntil = 0
 			if event.Event == "participant_joined" {
 				// A signed join event can precede participant-list visibility.
 				// Record the completed join; don't turn that lag into a departure.
+				h.hostRestored(record)
 				return h.saveLifecycle(ctx, record)
 			}
 		}
 	}
 	if record.HadHost {
-		return h.queueRoomClose(ctx, record, "host_left")
+		h.hostAbsent(record)
+		if h.clock().UnixMilli() >= record.ReconnectDeadline {
+			slog.Info("room host recovery expired", "room", record.ID)
+			return h.queueRoomClose(ctx, record, "host_left")
+		}
 	}
 	if event.Event == "room_finished" {
 		return h.queueRoomClose(ctx, record, "room_finished")
 	}
-	if record.Host != nil && h.clock().Unix() >= record.Host.PendingUntil {
+	if !record.HadHost && record.Host != nil && h.clock().Unix() >= record.Host.PendingUntil {
 		record.Host = nil
+	}
+	if !record.HadHost && record.CheckAt > 0 && record.CheckAt <= h.clock().UnixMilli() {
+		record.CheckAt = h.clock().Add(time.Minute).UnixMilli()
 	}
 	if err := h.saveLifecycle(ctx, record); err != nil {
 		return err
@@ -468,16 +541,11 @@ func (h Handler) deleteLifecycleRoom(ctx context.Context, record *roomLifecycle,
 
 func (h Handler) finishClosedRoom(ctx context.Context, record *roomLifecycle, reason string) error {
 	if record.OwnerID != "" {
-		reserved, err := h.loadOwnerRoom(ctx, record.OwnerID)
-		if err != nil {
+		if err := h.releaseResources(ctx, record.OwnerID, ownerRoom{ID: record.ID, Title: record.Title}); err != nil {
 			return err
 		}
-		if reserved.ID == record.ID {
-			if err := h.saveOwnerRoom(ctx, record.OwnerID, ownerRoom{}); err != nil {
-				return err
-			}
-		}
 	}
+
 	if record.Reason == "" {
 		record.Reason = reason
 	}
@@ -524,7 +592,7 @@ func (h Handler) presence(c *gin.Context) {
 		closedRoom(c)
 		return
 	}
-	if record.Host == nil || record.Host.Identity != actor.Subject || !record.HadHost {
+	if record.Host == nil || record.Host.Identity != actor.Subject || record.HostConnection != "connected" {
 		failRoom(c, http.StatusConflict, "host_not_connected", "主播连接尚未确认，请稍后重试")
 		return
 	}
