@@ -501,3 +501,37 @@ for (const width of [320, 390, 1440]) {
     }
   });
 }
+
+for (const width of [1440, 390]) {
+  test(`host lobby return keeps confirmation until the route commits at ${width}px`, async ({ page, context }) => {
+    test.skip(process.env.LIVEKIT_INTEGRATION !== '1', 'Requires local LiveKit');
+    test.setTimeout(60_000);
+    const roomId = `voice-e2e-${randomUUID()}`;
+    await page.setViewportSize({ width, height: 980 });
+    await rpc('CreateRoom', { name: roomId, metadata: JSON.stringify({ title: '返回切换测试', ownerId: 'live-test-host' }) }, { roomCreate: true });
+    try {
+      await login(context);
+      await join(page, roomId, true);
+      await expect(page.getByText('已连接', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: width < 768 ? '返回直播大厅' : '直播大厅', exact: true }).click();
+      await page.evaluate(() => {
+        const frames: { dialog: boolean; ended: boolean; controls: boolean }[] = [];
+        Object.assign(window, { lobbyReturnFrames: frames });
+        const sample = () => {
+          if (!document.querySelector('.live-room-page')) return;
+          frames.push({ dialog: !!document.querySelector('.live-dialog[open]'), ended: [...document.querySelectorAll('.live-stage-empty h2')].some(el => el.textContent === '直播间已结束' || el.textContent === '你已离开直播间'), controls: !!document.querySelector('.live-control-bar') });
+          requestAnimationFrame(sample);
+        };
+        sample();
+      });
+      await page.getByRole('button', { name: '结束并返回大厅', exact: true }).click();
+      await expect(page).toHaveURL(/\/live$/);
+      const frames = await page.evaluate(() => (window as unknown as { lobbyReturnFrames: { dialog: boolean; ended: boolean; controls: boolean }[] }).lobbyReturnFrames);
+      expect(frames.length).toBeGreaterThan(0);
+      expect(frames.every(frame => frame.dialog && !frame.ended && frame.controls), JSON.stringify(frames)).toBe(true);
+      await expect(page.getByRole('button', { name: '刷新列表', exact: true })).toBeEnabled();
+    } finally {
+      await rpc('DeleteRoom', { room: roomId }, { roomCreate: true });
+    }
+  });
+}

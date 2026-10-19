@@ -35,10 +35,11 @@
     ".next-dev/types/**/*.ts",
     ".next-live-e2e/types/**/*.ts",
     ".next-notice-e2e/types/**/*.ts",
+    ".next-production-e2e/types/**/*.ts",
     ".next-progress-e2e/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-production-e2e/types/**/*.ts"
+    ".next-toolbar-e2e/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

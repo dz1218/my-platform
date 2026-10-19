@@ -178,6 +178,12 @@ test('a lost close response confirms closing from durable state before permittin
   assert.equal(store.getState().returnToLobby, true);
   assert.equal(await store.getState().endRoom(), true);
   assert.equal(client.getQueryData<LiveRoomDetail>(['live-room', '/api', 'room'])?.state, 'closing');
+  assert.equal(store.getState().closeConfirmOpen, true);
+  assert.equal(store.getState().isClosing, true);
+  store.getState().resetSession();
+  store.getState().setCloseConfirmOpen(false);
+  assert.equal(store.getState().closeConfirmOpen, true);
+  assert.equal(await store.getState().endRoom(), false);
   assert.equal(store.getState().joinRetryAt, 0);
   client.clear();
 });
@@ -193,6 +199,7 @@ test('an unconfirmed close stays on the page and a duplicate-page viewer never e
   assert.equal(await store.getState().endRoom(), false);
   assert.equal(store.getState().closeConfirmOpen, true);
   assert.match(store.getState().closeError!, /尚未确认/);
+  assert.equal(store.getState().isClosing, false);
   store.getState().setCloseConfirmOpen(false);
   assert.equal(store.getState().returnToLobby, false);
   store.getState().resetSession();

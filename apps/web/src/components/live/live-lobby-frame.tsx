@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react';
 import { SkeletonBlock, SkeletonRegion } from '@/components/skeleton';
-import { SceneBanner } from '@/components/scene-banner';
-import { PageHeading } from '@/components/page-heading';
 import { LiveIcon } from './live-icon';
 import '@/app/live/live.css';
 import { MobileLiveLobbyFrame, MobileLiveDirectory } from '@my-platform/mobile-web/live-lobby';
@@ -9,17 +7,17 @@ export { MobileLiveLobbyFrame } from '@my-platform/mobile-web/live-lobby';
 
 type LobbyFilter = '全部' | '直播中' | '准备中';
 
-export function DesktopLiveLobbyFrame({ directory, roomPanel }: { directory: ReactNode; roomPanel: ReactNode }) {
-  return <>
-    <PageHeading title="直播大厅" description="找个感兴趣的房间，让交流现在发生。" />
-    <SceneBanner scene="live" title="把心事，调到同一个频率。" description="听一个声音，分享一段日常。总有故事正在发生。" />
-    <div className="live-lobby-layout">{directory}{roomPanel}</div>
-  </>;
+export function DesktopLiveLobbyFrame({ directory }: { directory: ReactNode }) {
+  return <div className="flex min-h-[calc(100dvh-80px)] flex-col">
+    <h1 className="sr-only">直播大厅</h1>
+    {directory}
+  </div>;
 }
 
-export function LiveDirectoryFrame({ count, liveCount, filter = '全部', search = '', onFilter, onSearch, onRefresh, refreshing = false, refreshDisabled = false, updatesLabel = '正在连接实时更新…', children, result }: {
+export function LiveDirectoryFrame({ count, liveCount, waitingCount, filter = '全部', search = '', onFilter, onSearch, onRefresh, refreshing = false, refreshDisabled = false, updatesLabel = '正在连接实时更新…', children, result, action }: {
   count?: number;
   liveCount?: number;
+  waitingCount?: number;
   filter?: LobbyFilter;
   search?: string;
   onFilter?: (filter: LobbyFilter) => void;
@@ -30,50 +28,25 @@ export function LiveDirectoryFrame({ count, liveCount, filter = '全部', search
   updatesLabel?: string;
   children: ReactNode;
   result?: ReactNode;
+  action?: ReactNode;
 }) {
   return <section className="live-directory" aria-label="直播间列表">
-    <div className="live-directory-top"><h2>发现直播 {count !== undefined && <span>{count}</span>}</h2><span className="live-update-note" role="status"><i className={updatesLabel === '实时更新' ? undefined : 'opacity-40'} />{updatesLabel}</span></div>
+    <div className="sr-only"><h2>直播间列表{count !== undefined && `，共 ${count} 个`}</h2><span role="status">{updatesLabel}</span></div>
     <div className="live-directory-toolbar">
-      <div className="live-filters" aria-label="筛选直播间">{(['全部', '直播中', '准备中'] as const).map(value => <button type="button" key={value} aria-pressed={filter === value} disabled={!onFilter} onClick={() => onFilter?.(value)}>{value}{value === '直播中' && liveCount !== undefined && <span>{liveCount}</span>}</button>)}</div>
-      <div className="live-search-actions"><label className="live-search"><LiveIcon name="search" size={16} /><input type="search" aria-label="搜索直播间" placeholder="搜索直播间" value={search} disabled={!onSearch} onChange={event => onSearch?.(event.target.value)} /></label><button type="button" className="live-icon-button" aria-label="刷新列表" title="刷新列表" disabled={!onRefresh || refreshing || refreshDisabled} onClick={onRefresh}><LiveIcon name="refresh" className={refreshing ? 'live-spin' : undefined} /></button></div>
+      <div className="live-filters" aria-label="筛选直播间">{(['全部', '直播中', '准备中'] as const).map(value => <button type="button" key={value} aria-pressed={filter === value} disabled={!onFilter} onClick={() => onFilter?.(value)}>{value}{value !== '全部' && (value === '直播中' ? liveCount : waitingCount) !== undefined && <span>({value === '直播中' ? liveCount : waitingCount})</span>}</button>)}</div>
+      <div className="live-search-actions"><label className="live-search"><LiveIcon name="search" size={16} /><input type="search" aria-label="搜索直播间" placeholder="搜索直播间" value={search} disabled={!onSearch} onChange={event => onSearch?.(event.target.value)} /></label><button type="button" className="live-icon-button" aria-label="刷新列表" title="刷新列表" disabled={!onRefresh || refreshing || refreshDisabled} onClick={onRefresh}><LiveIcon name="refresh" className={refreshing ? 'live-spin' : undefined} /></button>{action}</div>
     </div>
     {children}
-    <p className="live-result-count" aria-live="polite">{result}</p>
+    <p className="sr-only" aria-live="polite">{result}</p>
   </section>;
-}
-
-export function LiveCreatePanelFrame({ title, description, pending = false, children }: { title: string; description: string; pending?: boolean; children: ReactNode }) {
-  return <aside className="live-create-panel" aria-busy={pending || undefined}>
-    <div className="live-create-icon"><LiveIcon name="video" size={24} /></div>
-    {pending ? <SkeletonRegion kind="room-panel-heading" label="正在确认房间…">
-      <div className="relative text-[22px] font-semibold tracking-[-.4px] max-[479px]:text-[17px]">
-        <span className="invisible">{title}</span>
-        <SkeletonBlock className="absolute inset-y-1 left-0 w-32 max-w-full" />
-      </div>
-      <div className="relative mt-2.5 text-[13px] leading-[1.9] max-[479px]:text-xs">
-        <span className="invisible">{description}</span>
-        <SkeletonBlock className="absolute top-[.45em] left-0 h-[1em] w-full max-w-60" />
-      </div>
-    </SkeletonRegion> : <><h2>{title}</h2><p>{description}</p></>}
-    {children}
-    <div className="live-create-footer"><LiveIcon name="chat" size={17} /><p>进入直播间，就能和大家实时聊天。</p></div>
-  </aside>;
 }
 
 /** Responsive presentation only; account/query controllers mount after resolution. */
 export function LiveLobbyLoadingContent() {
-  const directory = <LiveDirectoryFrame><LiveDirectorySkeleton /></LiveDirectoryFrame>;
+  const directory = <LiveDirectoryFrame action={<button type="button" className="live-lobby-start" disabled aria-label="正在确认房间…"><LiveIcon name="plus" size={16} />我要开播</button>}><LiveDirectorySkeleton /></LiveDirectoryFrame>;
   return <>
     <div className="hidden md:block">
-      <DesktopLiveLobbyFrame directory={directory} roomPanel={<LiveCreatePanelFrame pending title="创建直播间" description="给房间起个名字，邀请大家来聊聊。">
-        <div className="mt-7">
-          <label htmlFor="startup-room-title">房间名称 <span>必填</span></label>
-          <input id="startup-room-title" className="live-input" placeholder="例如：下班后，聊点有趣的" disabled />
-          <p className="live-name-hint">1–100 个字符，不能与已有房间重名</p>
-          <button type="button" className="live-button live-button-primary live-create-button" disabled>正在确认房间…</button>
-          <p className="live-create-hint">进入房间后，自行开启摄像头和麦克风。</p>
-        </div>
-      </LiveCreatePanelFrame>} />
+      <DesktopLiveLobbyFrame directory={directory} />
     </div>
     <div className="md:hidden">
       <MobileLiveLobbyFrame actions={<button type="button" className="btn-primary" disabled>我的直播间</button>}><MobileLiveDirectory rooms={[]} loading /></MobileLiveLobbyFrame>
@@ -82,7 +55,7 @@ export function LiveLobbyLoadingContent() {
 }
 
 export function LiveLobbyLoading() {
-  return <main id="main-content" tabIndex={-1} className="page-shell live-page"><LiveLobbyLoadingContent /></main>;
+  return <main id="main-content" tabIndex={-1} className="page-shell live-page live-lobby-page"><LiveLobbyLoadingContent /></main>;
 }
 
 export function LiveDirectorySkeleton() {

@@ -34,12 +34,14 @@ test('create and close update immediately even when subsequent list requests fai
   });
   await page.route(`**/api/v1/rooms/${room.id}`, (route) => route.fulfill({ json: { ok: true, state: 'closed' } }));
   await page.goto('/live');
+  await page.getByRole('button', { name: '我要开播', exact: true }).click();
   await page.getByRole('textbox', { name: '房间名称' }).fill(room.title);
   await page.getByRole('button', { name: '创建直播间', exact: true }).click();
   await expect(page.getByRole('article', { name: room.title })).toBeVisible();
   await expect(page.getByRole('textbox', { name: '房间名称' })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: '进入我的直播间' })).toHaveAttribute('href', `/live/${room.id}`);
+  await expect(page.getByRole('link', { name: '我的直播间', exact: true })).toHaveAttribute('href', `/live/${room.id}`);
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '刷新列表' }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('列表更新失败');
   await expect(page.getByRole('article', { name: room.title })).toBeVisible();
@@ -47,6 +49,7 @@ test('create and close update immediately even when subsequent list requests fai
   await page.getByRole('button', { name: `关闭直播间：${room.title}` }).click();
   await page.getByRole('dialog').getByRole('button', { name: '确认关闭' }).click();
   await expect(page.getByRole('article', { name: room.title })).toHaveCount(0);
+  await page.getByRole('button', { name: '我要开播', exact: true }).click();
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toBeEnabled();
 });
 
@@ -67,10 +70,11 @@ for (const status of ['准备中', '直播中']) {
     await login(context);
     const items = [{ ...room, status }];
     await lobby(page, items);
-    await expect(page.getByRole('heading', { name: '我的直播间', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: '进入我的直播间' })).toHaveAttribute('href', `/live/${room.id}`);
+    await expect(page.getByRole('dialog', { name: '今晚，开场', exact: true })).toBeHidden();
+    await expect(page.getByRole('link', { name: '我的直播间', exact: true })).toHaveAttribute('href', `/live/${room.id}`);
     await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toHaveCount(0);
     await expect(page.getByRole('textbox', { name: '房间名称' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 980 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -80,6 +84,7 @@ for (const status of ['准备中', '直播中']) {
     await page.route(`**/api/v1/rooms/${room.id}`, (route) => { items.pop(); return route.fulfill({ json: { ok: true, state: 'closed' } }); });
     await page.getByRole('button', { name: `关闭直播间：${room.title}` }).click();
     await page.getByRole('button', { name: '确认关闭' }).click();
+    await page.getByRole('button', { name: '我要开播', exact: true }).click();
     await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toBeEnabled();
     await expect(page.getByRole('textbox', { name: '房间名称' })).toBeEnabled();
   });
@@ -96,10 +101,11 @@ test('a second tab creating a room changes a stale form into the existing room e
     }
     return route.fulfill({ json: { items: [room] } });
   });
+  await page.getByRole('button', { name: '我要开播', exact: true }).click();
   await page.getByRole('textbox', { name: '房间名称' }).fill('另一个房间');
   await page.getByRole('button', { name: '创建直播间', exact: true }).click();
   await expect(page.getByRole('link', { name: '进入我的直播间' })).toBeVisible();
-  await expect(page.getByRole('main').getByRole('alert')).toContainText('已有一个直播间');
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('已有一个直播间');
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toHaveCount(0);
   expect(creates).toBe(1);
 });
@@ -107,7 +113,7 @@ test('a second tab creating a room changes a stale form into the existing room e
 test('legacy duplicate rooms can be managed but cannot create another room', async ({ page, context }) => {
   await login(context);
   await lobby(page, [room, { ...room, id: 'room-legacy', title: '旧的第二个直播间' }]);
-  await expect(page.getByText('你已有 2 个旧房间，请在列表中关闭多余房间。')).toBeVisible();
+  await expect(page.getByRole('link', { name: '我的直播间', exact: true })).toHaveAttribute('href', `/live/${room.id}`);
   await expect(page.getByRole('button', { name: /^关闭直播间：/ })).toHaveCount(2);
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toHaveCount(0);
 });
@@ -144,12 +150,13 @@ test('failed create preserves the title; Chinese composition does not submit', a
     }
     return route.fulfill({ json: { items: [] } });
   });
+  await page.getByRole('button', { name: '我要开播', exact: true }).click();
   const input = page.getByRole('textbox', { name: '房间名称' });
   await input.fill('中文标题');
   await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, keyCode: 229 });
   expect(creates).toBe(0);
   await input.press('Enter');
-  await expect(page.getByRole('main').getByRole('alert')).toContainText('创建失败');
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('创建失败');
   await expect(input).toHaveValue('中文标题');
   expect(creates).toBe(1);
 });
@@ -374,20 +381,21 @@ test('room names are required, unique, and server conflicts preserve input', asy
     }
     return route.fulfill({ json: { items: [otherRoom] } });
   });
+  await page.getByRole('button', { name: '我要开播', exact: true }).click();
   const input = page.getByRole('textbox', { name: '房间名称' });
   const create = page.getByRole('button', { name: '创建直播间', exact: true });
   await create.click();
   expect(creates).toBe(0);
   await input.fill('   ');
   await create.click();
-  await expect(page.getByRole('main').getByRole('alert')).toContainText('请输入');
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('请输入');
   await input.fill(`  ${room.title}  `);
   await create.click();
-  await expect(page.getByRole('main').getByRole('alert')).toContainText('已被使用');
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('已被使用');
   expect(creates).toBe(0);
   await input.fill('其他房间');
   await create.click();
-  await expect(page.getByRole('main').getByRole('alert')).toContainText('已被使用');
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('已被使用');
   await expect(input).toHaveValue('其他房间');
   expect(creates).toBe(1);
 });

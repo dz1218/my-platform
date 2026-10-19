@@ -60,6 +60,7 @@ function clearContainer(ref: React.RefObject<HTMLDivElement | null>) {
 
 export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: LiveRoomProps) {
   const router = useRouter();
+  useEffect(() => { router.prefetch('/live'); }, [router]);
   const disposedRef = useRef(false);
   const joinRequestRef = useRef<AbortController | null>(null);
   const refreshRequestRef = useRef<AbortController | null>(null);
@@ -283,13 +284,15 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
   async function endRoom() {
     const returnAfterClose = ui.getState().returnToLobby;
     if (await ui.getState().endRoom()) {
-      await leaveRoom();
       if (returnAfterClose && !disposedRef.current) router.push('/live');
+      else await leaveRoom();
     }
   }
 
   function returnToHall() {
-    if (ui.getState().requestLobbyReturn()) { void leaveRoom(); router.push('/live'); }
+    // The route cleanup disconnects LiveKit. Resetting the visible session here
+    // would flash the disconnected screen while navigation is still pending.
+    if (ui.getState().requestLobbyReturn()) router.push('/live');
   }
 
   async function enableAudio() {

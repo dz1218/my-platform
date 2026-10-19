@@ -149,15 +149,15 @@ test('mobile create-room sheet uses the same mutation and retains title across r
   await page.getByRole('button', { name: '开播', exact: true }).click();
   await page.getByRole('textbox', { name: '房间名称' }).fill('雨夜来信');
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.getByRole('dialog', { name: '我的直播间', exact: true })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: '今晚，开场', exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: '房间名称' })).toHaveValue('雨夜来信');
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: '开播', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '我的直播间', exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: '房间名称' })).toHaveValue('雨夜来信');
   await page.getByRole('button', { name: '创建直播间', exact: true }).click();
-  await expect(page.getByRole('dialog').getByRole('link', { name: '进入我的直播间' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '我的直播间', exact: true })).toBeHidden();
   expect(creates).toBe(1);
-  await page.keyboard.press('Escape');
+  await expect(page.locator('html')).not.toHaveCSS('overflow', 'hidden');
   await expect(page.getByRole('link', { name: '我的直播间', exact: true })).toBeVisible();
 });
 

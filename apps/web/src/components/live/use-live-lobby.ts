@@ -53,12 +53,13 @@ export function useLiveLobby({ apiBaseUrl, isLoggedIn, hostNickname }: LiveLobby
   const setSearch = useBrowseUI(s => s.setLiveSearch);
   const setFilter = useBrowseUI(s => s.setLiveFilter);
   useEffect(() => ui.subscribe(s => s.createdRoomId, id => {
-    if (id) { setSearch(''); setFilter('全部'); }
+    if (id) { setSearch(''); setFilter('全部'); ui.getState().setCreating(false); }
   }), [ui, setSearch, setFilter]);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const isMutating = isCreating || closingRoomId !== null || isRefreshing;
   const liveCount = rooms.filter((room) => room.status === '直播中').length;
+  const waitingCount = rooms.filter(room => room.status === '准备中').length;
   const visibleRooms = rooms.filter((room) => (filter === '全部' || room.status === filter) && room.title.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
 
   useEffect(() => ui.subscribe(s => s.roomToClose, room => {
@@ -70,6 +71,6 @@ export function useLiveLobby({ apiBaseUrl, isLoggedIn, hostNickname }: LiveLobby
     if (await ui.getState().createRoom() === 'invalid-title') titleRef.current?.focus();
   }
 
-  return { creating, setCreating, roomsQuery, rooms, ownedRooms, ownedRoom, title, setTitle, search, setSearch, filter, setFilter, isCreating, closingRoomId, roomToClose, setRoomToClose, createdRoomId, error, setError, closeError, setCloseError, dialogRef, titleRef, isMutating, liveCount, visibleRooms, createRoom, closeRoom, refreshRooms, isRefreshing, listError, updatesLabel, isLoggedIn, hostNickname };
+  return { creating, setCreating, roomsQuery, rooms, ownedRooms, ownedRoom, title, setTitle, search, setSearch, filter, setFilter, isCreating, closingRoomId, roomToClose, setRoomToClose, createdRoomId, error, setError, closeError, setCloseError, dialogRef, titleRef, isMutating, liveCount, waitingCount, visibleRooms, createRoom, closeRoom, refreshRooms, isRefreshing, listError, updatesLabel, isLoggedIn, hostNickname };
 }
 export type LiveLobbyModel = ReturnType<typeof useLiveLobby>;

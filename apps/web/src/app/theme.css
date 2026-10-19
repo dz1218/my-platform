@@ -1,5 +1,6 @@
 /* Radio Friday — the single source of truth for the Tailwind design system. */
 @theme inline {
+  --background-image-glass-sheen: linear-gradient(135deg, color-mix(in srgb, var(--rf-ink) 6%, transparent), transparent 65%);
   --background-image-shell-ambient: linear-gradient(125deg, transparent 10%, var(--rf-ambient-soft) 38%, var(--rf-ambient-glow) 65%, var(--rf-ambient-soft) 88%, transparent);
   --background-image-shell-content: linear-gradient(to right, var(--rf-canvas), var(--rf-content-canvas) 160px);
   --background-image-nav-active: radial-gradient(ellipse at 50% 130%, var(--rf-nav-glow), transparent 65%);
@@ -46,8 +47,10 @@
   --radius-panel: 1rem;
   --radius-scene: 1.5rem;
   --shadow-panel: 0 2px 8px rgb(0 0 0 / 12%);
+  --shadow-card-hover: 0 0 0 3px #000, -3px -3px 12px 3px rgb(165 210 225 / 26%), 3px 4px 12px 3px rgb(181 169 207 / 28%);
   --shadow-popover: 0 8px 28px rgb(0 0 0 / 28%);
   --shadow-dialog: 0 24px 80px rgb(0 0 0 / 40%);
+  --shadow-glass-dialog: inset 0 1px 0 rgb(255 255 255 / 6%), 0 24px 64px rgb(0 0 0 / 28%);
   --color-overlay: #18181680;
   --color-photo-ink: #f6f4f0;
   --color-photo-muted: #d1ccc3;

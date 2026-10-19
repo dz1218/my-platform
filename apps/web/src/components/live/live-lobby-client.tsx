@@ -1,11 +1,11 @@
 'use client';
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { AudioLines } from 'lucide-react';
 import { Sheet } from '@/components/sheet';
 import { useViewport } from '@/components/use-viewport';
 import { LiveIcon } from './live-icon';
 import { useLiveLobby, type LiveLobbyProps, type LiveLobbyModel } from './use-live-lobby';
-import { DesktopLiveLobbyFrame, MobileLiveLobbyFrame, LiveDirectoryFrame, LiveCreatePanelFrame, LiveLobbyLoadingContent, LiveDirectorySkeleton } from './live-lobby-frame';
+import { DesktopLiveLobbyFrame, MobileLiveLobbyFrame, LiveDirectoryFrame, LiveLobbyLoadingContent, LiveDirectorySkeleton } from './live-lobby-frame';
 import { MobileLiveDirectory, MobileCreateRoomPanel } from '@my-platform/mobile-web/live-lobby';
 import type { ReactNode } from 'react';
 
@@ -15,25 +15,31 @@ export function LiveLobbyClient(props: LiveLobbyProps) {
   const model = useLiveLobby(props);
   const viewport = useViewport();
   const { creating, setCreating } = model;
-  useEffect(() => { if (viewport === 'desktop') setCreating(false); }, [viewport, setCreating]);
   return <>
     {!viewport ? <LiveLobbyLoadingContent /> : viewport === 'desktop' ? <DesktopLiveLobby model={model} /> : <MobileLiveLobby model={model} onCreate={() => setCreating(true)} />}
-    <Sheet open={creating && viewport === 'mobile'} onClose={() => setCreating(false)} title="我的直播间"><MobileCreateRoomPanel ownedRoom={model.ownedRoom} ownedCount={model.ownedRooms.length} createdRoomId={model.createdRoomId} title={model.title} onTitle={value => { model.setTitle(value); model.setError(null); }} inputRef={model.titleRef} isLoggedIn={model.isLoggedIn} pending={model.roomsQuery.isPending} failed={model.roomsQuery.isError} isMutating={model.isMutating} isCreating={model.isCreating} error={model.error} onCreate={() => void model.createRoom()} renderLink={renderMobileLink} /></Sheet>
+    <Sheet open={creating && !!viewport} onClose={() => setCreating(false)} desktopCentered title={viewport === 'mobile' ? '我的直播间' : '今晚，开场'} className={viewport === 'desktop' ? 'live-page live-create-sheet' : ''}>
+      {viewport === 'desktop' ? <CreateRoomPanel model={model} /> : <MobileCreateRoomPanel ownedRoom={model.ownedRoom} ownedCount={model.ownedRooms.length} createdRoomId={model.createdRoomId} title={model.title} onTitle={value => { model.setTitle(value); model.setError(null); }} inputRef={model.titleRef} isLoggedIn={model.isLoggedIn} pending={model.roomsQuery.isPending} failed={model.roomsQuery.isError} isMutating={model.isMutating} isCreating={model.isCreating} error={model.error} onCreate={() => void model.createRoom()} renderLink={renderMobileLink} />}
+    </Sheet>
     <CloseRoomDialog model={model} />
   </>;
 }
 function DesktopLiveLobby({ model }: { model: LiveLobbyModel }) {
-  return <DesktopLiveLobbyFrame directory={<LobbyDirectory model={model} />} roomPanel={<CreateRoomPanel model={model} />} />;
+  return <DesktopLiveLobbyFrame directory={<LobbyDirectory model={model} action={
+    model.ownedRoom ? <Link href={`/live/${encodeURIComponent(model.ownedRoom.id)}`} className="live-lobby-start">我的直播间<LiveIcon name="arrow" size={16} /></Link> :
+      <button type="button" className="live-lobby-start" disabled={model.roomsQuery.isPending} onClick={() => model.setCreating(true)}>
+        <LiveIcon name="plus" size={16} />我要开播
+      </button>
+  } />} />;
 }
 function MobileLiveLobby({ model, onCreate }: { model: LiveLobbyModel; onCreate: () => void }) {
   return <MobileLiveLobbyFrame liveCount={model.roomsQuery.isPending ? undefined : model.liveCount} actions={model.roomsQuery.isPending ? <button type="button" className="btn-primary" disabled>我的直播间</button> : model.ownedRoom ? <Link href={`/live/${encodeURIComponent(model.ownedRoom.id)}`} className="btn-primary">我的直播间</Link> : model.isLoggedIn ? <button type="button" onClick={onCreate} className="btn-primary">开播</button> : <Link href="/login" className="btn-secondary">登录开播</Link>}>
-    <MobileLiveDirectory rooms={model.visibleRooms} total={model.rooms.length} liveCount={model.roomsQuery.isPending ? undefined : model.liveCount} search={model.search} filter={model.filter} loading={model.roomsQuery.isPending} refreshing={model.roomsQuery.isFetching || model.isRefreshing} refreshDisabled={model.isMutating} updatesLabel={model.updatesLabel} error={model.listError} isLoggedIn={model.isLoggedIn} isMutating={model.isMutating} onSearch={model.setSearch} onFilter={model.setFilter} onRefresh={() => void model.refreshRooms()} onCloseRoom={room => { model.setCloseError(null); model.setRoomToClose(room); }} renderLink={renderMobileLink} />
+    <MobileLiveDirectory rooms={model.visibleRooms} total={model.rooms.length} liveCount={model.roomsQuery.isPending ? undefined : model.liveCount} waitingCount={model.roomsQuery.isPending ? undefined : model.waitingCount} search={model.search} filter={model.filter} loading={model.roomsQuery.isPending} refreshing={model.roomsQuery.isFetching || model.isRefreshing} refreshDisabled={model.isMutating} updatesLabel={model.updatesLabel} error={model.listError} isLoggedIn={model.isLoggedIn} isMutating={model.isMutating} onSearch={model.setSearch} onFilter={model.setFilter} onRefresh={() => void model.refreshRooms()} onCloseRoom={room => { model.setCloseError(null); model.setRoomToClose(room); }} renderLink={renderMobileLink} />
   </MobileLiveLobbyFrame>;
 }
 
-function LobbyDirectory({ model }: { model: LiveLobbyModel }) {
+function LobbyDirectory({ model, action }: { model: LiveLobbyModel; action: ReactNode }) {
   const { roomsQuery, rooms, search, setSearch, filter, setFilter, setRoomToClose, setCloseError, isMutating, liveCount, visibleRooms, isLoggedIn, refreshRooms, isRefreshing, listError, updatesLabel } = model;
-  return (      <LiveDirectoryFrame count={roomsQuery.isPending ? undefined : rooms.length} liveCount={roomsQuery.isPending ? undefined : liveCount} filter={filter} search={search} onFilter={setFilter} onSearch={setSearch} onRefresh={() => void refreshRooms()} refreshing={roomsQuery.isFetching || isRefreshing} refreshDisabled={isMutating} updatesLabel={updatesLabel} result={!roomsQuery.isPending && `${visibleRooms.length} 个直播间${search || filter !== '全部' ? `，共 ${rooms.length} 个` : ''}`}>
+  return (      <LiveDirectoryFrame action={action} count={roomsQuery.isPending ? undefined : rooms.length} liveCount={roomsQuery.isPending ? undefined : liveCount} waitingCount={roomsQuery.isPending ? undefined : model.waitingCount} filter={filter} search={search} onFilter={setFilter} onSearch={setSearch} onRefresh={() => void refreshRooms()} refreshing={roomsQuery.isFetching || isRefreshing} refreshDisabled={isMutating} updatesLabel={updatesLabel} result={!roomsQuery.isPending && `${visibleRooms.length} 个直播间${search || filter !== '全部' ? `，共 ${rooms.length} 个` : ''}`}>
         {listError && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>直播间列表更新失败，{listError}。请刷新列表重试。</p></div>}
         {roomsQuery.isPending ? <LiveDirectorySkeleton /> : visibleRooms.length ? <div className="live-room-grid">
           {visibleRooms.map((room) => <article className="live-room-card" key={room.id} data-browse-anchor={`room:${room.id}`} aria-label={room.title}>
@@ -43,38 +49,41 @@ function LobbyDirectory({ model }: { model: LiveLobbyModel }) {
               <span className="live-cover-caption">{room.status === '直播中' ? '进入房间观看实时画面' : '即将开始 · 欢迎入座'}</span>
               <span className="live-cover-viewers"><LiveIcon name="users" size={13} />{room.viewers}</span>
             </Link>
-            <div className="live-room-card-body"><h3 title={room.title}><Link href={`/live/${encodeURIComponent(room.id)}`}>{room.title}</Link></h3><p>{room.viewers} 人在房间</p>
+            <div className="live-room-card-body"><h3 title={room.title}><Link href={`/live/${encodeURIComponent(room.id)}`}>{room.title}</Link></h3>
               <div className="live-room-card-actions"><Link href={`/live/${encodeURIComponent(room.id)}`} className="live-enter-link">{isLoggedIn && room.canManage ? '进入直播间' : '观看'}<LiveIcon name="arrow" size={16} /></Link>{isLoggedIn && room.canManage && <button type="button" className="live-close-room" disabled={isMutating} aria-label={`关闭直播间：${room.title}`} onClick={() => { setCloseError(null); setRoomToClose(room); }}>关闭</button>}</div>
             </div>
           </article>)}
-        </div> : !listError && <div className="live-empty">
-          <div className="live-empty-icon"><LiveIcon name={search ? 'search' : 'video'} size={30} /></div>
-          <h3>{rooms.length ? '没有找到匹配的直播间' : '暂无直播间'}</h3>
-          <p>{rooms.length ? '换个关键词，或看看其他状态的直播间。' : isLoggedIn ? '还没有人开播，创建一个直播间开始分享吧。' : '现在还没有人开播，过会儿再来看看。'}</p>
-          {rooms.length > 0 && <button type="button" className="live-button live-button-secondary" onClick={() => { setSearch(''); setFilter('全部'); }}>查看全部直播间</button>}
+        </div> : !listError && <div className="live-lobby-empty" role="status">
+          <div className="mb-6 flex items-center gap-6 text-muted" aria-hidden="true">
+            <span className="h-px w-14 bg-line" /><AudioLines className="size-12" strokeWidth={1.25} /><span className="h-px w-14 bg-line" />
+          </div>
+          <h3 className="text-sm font-normal text-muted">暂无直播间</h3>
         </div>}
       </LiveDirectoryFrame>
   );
 }
 
 function CreateRoomPanel({ model }: { model: LiveLobbyModel }) {
-  const { roomsQuery, ownedRooms, ownedRoom, title, setTitle, isCreating, createdRoomId, error, setError, titleRef, isMutating, createRoom, isLoggedIn } = model;
-  return (      <LiveCreatePanelFrame pending={roomsQuery.isPending} title={ownedRoom ? '我的直播间' : '创建直播间'} description={ownedRoom ? '每个账号同时只能保留一个直播间。' : '给房间起个名字，邀请大家来聊聊。'}>
-        {ownedRoom ? <>
-          <div className="live-created" role="status"><span><LiveIcon name="check" size={16} />{createdRoomId === ownedRoom.id ? '直播间已创建' : '你已有直播间'}</span><strong>{ownedRoom.title}</strong></div>
-          <Link href={`/live/${encodeURIComponent(ownedRoom.id)}`} className="live-button live-button-primary live-create-button">进入我的直播间<LiveIcon name="arrow" size={16} /></Link>
-          <p className="live-create-hint">{ownedRooms.length > 1 ? `你已有 ${ownedRooms.length} 个旧房间，请在列表中关闭多余房间。` : '关闭当前直播间后，才能创建新的房间。'}</p>
-          {error && <p role="alert" className="live-form-error">{error}</p>}
-        </> : isLoggedIn ? <form onSubmit={(event) => { event.preventDefault(); void createRoom(); }}>
-          <label htmlFor="room-title">房间名称 <span>必填</span></label>
-          <input id="room-title" aria-label="房间名称" required aria-invalid={!!error} aria-describedby={error ? "room-name-error" : "room-name-hint"} ref={titleRef} name="roomTitle" autoComplete="off" maxLength={100} disabled={isMutating || roomsQuery.isPending || roomsQuery.isError} value={title} onChange={(event) => { setTitle(event.target.value); setError(null); }} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} placeholder="例如：下班后，聊点有趣的" className="live-input" />
-          <p id="room-name-hint" className="live-name-hint">1–100 个字符，不能与已有房间重名</p>
-          <button type="submit" disabled={isMutating || roomsQuery.isPending || roomsQuery.isError} className="live-button live-button-primary live-create-button"><LiveIcon name="plus" size={17} />{isCreating ? '创建中…' : roomsQuery.isPending ? '正在确认房间…' : '创建直播间'}</button>
-          <p className="live-create-hint">进入房间后，自行开启摄像头和麦克风。</p>
-          {error && <p id="room-name-error" role="alert" className="live-form-error">{error}</p>}
-        </form> : <><Link href="/login" className="live-button live-button-primary live-create-button">登录后创建<LiveIcon name="arrow" size={16} /></Link><p className="live-create-hint">观看直播和发送消息无需登录。</p></>}
-      </LiveCreatePanelFrame>
-  );
+  const { roomsQuery, ownedRoom, title, setTitle, isCreating, error, setError, titleRef, isMutating, createRoom, isLoggedIn, setCreating } = model;
+  if (ownedRoom) return <div className="space-y-5">
+    <p className="text-sm leading-6 text-muted">{ownedRoom.title}</p>
+    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+    <Link href={`/live/${encodeURIComponent(ownedRoom.id)}`} className="live-lobby-start">进入我的直播间<LiveIcon name="arrow" size={16} /></Link>
+  </div>;
+  return <>
+    {isLoggedIn ? <form className="mt-3" onSubmit={event => { event.preventDefault(); void createRoom(); }}>
+      <div className="mb-2 flex items-center justify-between gap-4 text-xs text-muted">
+        <label htmlFor="room-title">房间名称</label>
+        <span id="room-name-hint">1–100 字</span>
+      </div>
+      <input id="room-title" aria-label="房间名称" required aria-invalid={!!error} aria-describedby={error ? 'room-name-error' : 'room-name-hint'} ref={titleRef} name="roomTitle" autoComplete="off" maxLength={100} disabled={isMutating || roomsQuery.isPending || roomsQuery.isError} value={title} onChange={event => { setTitle(event.target.value); setError(null); }} onKeyDown={event => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault(); }} placeholder="为房间起个名字" className="live-create-name" />
+      {error && <p id="room-name-error" role="alert" className="pt-3 text-sm leading-6 text-danger">{error}</p>}
+      <div className="mt-5 ml-auto grid w-fit grid-cols-2 gap-2">
+        <button type="button" onClick={() => setCreating(false)} className="btn-solid min-w-26 bg-ink/5 text-muted hover:bg-ink/10 hover:text-ink">取消</button>
+        <button type="submit" disabled={isMutating || roomsQuery.isPending || roomsQuery.isError} className="btn-primary min-w-26">{isCreating ? '创建中…' : '创建直播间'}</button>
+      </div>
+    </form> : <div className="mt-3 flex items-center justify-between gap-4"><p className="text-xs text-muted">登录后，开启你的直播。</p><Link href="/login" className="live-lobby-start">登录后创建<LiveIcon name="arrow" size={16} /></Link></div>}
+  </>;
 }
 
 function CloseRoomDialog({ model }: { model: LiveLobbyModel }) {

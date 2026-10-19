@@ -103,6 +103,7 @@ export const createRoomOperations = (services: RoomServices): StateCreator<LiveR
     const s = get();
     if (!services.close || s.role !== '主播' || !s.closeConfirmOpen || s.isClosing) return false;
     set({ isClosing: true, closeError: null });
+    let awaitingLobby = false;
     try {
       let result: LiveRoomClose | void;
       try { result = await services.close(); }
@@ -126,13 +127,16 @@ export const createRoomOperations = (services: RoomServices): StateCreator<LiveR
         client.setQueryData<ApiRoomItem[]>(listKey, rooms => rooms?.filter(room => room.id !== roomId));
         void client.invalidateQueries({ queryKey: listKey });
       }
-      set({ closeConfirmOpen: false, joinFailure: 'closed', joinRetryAt: 0, recovering: false, isJoining: false });
+      // A successful lobby return keeps the confirmation covering the old room
+      // until its owner unmounts. Do not reveal the terminal screen in between.
+      awaitingLobby = s.returnToLobby;
+      set({ closeConfirmOpen: awaitingLobby, joinFailure: 'closed', joinRetryAt: 0, recovering: false, isJoining: false });
       return true;
     } catch (error) {
       set({ closeError: error instanceof Error ? error.message : '结束直播失败，请重试' });
       return false;
     } finally {
-      set({ isClosing: false });
+      if (!awaitingLobby) set({ isClosing: false });
     }
   },
   dispatchAgent: async () => {

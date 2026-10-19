@@ -1,0 +1,90 @@
+import { test, expect } from '@playwright/test';
+const fixture = `${process.env.LOBBY_FIXTURE_URL || 'http://127.0.0.1:18181'}/__performance`;
+test.afterEach(async ({ request }) => { await request.post(fixture, { data: {} }); });
+const item = { id: 'sleeve-review', title: '下班了，一起聊聊今天', status: '直播中', viewers: 3, canManage: false };
+for (const width of [768, 1440]) test(`room directory preserves the sleeve layout at ${width}px`, async ({ page }) => {
+ await page.setViewportSize({ width, height: 1000 });
+ await page.request.post(fixture,{ data: { rooms: [] } });
+ await page.goto('/live');
+ const sleeve = page.getByRole('region',{name:'Radio Friday 电台'});
+ await expect(page.getByText('暂无直播间',{exact:true})).toBeVisible();
+ const expanded = (await sleeve.boundingBox())!.height;
+ await page.screenshot({path:`/tmp/radio-friday-transition/empty-${width}.png`,fullPage:true,animations:'disabled'});
+ const before = await sleeve.boundingBox();
+
+ await page.request.post(fixture,{ data: { rooms: [item] } });
+ await expect(sleeve).toHaveAttribute('data-directory','true');
+ await expect(page.getByRole('article',{name:item.title})).toBeVisible();
+ await expect(sleeve.locator('.live-lobby-pane').first()).toHaveCSS('opacity','0');
+ expect(await sleeve.boundingBox()).toEqual(before);
+
+ await expect(page.getByText('暂无直播间',{exact:true})).not.toBeVisible();
+ await expect(page.getByRole('link',{name:'登录，成为开场的人'})).toHaveCount(0);
+ await page.screenshot({path:`/tmp/radio-friday-transition/rooms-${width}.png`,fullPage:true,animations:'disabled'});
+ await page.getByRole('searchbox',{name:'搜索直播间'}).fill('没有这个房间');
+ await expect(page.getByText('没有找到匹配的直播间')).toBeVisible();
+ expect((await sleeve.boundingBox())!.height).toBe(expanded);
+ await page.getByRole('button',{name:'清除筛选'}).click();
+ await page.request.post(fixture,{ data: { rooms: [] } });
+ await expect(sleeve).toHaveAttribute('data-directory','false');
+ await expect.poll(async ()=>(await sleeve.boundingBox())!.height).toBe(expanded);
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.request.post(fixture,{ data: { rooms: [item] } });
+ await expect(sleeve).toHaveAttribute('data-directory','true');
+ expect(await sleeve.locator('[inert]').first().evaluate(el=>getComputedStyle(el).transitionDuration)).toBe('0s');
+ expect(await page.locator('.live-lobby-room').first().evaluate(el=>getComputedStyle(el).animationName)).toBe('none');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.emulateMedia({reducedMotion:'no-preference'});
+ await page.request.post(fixture,{data:{rooms:Array.from({length:120},(_,i)=>({...item,id:`room-${i}`,title:`陪你聊聊今天的第 ${i+1} 件小事`}))}});
+ await expect(page.getByRole('article')).toHaveCount(120);
+ const list=page.getByRole('region',{name:'房间目录'});
+ expect(await list.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
+ await list.evaluate(el=>{el.scrollTop=el.scrollHeight;});
+ await expect(page.getByRole('article').last()).toBeInViewport();
+ expect(await sleeve.boundingBox()).toEqual(before);
+ await page.screenshot({path:`/tmp/radio-friday-transition/many-${width}.png`,fullPage:true,animations:'disabled'});
+ await page.request.post(fixture,{data:{}});
+});
+
+for (const width of [320, 390, 768, 1440]) test(`owned rooms and empty artwork at ${width}px`, async ({ page, context }) => {
+ await context.addCookies([{ name: 'companion_session', value: 'live-test-host', domain: '127.0.0.1', path: '/' }]);
+ await page.setViewportSize({ width, height: 980 });
+ await page.request.post(fixture, { data: { rooms: [] } });
+ await page.goto('/live');
+ if (width < 768) await expect(page.getByRole('img', { name: '等待开播的耳机' })).toBeVisible();
+ else {
+   const search = page.getByRole('searchbox', { name: '搜索直播间' });
+   const surface = await search.locator('..').evaluate(el => getComputedStyle(el).backgroundColor);
+   await search.focus();
+   await expect(search).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+   await expect(search.locator('..')).toHaveCSS('background-color', surface);
+   await expect(page.getByRole('button', { name: '我要开播', exact: true })).toBeVisible();
+   await page.getByRole('button', { name: '我要开播', exact: true }).click();
+   await expect(page.getByRole('textbox', { name: '房间名称' })).toBeVisible();
+   await page.getByRole('button', { name: '分享一首晚安曲' }).click();
+   await expect(page.getByRole('textbox', { name: '房间名称' })).toHaveValue('分享一首晚安曲');
+   await page.screenshot({ path: `/tmp/radio-friday-transition/create-${width}.png` });
+   await page.keyboard.press('Escape');
+ }
+ await page.screenshot({ path: `/tmp/radio-friday-transition/art-${width}.png`, fullPage: true });
+ await page.request.post(fixture, { data: { rooms: [item, ...Array.from({ length: 3 }, (_, i) => ({ ...item, id: `other-${i}`, title: `晚间电台 ${i + 1}` })), { ...item, id: 'owned', title: '我的晚间电台', canManage: true }] } });
+ await expect(page.getByRole('region', { name: '我的直播间', exact: true }).getByRole('article')).toHaveCount(1);
+ await expect(page.getByRole('region', { name: '其他直播间', exact: true }).getByRole('article')).toHaveCount(4);
+ const card = page.getByRole('article', { name: item.title });
+ const box = (await card.boundingBox())!;
+ if (width >= 768) {
+   expect(box.width).toBeGreaterThanOrEqual(220);
+   expect(box.height).toBeGreaterThanOrEqual(96);
+ } else expect(box.width).toBeGreaterThan(box.height);
+ expect(box.width).toBeLessThanOrEqual(width >= 768 ? width : 260);
+ const peers = page.getByRole('region', { name: '其他直播间', exact: true }).getByRole('article');
+ const first = (await peers.nth(0).boundingBox())!;
+ const second = (await peers.nth(1).boundingBox())!;
+ if (width < 768) expect(Math.abs(first.y - second.y)).toBeLessThan(2);
+ else if (width >= 1440) expect(Math.abs(first.y - second.y)).toBeLessThan(2);
+ await page.getByRole('searchbox', { name: '搜索直播间' }).focus();
+ await expect(page.getByRole('searchbox', { name: '搜索直播间' })).toHaveCSS('outline-style', 'none');
+ await card.hover();
+ await page.screenshot({ path: `/tmp/radio-friday-transition/grouped-${width}.png`, fullPage: true });
+ expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

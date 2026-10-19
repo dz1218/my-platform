@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { memo } from 'react';
 import { LiveIcon } from './live-icon';
 import { LiveChat } from './live-chat';
 import { LiveVoiceControls, LiveVoicePanel, LiveViewerCall } from './live-voice';
@@ -15,7 +16,17 @@ function RoleBadge({ role }: { role: Role | 'AI助手' }) {
 
 export function LiveRoomClient(props: LiveRoomProps) {
   const viewport = useViewport();
-  const { roomTitle, roomTitlePending, roomEnded, roomInUse, hostRecovering, recovering, returnToLobby, returnToHall, roomReason, setCloseConfirmOpen, isClosing, closeError, closeDialogRef, endRoom, refreshRoom, isRefreshing, refreshError, updatesLabel, role, isHost, roomNotice, nickname, setNickname, participants, error, setError, isJoining, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, voice, joinRoom, toggleLocalMedia, dispatchAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen } = useLiveRoom(props);
+  const model = useLiveRoom(props);
+  return <><LiveRoomScene model={model} viewport={viewport} /><EndRoomDialog model={model} /></>;
+}
+
+// Keep the outgoing scene stable while the confirmed return finishes. The owner
+// still processes SDK events and releases resources; failures reveal current state.
+const LiveRoomScene = memo(function LiveRoomScene({ model, viewport }: {
+  model: ReturnType<typeof useLiveRoom>;
+  viewport: ReturnType<typeof useViewport>;
+}) {
+  const { roomTitle, roomTitlePending, roomEnded, roomInUse, hostRecovering, recovering, returnToHall, roomReason, setCloseConfirmOpen, isClosing, refreshRoom, isRefreshing, refreshError, updatesLabel, role, isHost, roomNotice, nickname, setNickname, participants, error, setError, isJoining, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, voice, joinRoom, toggleLocalMedia, dispatchAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen } = model;
   const isTerminal = roomEnded || roomInUse;
   const joining = !isInRoom && isJoining && !isTerminal;
   const terminalMessage = roomEnded ? roomReason === 'host_left' ? '主播已离开，直播间已结束。' : '直播间已结束，请返回直播大厅。'
@@ -33,7 +44,7 @@ export function LiveRoomClient(props: LiveRoomProps) {
     </header></div>}
     {roomNotice && <div role="status" className="live-notice"><LiveIcon name="info" /><p>{roomNotice}</p></div>}
     {notice && <div role="status" className="live-toast"><LiveIcon name="info" size={16} />{notice}</div>}
-    {!roomEnded && <div className="mb-4 flex flex-wrap items-center justify-end gap-3 text-xs text-muted"><span role="status">{updatesLabel}</span><button type="button" className="live-agent-button" disabled={isRefreshing || isClosing} onClick={() => void refreshRoom()}><LiveIcon name="refresh" size={15} className={isRefreshing ? 'live-spin' : undefined} />{isRefreshing ? '正在刷新…' : '刷新状态'}</button></div>}
+    <div aria-hidden={roomEnded || undefined} className={`mb-4 flex flex-wrap items-center justify-end gap-3 text-xs text-muted ${roomEnded ? 'invisible' : ''}`}><span role="status">{updatesLabel}</span><button type="button" className="live-agent-button" disabled={isRefreshing || isClosing} onClick={() => void refreshRoom()}><LiveIcon name="refresh" size={15} className={isRefreshing ? 'live-spin' : undefined} />{isRefreshing ? '正在刷新…' : '刷新状态'}</button></div>
     {refreshError && !roomEnded && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>{refreshError}</p></div>}
 
     <div className="live-studio">
@@ -84,10 +95,16 @@ export function LiveRoomClient(props: LiveRoomProps) {
         </div></>}
       </aside>
     </div>
+  </>;
+}, (_previous, next) => next.model.returnToLobby && next.model.isClosing);
+
+function EndRoomDialog({ model }: { model: ReturnType<typeof useLiveRoom> }) {
+  const { closeDialogRef, isClosing, setCloseConfirmOpen, returnToLobby, closeError, endRoom } = model;
+  return (
     <dialog ref={closeDialogRef} className="live-dialog" aria-labelledby="end-live-title" aria-describedby="end-live-description" onCancel={event => { if (isClosing) event.preventDefault(); else setCloseConfirmOpen(false); }} onClose={() => setCloseConfirmOpen(false)}>
       <h2 id="end-live-title">{returnToLobby ? '返回大厅并结束直播？' : '结束这个直播间？'}</h2><p id="end-live-description">{returnToLobby ? '返回大厅将结束当前直播，是否继续？' : '结束后，所有参与者将断开连接。之后需要重新创建直播间。'}</p>
       {closeError && <p role="alert" className="live-form-error">{closeError}</p>}
       <div className="live-dialog-actions"><button autoFocus type="button" className="live-button live-button-secondary" disabled={isClosing} onClick={() => setCloseConfirmOpen(false)}>{returnToLobby ? '继续直播' : '取消'}</button><button type="button" className="live-button live-button-danger" disabled={isClosing} onClick={() => void endRoom()}>{isClosing ? '正在结束…' : returnToLobby ? '结束并返回大厅' : '确认结束'}</button></div>
     </dialog>
-  </>;
+  );
 }
