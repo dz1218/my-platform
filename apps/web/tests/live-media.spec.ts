@@ -90,6 +90,12 @@ test('real host/viewer media, viewer rejoin and confirmed host ending', async ({
     await expect(page.getByRole('log')).toContainText('大家晚上好');
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 980 });
+      if (width >= 768) {
+        // Wait for the mobile-to-desktop color transition before capturing.
+        await expect(page.locator('.live-button-stage')).toHaveCSS('background-color', 'rgb(245, 245, 245)');
+        const composer = await page.locator('.live-chat-form').boundingBox();
+        expect(composer!.y + composer!.height).toBeLessThanOrEqual(980);
+      }
       await page.screenshot({ path: test.info().outputPath(`room-${width}.png`), fullPage: width > 500 });
       const overflow = await page.evaluate(() => Array.from(document.querySelectorAll('main *')).filter((element) => element.getBoundingClientRect().right > window.innerWidth + 1).map((element) => element.className));
       expect(overflow).toEqual([]);
@@ -99,6 +105,14 @@ test('real host/viewer media, viewer rejoin and confirmed host ending', async ({
         await page.screenshot({ path: test.info().outputPath('room-mobile-chat.png') });
         await page.evaluate(() => window.scrollTo(0, 0));
       }
+    }
+
+    for (const height of [720, 900]) {
+      await page.setViewportSize({ width: 1440, height });
+      await expect(page.locator('.live-stage .live-studio-heading')).toBeVisible();
+      await expect(page.getByText('本地预览', { exact: true })).not.toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
+      await page.screenshot({ path: test.info().outputPath(`room-merged-header-${height}.png`) });
     }
 
     await page.getByRole('button', { name: '开启摄像头' }).click();
@@ -250,7 +264,7 @@ for (const width of [1440, 390]) {
       await expect(page.getByText('已连接', { exact: true })).toBeVisible();
       await back.click();
       await page.screenshot({ path: test.info().outputPath(`return-dialog-${width}.png`), fullPage: true });
-      await page.getByRole('button', { name: '结束并返回大厅', exact: true }).click();
+      await page.getByRole('button', { name: '结束直播', exact: true }).click();
       await expect(page).toHaveURL(/\/live$/);
       await expectEnded(viewer);
     } finally {
@@ -417,13 +431,13 @@ test('lobby return stays put on an unaccepted close and confirms a lost accepted
       await route.fetch();
       await route.abort('failed');
     });
-    await page.getByRole('button', { name: '直播大厅', exact: true }).click();
-    await page.getByRole('button', { name: '结束并返回大厅', exact: true }).click();
+    await page.getByRole('button', { name: '返回大厅', exact: true }).click();
+    await page.getByRole('button', { name: '结束直播', exact: true }).click();
     await expect(page.getByRole('dialog').getByRole('alert')).toContainText('测试关闭尚未接受');
     await expect(page).toHaveURL(new RegExp(`/live/${roomId}$`));
     await expect(page.getByText('已连接', { exact: true })).toBeVisible();
     accepted = true;
-    await page.getByRole('button', { name: '结束并返回大厅', exact: true }).click();
+    await page.getByRole('button', { name: '结束直播', exact: true }).click();
     await expect(page).toHaveURL(/\/live$/);
   } finally { await rpc('DeleteRoom', { room: roomId }, { roomCreate: true }); }
 });
@@ -524,7 +538,7 @@ for (const width of [1440, 390]) {
         };
         sample();
       });
-      await page.getByRole('button', { name: '结束并返回大厅', exact: true }).click();
+      await page.getByRole('button', { name: '结束直播', exact: true }).click();
       await expect(page).toHaveURL(/\/live$/);
       const frames = await page.evaluate(() => (window as unknown as { lobbyReturnFrames: { dialog: boolean; ended: boolean; controls: boolean }[] }).lobbyReturnFrames);
       expect(frames.length).toBeGreaterThan(0);

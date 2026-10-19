@@ -121,6 +121,10 @@
 .live-dialog h2 { font-size: 20px; font-weight: 600; }
 .live-dialog > p { margin-top: 14px; font-size: 13px; line-height: 1.9; overflow-wrap: anywhere; @apply text-muted; }
 .live-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 26px; }
+.live-dialog-confirm { @apply w-[min(360px,calc(100%-40px))] p-6; }
+.live-dialog-confirm > #end-live-description { @apply m-0 text-left text-base font-medium leading-6 text-ink; }
+.live-dialog-confirm .live-dialog-actions { @apply mt-5 flex justify-end gap-3; }
+.live-dialog-confirm .live-dialog-actions .live-button { @apply min-h-11 w-auto min-w-24 px-4 py-2 text-sm md:min-h-9 md:py-1.5; }
 .live-button-danger { @apply text-on-action bg-danger; }
 .live-button-danger:hover { @apply bg-danger-hover; }
 .live-room-page { padding-top: 26px; }
@@ -185,6 +189,8 @@
 .live-control-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 0; border-radius: 0 0 16px 16px; min-height: 76px; padding: 12px 18px; @apply bg-panel border border-line; }
 .live-device-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .live-device-button { display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 90px; padding: 9px 10px; border-radius: 6px; font-size: 11px; @apply text-muted; }
+.live-device-button > span { @apply inline-block w-[5em] shrink-0 whitespace-nowrap text-center; }
+.live-device-button > svg { @apply shrink-0; }
 .live-device-button:hover { @apply bg-surface-soft; }
 .live-device-button.is-enabled { @apply text-action bg-success-soft; }
 .live-button-leave { flex-shrink: 0; @apply bg-panel border-danger-line text-danger; }
@@ -270,6 +276,7 @@
 .live-message-body > p { display: inline-block; border-radius: 0 7px 7px 7px; padding: 8px 11px; margin-top: 5px; font-size: 12px; line-height: 1.9; overflow-wrap: anywhere; white-space: pre-wrap; max-width: 100%; @apply bg-surface-soft text-ink; }
 .live-message.is-own .live-message-body > p { @apply bg-surface-selected; }
 .live-message.is-own .live-message-avatar { @apply bg-surface-selected; }
+.live-chat-compose { display: contents; }
 .live-chat-form { flex-shrink: 0; margin: 0 14px 14px; border-radius: 7px; padding: 10px; @apply border border-line bg-panel; }
 .live-chat-form:focus-within { @apply border-focus ring-3 ring-focus/15; }
 .live-chat-form textarea { display: block; width: 100%; resize: none; outline: none; font-size: 13px; line-height: 1.8; min-height: 49px; @apply text-ink; }
@@ -426,3 +433,95 @@
 @media (max-width: 375px) {
   .live-room-page .live-control-bar { min-height: 116px; }
 }
+
+/* Desktop studio: preview + 336px interaction rail + 16px gutter.
+   The stage height reserves room for the header, devices and assistant footer. */
+@media (min-width: 768px) {
+  .live-room-page { @apply theme-graphite; max-width: 1800px; padding: 20px 28px 24px; }
+  .live-studio-heading { @apply items-center gap-4; min-height: 64px; margin: 0; padding: 10px 16px; flex-shrink: 0; z-index: 3; @apply bg-panel; }
+  .live-room-back { height: 52px; align-items: flex-start; }
+  .live-header-back { @apply inline-flex min-h-11 shrink-0 items-center gap-2 rounded-control text-sm text-muted hover:text-ink; }
+  .live-header-back-icon { @apply grid size-[21px] shrink-0 place-items-center; }
+  .live-studio-heading .live-room-title { @apply flex min-w-0 flex-1 items-center gap-x-3; }
+  .live-studio-heading .live-room-title h1 { @apply min-w-0 text-base font-semibold tracking-tight; line-height: 32px; height: 32px; overflow: hidden; max-width: 100%; }
+  .live-studio-heading .live-connection { @apply inline-flex shrink-0 items-center gap-2 text-xs text-muted; }
+  .live-studio-heading .live-button-secondary { @apply rounded-full border-0 bg-surface-soft px-4 hover:bg-surface-hover; }
+  .live-room-page .live-role { @apply text-xs; }
+  .live-room-page .live-role.is-host { @apply bg-surface-soft text-ink; }
+  .live-room-page .live-button { @apply text-sm; }
+  .live-studio { grid-template-columns: minmax(0, 1fr) 336px; gap: 16px; align-items: start; --studio-stage-height: clamp(280px, calc(100dvh - 252px), 900px); }
+  .live-stage { @apply theme-graphite rounded-t-panel; aspect-ratio: auto; height: var(--studio-stage-height); min-height: 0; max-height: none; }
+  .live-stage:fullscreen { height: 100%; border-radius: 0; }
+  .live-stage-top { @apply border-0 bg-panel px-5 text-xs; min-height: 52px; padding-block: 12px; }
+  .live-stage-top { display: none; }
+  .live-stage-top.has-call { @apply absolute right-3 top-20 flex bg-transparent p-0; min-height: 44px; }
+  .live-stage-top.has-call > span { display: none; }
+  .live-stage-top > span:first-child { @apply font-medium text-ink; }
+  .live-stage-bottom { @apply absolute right-3 bottom-3 bg-transparent p-0; min-height: 44px; }
+  .live-stage-symbol { @apply rounded-full border-0 bg-panel text-muted; width: 72px; height: 72px; margin-bottom: 20px; }
+  .live-stage-empty h2 { @apply text-xl font-medium tracking-tight; }
+  .live-stage-empty > p { @apply mt-3 text-sm; }
+  .live-stage-empty > .live-button { @apply rounded-full px-6 text-sm; margin-top: 24px; }
+  .live-camera-label { @apply rounded-full bg-panel px-3 py-1.5 text-xs text-muted; left: 20px; bottom: 16px; }
+  .live-camera-pane.is-small .live-camera-label { left: 6px; bottom: 6px; padding: 3px 6px; font-size: 11px; }
+  .live-control-bar { @apply rounded-b-panel border-0 border-t border-line/50 bg-panel px-5; height: 88px; min-height: 88px; }
+  .live-device-controls { @apply gap-3; }
+  .live-device-button { @apply min-h-12 gap-3 rounded-control bg-surface-soft px-4 text-sm text-ink; }
+  .live-device-button:hover { @apply bg-surface-hover; }
+  .live-device-button.is-enabled { @apply bg-action text-on-action; }
+  .live-control-bar .live-button-leave { @apply min-h-12 border-transparent bg-danger-soft px-4 text-danger; }
+  .live-control-bar .live-button-leave:hover { @apply border-danger-line; }
+  .live-studio-footer { @apply justify-end gap-3 px-1 py-3 text-xs; min-height: 64px; }
+  .live-studio-footer > div { @apply min-w-0 flex-1 leading-5; }
+  .live-studio-footer .live-agent-button { @apply shrink-0 rounded-full bg-panel px-4 text-xs text-ink; }
+  .live-studio-footer .live-agent-button:hover { @apply bg-surface-hover; }
+  .live-sidebar { @apply rounded-panel border-0 bg-panel; height: calc(var(--studio-stage-height) + 88px); min-height: 0; max-height: none; }
+  .live-sidebar-tabs { @apply m-0 gap-1 rounded-none border-0 border-b border-line/50 bg-transparent px-4 py-3; }
+  .live-sidebar-tabs button { @apply flex-1 justify-center gap-1.5 rounded-lg text-sm; min-height: 44px; }
+  .live-sidebar-tabs button:hover { @apply bg-surface-soft text-ink; }
+  .live-sidebar-tabs button[aria-pressed=true] { @apply bg-surface-soft font-medium text-ink; }
+  .live-sidebar-tabs button[aria-pressed=true]::after { display: none; }
+  .live-sidebar-tabs button span { @apply text-xs tabular-nums; }
+  .live-chat-log { @apply px-5 py-4; }
+  .live-chat-intro { @apply bg-transparent p-0 text-xs leading-6; }
+  .live-chat-intro span { @apply text-xs; }
+  .live-chat-empty { @apply gap-3; margin-top: clamp(32px, 8vh, 88px); }
+  .live-chat-empty p { @apply text-xs; }
+  .live-chat-form { @apply m-0 rounded-none border-0 bg-transparent p-4; }
+  .live-chat-form:focus-within { @apply ring-0; }
+  .live-chat-compose { @apply flex items-end gap-2 rounded-control border border-line/60 bg-surface-soft p-1.5; }
+  .live-chat-compose:focus-within { @apply border-control; }
+  .live-chat-form textarea { @apply min-w-0 flex-1 bg-transparent px-2 py-2.5 text-sm leading-6; field-sizing: content; min-height: 44px; max-height: 140px; }
+  .live-chat-form-footer { @apply shrink-0 gap-0 p-0; }
+  .live-chat-form-footer > span { display: none; }
+  .live-chat-form-footer > span[data-near-limit] { @apply block px-1 text-xs text-muted; }
+  .live-chat-form-footer .live-button { @apply m-0 min-h-11 gap-1.5 rounded-lg px-3 text-xs; }
+  .live-chat-form-footer .live-button:disabled { @apply bg-transparent text-muted; opacity: 1; }
+  .live-message-meta, .live-message-meta strong { @apply text-xs; }
+  .live-message { @apply mt-5 gap-2.5; }
+  .live-message:first-child { @apply mt-0; }
+  .live-message-avatar { @apply size-7 text-xs; }
+  .live-message-meta time { @apply text-xs; }
+  .live-message-role { @apply bg-surface-soft text-muted; font-size: 10px; }
+  .live-message-body > p, .live-message.is-own .live-message-body > p { @apply mt-1 block rounded-none bg-transparent p-0 text-sm leading-6; }
+  .live-people-panel { @apply px-5; }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .live-room-page { padding-inline: 20px; }
+  .live-studio { grid-template-columns: minmax(0, 1fr) 288px; }
+  .live-studio-heading { @apply gap-4; }
+  .live-control-bar { @apply gap-2 px-3; }
+  .live-device-controls { @apply gap-2; }
+  .live-device-button { @apply gap-2 px-2; min-width: 0; }
+  .live-control-bar .live-button-leave { @apply px-3; }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .live-studio { grid-template-columns: minmax(0, 1fr); --studio-stage-height: 420px; }
+  .live-sidebar { height: 500px; }
+}
+
+/* Keep the remaining assistant action compact after removing helper copy. */
+.live-room-page .live-studio-footer { min-height: 64px; }
+.live-stage-bottom { justify-content: flex-end; }

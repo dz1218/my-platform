@@ -74,12 +74,11 @@ export function LiveStageMedia({ room, pending = false, isHost, hostRecovering, 
   }, [room, slot?.identity, slot?.participantSid]);
 
   const swap = () => { if (call) setFocusedCall(callerIsMain ? null : call.requestId); };
-  const hasVideo = !!cameras.host?.track || (!!call && !!cameras.caller?.track);
   return <>
-    <div className={`live-stage-top ${pending ? 'invisible' : ''}`} aria-hidden={pending || undefined}>
+    <div className={`live-stage-top ${call ? 'has-call' : ''} ${pending ? 'invisible' : ''}`} aria-hidden={pending || undefined}>
       <span><LiveIcon name="video" size={15} />{call ? '连麦画面' : isHost ? '本地预览' : '直播画面'}</span>
       {call ? <button type="button" className="live-stage-swap" onClick={swap}><LiveIcon name="swap" size={15} />切换大小画面</button>
-        : <span>{room ? hasVideo ? '实时画面' : '等待画面' : '尚未连接'}</span>}
+        : null}
     </div>
     {room && <div className={`live-stage-media ${call ? 'has-call' : ''}`}>
       <div className={`live-camera-pane ${callerIsMain ? 'is-small' : 'is-main'}`} role="group" aria-label="主播画面">
@@ -87,7 +86,7 @@ export function LiveStageMedia({ room, pending = false, isHost, hostRecovering, 
           : <div className="live-stage-empty">
             <div className="live-stage-symbol"><LiveIcon name={isHost ? 'videoOff' : 'screen'} size={36} /></div>
             <h2>{isHost ? '摄像头尚未开启' : hostRecovering ? '主播连接暂时中断，正在等待恢复…' : '等主播开启画面'}</h2>
-            {!callerIsMain && <><p>{isHost ? '准备好后，开启摄像头与大家见面。' : '先聊聊天，画面准备好后会自动显示。'}</p>
+            {!callerIsMain && <>
               {isHost && <button type="button" className="live-button live-button-stage" disabled={cameraDisabled} onClick={onEnableCamera}><LiveIcon name="video" size={16} />打开画面</button>}</>}
           </div>}
         <span className="live-camera-label">主播{cameras.host?.name ? ` · ${cameras.host.name}` : ''}{isHost ? '（我）' : ''}</span>

@@ -27,28 +27,29 @@ export function LiveChatLoading() {
     <span className="sr-only">正在准备聊天</span>
     <div className="live-chat-log" aria-hidden="true" />
     <div className="live-chat-form">
+      <div className="live-chat-compose">
       <textarea aria-label="发送消息" disabled readOnly value="" rows={2} />
-      <div className="live-chat-form-footer" aria-hidden="true"><SkeletonBlock className="h-2 w-24" /><div className="flex h-11 items-center"><SkeletonBlock className="h-7 w-14" /></div></div>
+      <div className="live-chat-form-footer" aria-hidden="true"><SkeletonBlock className="h-2 w-24 md:hidden" /><div className="flex h-11 items-center"><SkeletonBlock className="h-7 w-14" /></div></div>
+      </div>
     </div>
   </div>;
 }
 
 export function LiveRoomLoading() {
   return <main id="main-content" tabIndex={-1} data-page-loading="room" className="live-page live-room-page">
-    <div className="hidden md:block">
-      <div className="live-room-nav"><Link href="/live" prefetch={false}><LiveIcon name="back" size={17} />直播大厅</Link><span>直播现场</span></div>
-      <header className="live-room-heading">
-        <div className="live-room-title"><LiveRoomTitle /><div className="live-room-meta"><SkeletonBlock className="h-3 w-24" /></div></div>
-        <button type="button" disabled className="live-button live-button-secondary"><LiveIcon name="link" size={16} />分享直播间</button>
-      </header>
-    </div>
+    <div className="live-room-back hidden md:flex"><Link href="/live" prefetch={false} aria-label="返回大厅" title="返回大厅" className="live-header-back"><span className="live-header-back-icon"><LiveIcon name="back" size={21} /></span><span>返回大厅</span></Link></div>
+
     <div className="md:hidden"><MobileLiveRoomHeader title="直播间" pendingTitle role={null} status="" count={null}
       back={<Link href="/live" prefetch={false} aria-label="返回直播大厅" className="grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-soft"><LiveIcon name="back" size={21} /></Link>}
     /></div>
-    <div className="mb-4 flex h-11 items-center justify-end"><SkeletonBlock className="h-3 w-32" /></div>
+    <div className="live-room-sync mb-4 flex h-11 items-center justify-end md:hidden"><SkeletonBlock className="h-3 w-32" /></div>
     <div className="live-studio">
       <div className="live-stage-column">
         <div className="live-stage" data-connecting>
+    <header className="live-studio-heading hidden md:flex">
+      <div className="live-room-title"><LiveRoomTitle /><SkeletonBlock className="h-3 w-16" /></div>
+      <div className="ml-auto flex shrink-0 items-center gap-2"><button type="button" disabled className="live-icon-button" aria-label="刷新状态"><LiveIcon name="refresh" size={17} /></button><button type="button" disabled className="live-button live-button-secondary" aria-label="分享直播间"><LiveIcon name="link" size={16} />分享</button></div>
+    </header>
           <div className="live-stage-top invisible" aria-hidden="true"><span><LiveIcon name="video" size={15} />直播画面</span></div>
           <LiveConnectionPending label="正在准备直播间" />
           <div className="live-stage-bottom invisible" aria-hidden="true"><span>直播画面</span><span className="size-9" /></div>
