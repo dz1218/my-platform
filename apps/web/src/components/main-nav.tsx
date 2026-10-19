@@ -30,6 +30,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import {
   Suspense,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -215,14 +216,61 @@ function AppFrame({
   );
 }
 
+function NavigationTooltip({ label, enabled, children }: { label: string; enabled: boolean; children: ReactNode }) {
+  const id = useId();
+  const tooltip = useRef<HTMLSpanElement>(null);
+  const anchor = useRef<HTMLSpanElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const hide = () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+      tooltip.current?.hidePopover();
+      anchor.current?.querySelector("a")?.removeAttribute("aria-describedby");
+    };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") hide(); };
+    hide();
+    window.addEventListener("keydown", escape);
+    window.addEventListener("resize", hide);
+    window.addEventListener("scroll", hide, true);
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+      window.removeEventListener("keydown", escape);
+      window.removeEventListener("resize", hide);
+      window.removeEventListener("scroll", hide, true);
+    };
+  }, [enabled]);
+  const show = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    const link = anchor.current?.querySelector("a");
+    const node = tooltip.current;
+    if (!enabled || !link || !node) return;
+    const bounds = link.getBoundingClientRect();
+    node.style.left = `${bounds.right + 8}px`;
+    node.style.top = `${Math.max(8, bounds.top + (bounds.height - 36) / 2)}px`;
+    node.showPopover();
+    link.setAttribute("aria-describedby", id);
+  };
+  const hide = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    tooltip.current?.hidePopover();
+    anchor.current?.querySelector("a")?.removeAttribute("aria-describedby");
+  };
+  return <span ref={anchor} className="contents" onPointerEnter={event => { if (event.pointerType === "mouse") show(); }} onPointerLeave={() => { closeTimer.current = setTimeout(hide, 120); }} onFocus={show} onBlur={hide} onClick={hide}>
+    {children}
+    <span ref={tooltip} id={id} role="tooltip" popover="manual" className="fixed inset-auto m-0 min-h-9 rounded-control border border-line bg-panel px-3 py-2 text-xs font-medium text-ink shadow-popover">{label}</span>
+  </span>;
+}
+
 function NavigationLinks({
   path,
   desktop = false,
   showAccount = true,
+  collapsed = false,
 }: {
   path: string;
   desktop?: boolean;
   showAccount?: boolean;
+  collapsed?: boolean;
 }) {
   const pendingHref = useAppUI(s => s.pendingHref);
   return links.filter(link => showAccount || link.href !== '/me').map(({ label, href, icon: Icon, glyph }) => {
@@ -231,11 +279,9 @@ function NavigationLinks({
       (href === "/companion" && path.startsWith("/chat")) ||
       (href === "/me" && (path === "/operator" || path === "/choose-identity"));
     return (
-      <Link
-        key={href}
+      <NavigationTooltip key={href} label={label} enabled={desktop && collapsed}><Link
         href={href}
         aria-label={label}
-        title={desktop ? label : undefined}
         aria-current={active ? "page" : undefined}
         aria-busy={pendingHref?.split('?')[0] === href || undefined}
         data-pending={pendingHref?.split('?')[0] === href || undefined}
@@ -249,7 +295,7 @@ function NavigationLinks({
         <span className={desktop ? "nav-collapse-label" : undefined}>
           {label}
         </span>
-      </Link>
+      </Link></NavigationTooltip>
     );
   });
 }
@@ -350,10 +396,10 @@ function AccountMenu({ user, collapsed }: { user: User; collapsed: boolean }) {
         panel.current?.showPopover();
         panel.current?.querySelector<HTMLAnchorElement>("a")?.focus({ preventScroll: true });
       }}
-      className="nav-identity-link group/account w-full text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus aria-expanded:bg-surface-selected"
+      className={cn("nav-identity-link group/account text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus", !collapsed && "w-full aria-expanded:bg-surface-selected")}
     >
       <span aria-hidden="true" className={cn(
-        "grid shrink-0 place-items-center rounded-full bg-surface-selected font-medium text-ink transition-colors group-hover/account:bg-surface-hover group-focus-visible/account:bg-surface-hover",
+        "grid shrink-0 place-items-center rounded-full bg-surface-selected font-medium text-ink transition-colors group-hover/account:bg-surface-hover group-focus-visible/account:bg-surface-hover group-aria-expanded/account:bg-surface-hover",
         collapsed ? "size-8 text-xs" : "size-10 text-base",
       )}>{user.name?.slice(-1) || "我"}</span>
       <span className="nav-collapse-label min-w-0 flex-1">
@@ -454,7 +500,7 @@ export function MainNav({
         </Link>
       </div>
       <nav id="desktop-navigation" aria-label="主导航" className="primary-nav">
-        <NavigationLinks path={path} desktop showAccount={!!user} />
+        <NavigationLinks path={path} desktop collapsed={collapsed} showAccount={!!user} />
       </nav>
       <div className="nav-footer">
         {user ? (

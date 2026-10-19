@@ -543,7 +543,7 @@ for (const width of [1440, 390]) {
       const frames = await page.evaluate(() => (window as unknown as { lobbyReturnFrames: { dialog: boolean; ended: boolean; controls: boolean }[] }).lobbyReturnFrames);
       expect(frames.length).toBeGreaterThan(0);
       expect(frames.every(frame => frame.dialog && !frame.ended && frame.controls), JSON.stringify(frames)).toBe(true);
-      await expect(page.getByRole('button', { name: '刷新列表', exact: true })).toBeEnabled();
+      await expect(page.getByRole('button', { name: '刷新列表', exact: true })).toHaveCount(0);
     } finally {
       await rpc('DeleteRoom', { room: roomId }, { roomCreate: true });
     }

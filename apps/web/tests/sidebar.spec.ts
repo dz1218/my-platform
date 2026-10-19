@@ -172,7 +172,8 @@ test('sidebar collapse persists, keeps accessible links and leaves mobile naviga
   for (const name of ['陪伴', '直播', '小说', '我的']) {
     const link = mainNav.getByRole('link', { name, exact: true });
     await expect(link).toBeVisible();
-    await expect(link).toHaveAttribute('title', name);
+    await link.hover();
+    await expect(page.getByRole('tooltip', { name, exact: true })).toBeVisible();
   }
   await expect(trigger).toBeVisible();
   await mainNav.getByRole('link', { name: '小说', exact: true }).click();
@@ -325,4 +326,39 @@ test('notice stays on the account page, restores scroll and adapts between modal
   await page.goto('/privacy');
   await expect(page.getByRole('heading', { name: '平台互动说明', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: '聊天记录与隐私' })).toBeVisible();
+});
+
+test('collapsed account stays square and navigation tooltips support hover and keyboard', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/me');
+  await page.getByRole('button', { name: '收起侧边栏' }).click();
+  const account = page.getByRole('button', { name: /账户与身份 ·/ });
+  await account.hover();
+  await expect(page.getByRole('navigation', { name: '账户与身份', exact: true })).toBeVisible();
+  const bounds = (await account.boundingBox())!;
+  expect(bounds.width).toBe(44);
+  expect(bounds.height).toBe(44);
+  await page.screenshot({ path: testInfo.outputPath('collapsed-account.png') });
+  await page.keyboard.press('Escape');
+  for (const label of ['陪伴', '直播', '小说', '我的']) {
+    const link = page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: label, exact: true });
+    await link.hover();
+    const tooltip = page.getByRole('tooltip', { name: label, exact: true });
+    await expect(tooltip).toBeVisible();
+    await expect(link).not.toHaveAttribute('title');
+    await page.screenshot({ path: testInfo.outputPath(`tooltip-${label}.png`) });
+    await page.keyboard.press('Escape');
+    await expect(tooltip).toBeHidden();
+    await page.mouse.move(1000, 100);
+    await page.locator('#main-content').focus();
+    await link.focus();
+    await expect(tooltip).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expect(tooltip).toBeHidden();
+  }
+  await page.getByRole('button', { name: '展开侧边栏' }).click();
+  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '直播', exact: true }).hover();
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: testInfo.outputPath('mobile-navigation.png') });
 });

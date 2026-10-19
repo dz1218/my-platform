@@ -1,7 +1,12 @@
 'use client';
 
 import type { ReactNode, Ref } from 'react';
-import { ArrowUpRight, ChevronRight, Headphones, Plus, Radio, RefreshCw, Search, Users } from 'lucide-react';
+import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
+import { createDomainStore } from '@my-platform/client-core';
+import { useStoreInstance } from '@my-platform/client-core/react';
+import { Sheet } from '@my-platform/web-ui/sheet';
+import { ArrowUpRight, ChevronRight, Plus, Radio, Search } from 'lucide-react';
 import type { LiveRoomSummary } from '@my-platform/shared';
 import { SkeletonBlock, SkeletonRegion } from '@my-platform/web-ui/skeleton';
 
@@ -9,12 +14,35 @@ type Filter = '全部' | '直播中' | '准备中';
 type RenderLink = (href: string, children: ReactNode, className: string) => ReactNode;
 const fallbackLink: RenderLink = (href, children, className) => <a href={href} className={className}>{children}</a>;
 
-export function MobileLiveLobbyFrame({ actions, liveCount, children }: { actions: ReactNode; liveCount?: number; children: ReactNode }) {
-  return <div data-mobile-page="live">
-    <header className="mb-6 flex items-start justify-between gap-3"><div><h1 className="text-3xl font-semibold tracking-tight">直播</h1><p className="pt-2 text-sm leading-6 text-muted">找一个声音，陪你度过此刻。</p></div><div className="shrink-0">{actions}</div></header>
-    <div className="mb-5 flex items-center gap-2 text-sm text-muted"><Radio aria-hidden="true" className="size-4 text-accent" /><p>{liveCount === undefined ? '正在寻找直播间…' : liveCount > 0 ? `${liveCount} 场直播正在进行` : '好话题，等你来开启。'}</p></div>
+type FinderState = {
+  open: boolean; search: string; filter: Filter;
+  begin: (search: string, filter: Filter) => void;
+  close: () => void;
+  editSearch: (search: string) => void;
+  editFilter: (filter: Filter) => void;
+};
+const createFinderStore = () => createDomainStore<FinderState>()(set => ({
+  open: false, search: '', filter: '全部',
+  begin: (search, filter) => set({ open: true, search, filter }),
+  close: () => set({ open: false }),
+  editSearch: search => set({ search }), editFilter: filter => set({ filter }),
+}));
+
+export function MobileLiveLobbyFrame({ actions, children }: { actions: ReactNode; liveCount?: number; children: ReactNode }) {
+  return <div data-mobile-page="live" className="flex min-h-[calc(100dvh-136px-env(safe-area-inset-bottom))] flex-col">
     {children}
+    <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] mt-6 bg-canvas py-3 [&>a]:min-h-14 [&>a]:w-full [&>a]:rounded-full [&>button]:min-h-14 [&>button]:w-full [&>button]:rounded-full">{actions}</div>
   </div>;
+}
+
+function QuietRecord() {
+  return <svg aria-hidden="true" viewBox="0 0 180 180" className="mb-8 size-40 text-line" fill="none">
+    <circle cx="90" cy="90" r="84" stroke="currentColor" />
+    <circle cx="90" cy="90" r="72" stroke="currentColor" />
+    <circle cx="90" cy="90" r="60" stroke="currentColor" />
+    <circle cx="90" cy="90" r="24" className="fill-surface-soft" />
+    <path d="M82 85v10m8-17v24m8-17v10" className="stroke-muted" strokeWidth="2" strokeLinecap="round" />
+  </svg>;
 }
 
 export function MobileLiveDirectory({ rooms, total, liveCount, waitingCount, search = '', filter = '全部', loading = false, refreshing = false, refreshDisabled = false, updatesLabel, error, isLoggedIn = false, isMutating = false, onSearch, onFilter, onRefresh, onCloseRoom, renderLink = fallbackLink }: {
@@ -23,16 +51,41 @@ export function MobileLiveDirectory({ rooms, total, liveCount, waitingCount, sea
   isLoggedIn?: boolean; isMutating?: boolean; onSearch?: (value: string) => void; onFilter?: (value: Filter) => void;
   onRefresh?: () => void; onCloseRoom?: (room: LiveRoomSummary) => void; renderLink?: RenderLink;
 }) {
-  return <section aria-label="直播间列表">
-    {updatesLabel && <p className="mb-3 text-xs text-muted" role="status">{updatesLabel}</p>}
-    <div className="mb-3 flex gap-2"><label className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-line bg-panel px-4"><Search aria-hidden="true" className="size-4 shrink-0 text-muted" /><input type="search" aria-label="搜索直播间" placeholder="搜索直播间" className="min-h-12 min-w-0 w-full bg-transparent text-base text-ink placeholder:text-muted" value={search} disabled={!onSearch} onChange={event => onSearch?.(event.target.value)} /></label><button type="button" className="grid size-12 shrink-0 place-items-center rounded-full border border-line text-muted hover:bg-surface-soft hover:text-ink disabled:opacity-50" aria-label="刷新列表" title="刷新列表" disabled={!onRefresh || refreshing || refreshDisabled} onClick={onRefresh}><RefreshCw aria-hidden="true" className={`size-4 ${refreshing ? 'motion-safe:animate-spin' : ''}`} /></button></div>
-    <div className="mb-3 flex gap-2" aria-label="筛选直播间">{(['全部', '直播中', '准备中'] as const).map(value => <button key={value} type="button" disabled={!onFilter} aria-pressed={value === filter} onClick={() => onFilter?.(value)} className={`flex min-h-11 items-center gap-2 rounded-full px-4 text-sm ${value === filter ? 'bg-action font-medium text-on-action' : 'bg-surface-soft text-muted hover:text-ink'}`}>{value}{value !== '全部' && (value === '直播中' ? liveCount : waitingCount) !== undefined && <span className="text-xs tabular-nums">({value === '直播中' ? liveCount : waitingCount})</span>}</button>)}</div>
-    {error && <div role="alert" className="my-4 rounded-control border border-danger-line bg-danger-soft p-4 text-sm leading-6 text-danger">直播间列表更新失败，{error}。请刷新列表重试。</div>}
-    {loading ? <MobileLiveDirectorySkeleton /> : rooms.length > 0 ? <div className="divide-y divide-line">{rooms.map(room => <article key={room.id} aria-label={room.title} data-browse-anchor={`room:${room.id}`} className="py-5">
-      <div className="flex gap-3"><div aria-hidden="true" className={`grid size-14 shrink-0 place-items-center rounded-panel ${room.status === '直播中' ? 'bg-accent-soft text-accent' : 'bg-surface-soft text-muted'}`}>{room.status === '直播中' ? <Radio className="size-6" /> : <Headphones className="size-6" />}</div><div className="min-w-0 flex-1"><div className="mb-1.5 flex items-center gap-2 text-xs text-muted"><span className={room.status === '直播中' ? 'text-accent' : ''}>{room.status}</span>{room.viewers > 0 && <span className="ml-auto inline-flex items-center gap-1"><Users aria-hidden="true" className="size-3.5" />{room.viewers} 人</span>}</div><h2 className="break-words text-base font-semibold leading-6">{renderLink(`/live/${encodeURIComponent(room.id)}`, room.title, 'rounded-control hover:text-accent')}</h2></div></div>
-      <div className="mt-3 flex items-center justify-end gap-3">{isLoggedIn && room.canManage && <button type="button" disabled={isMutating} aria-label={`关闭直播间：${room.title}`} className="min-h-11 rounded-control px-3 text-sm text-muted hover:bg-surface-soft hover:text-ink disabled:opacity-50" onClick={() => onCloseRoom?.(room)}>关闭</button>}{renderLink(`/live/${encodeURIComponent(room.id)}`, <>{isLoggedIn && room.canManage ? '进入直播间' : '观看'}<ChevronRight aria-hidden="true" className="size-4" /></>, 'inline-flex min-h-11 items-center gap-2 rounded-full bg-surface-soft px-4 text-sm font-medium text-accent hover:bg-surface-hover')}</div>
-    </article>)}</div> : !error && <div className="py-12"><Headphones aria-hidden="true" className="mb-5 size-9 text-accent" /><h2 className="text-lg font-semibold">{total ? '没有找到匹配的直播间' : '暂无直播间'}</h2><p className="pt-3 text-sm leading-7 text-muted">{total ? '换个关键词，或看看其他状态的直播间。' : isLoggedIn ? '还没有人开播，创建一个直播间开始分享吧。' : '现在还没有人开播，过会儿再来看看。'}</p>{!!total && <button type="button" className="btn-secondary mt-5" onClick={() => { onSearch?.(''); onFilter?.('全部'); }}>查看全部直播间</button>}</div>}
-    {!loading && <p aria-live="polite" className="pt-4 text-xs text-muted">{rooms.length} 个直播间{search || filter !== '全部' ? `，共 ${total ?? 0} 个` : ''}</p>}
+  const store = useStoreInstance(createFinderStore);
+  const finder = useStore(store, useShallow(state => ({ open: state.open, search: state.search, filter: state.filter })));
+  const { begin, close, editSearch, editFilter } = store.getState();
+  const filtered = !!search || filter !== '全部';
+  return <section aria-label="直播间列表" className="flex flex-1 flex-col">
+    <header className="mb-5 flex min-h-12 items-center gap-2">
+      <h1 className="mr-auto text-xl font-medium">直播</h1>
+      {(!!total || filtered) && <button type="button" aria-label="查找直播间" aria-haspopup="dialog" onClick={() => begin(search, filter)} className="grid size-11 place-items-center rounded-full text-ink hover:bg-surface-soft"><Search className="size-5" /></button>}
+    </header>
+    {updatesLabel && <p className="sr-only" role="status">{updatesLabel}</p>}
+    {filtered && <button type="button" onClick={() => begin(search, filter)} className="mb-4 flex min-h-11 items-center justify-between rounded-full bg-panel px-4 text-sm text-muted"><span className="truncate">{[search, filter !== '全部' && filter].filter(Boolean).join(' · ')}</span><span className="ml-3 shrink-0">修改</span></button>}
+    {error && <div role="alert" className="my-4 rounded-panel bg-danger-soft p-5 text-sm leading-6 text-danger">直播间更新失败，{error}。<button type="button" disabled={!onRefresh || refreshing || refreshDisabled} onClick={onRefresh} className="mt-3 block min-h-11 font-medium">{refreshing ? '正在加载…' : '重新加载'}</button></div>}
+    {loading ? <MobileLiveDirectorySkeleton /> : rooms.length ? <>
+      <div className="mb-6 flex items-end justify-between"><p className="font-literary text-3xl leading-tight">听见，此刻。</p><span className="text-xs text-muted">{rooms.length} 个房间</span></div>
+      <div className="grid gap-4">{rooms.map((room, index) => <article key={room.id} aria-label={room.title} data-browse-anchor={`room:${room.id}`} className={index === 0 ? 'rounded-scene bg-panel p-6' : 'border-b border-line/50 px-1 py-5'}>
+        {renderLink(`/live/${encodeURIComponent(room.id)}`, <>
+          <span className="flex items-center gap-2 text-xs text-muted"><Radio aria-hidden="true" className="size-4" />{room.status}<span className="ml-auto">{room.viewers} 人</span></span>
+          <h2 className={`${index === 0 ? 'my-10 text-[28px]' : 'my-5 text-xl'} break-words font-literary leading-relaxed text-ink`}>{room.title}</h2>
+          <span className="flex min-h-11 items-center justify-between text-sm text-ink"><span>{isLoggedIn && room.canManage ? '进入直播间' : '进入听听'}</span><ChevronRight aria-hidden="true" className="size-5" /></span>
+        </>, 'block rounded-control focus-visible:outline-2 focus-visible:outline-focus')}
+        {isLoggedIn && room.canManage && <button type="button" disabled={isMutating} aria-label={`关闭直播间：${room.title}`} onClick={() => onCloseRoom?.(room)} className="mt-2 min-h-11 w-full rounded-full bg-surface-soft text-sm text-muted disabled:opacity-50">关闭直播间</button>}
+      </article>)}</div>
+    </> : !error && <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 text-center">
+      <QuietRecord />
+      <h2 className="font-literary text-[28px] leading-relaxed">{filtered ? '还没找到这个声音' : '今晚，还很安静。'}</h2>
+      <p className="mt-3 text-sm leading-7 text-muted">{filtered ? '换个关键词，再找找。' : '暂无直播间，等一个声音，也可以是你。'}</p>
+      {filtered && <button type="button" className="btn-secondary mt-6 rounded-full" onClick={() => { onSearch?.(''); onFilter?.('全部'); }}>查看全部直播间</button>}
+    </div>}
+    <Sheet open={finder.open} onClose={close} title="查找直播间">
+      <form onSubmit={event => { event.preventDefault(); onSearch?.(finder.search.trim()); onFilter?.(finder.filter); close(); }} className="space-y-6">
+        <label className="grid gap-3 text-sm text-muted">房间名称<input aria-label="搜索直播间" type="search" placeholder="想听什么？" value={finder.search} onChange={event => editSearch(event.target.value)} className="input-field" /></label>
+        <fieldset><legend className="mb-3 text-sm text-muted">房间状态</legend><div className="grid grid-cols-3 gap-2">{(['全部', '直播中', '准备中'] as const).map(value => <button key={value} type="button" aria-pressed={finder.filter === value} onClick={() => editFilter(value)} className={`min-h-12 rounded-full text-sm ${finder.filter === value ? 'bg-action text-on-action' : 'bg-surface-soft text-muted'}`}>{value}{value !== '全部' && <span className="ml-1 text-xs">{value === '直播中' ? liveCount ?? 0 : waitingCount ?? 0}</span>}</button>)}</div></fieldset>
+        <div className="flex gap-3"><button type="button" className="btn-secondary flex-1 rounded-full" onClick={() => { editSearch(''); editFilter('全部'); }}>重置</button><button type="submit" className="btn-primary flex-1 rounded-full">查看房间</button></div>
+      </form>
+    </Sheet>
   </section>;
 }
 
@@ -54,5 +107,5 @@ export function MobileCreateRoomPanel({ ownedRoom, ownedCount, createdRoomId, ti
 }
 
 export function MobileLiveDirectorySkeleton() {
-  return <SkeletonRegion kind="rooms" label="正在加载直播间…" className="divide-y divide-line">{Array.from({ length: 4 }, (_, index) => <div key={index} className="py-5"><div className="flex gap-3"><SkeletonBlock className="size-14 shrink-0 rounded-panel" /><div className="flex-1"><SkeletonBlock className="h-3 w-1/2" /><SkeletonBlock className="mt-3 h-5 w-4/5" /></div></div><SkeletonBlock className="mt-3 ml-auto h-11 w-24 rounded-full" /></div>)}</SkeletonRegion>;
+  return <SkeletonRegion kind="rooms" label="正在加载直播间…" className="grid gap-3">{Array.from({ length: 3 }, (_, index) => <div key={index} className="rounded-scene bg-panel p-5"><SkeletonBlock className="h-4 w-20" /><SkeletonBlock className="my-6 h-8 w-4/5" /><div className="flex min-h-11 items-center"><SkeletonBlock className="h-4 w-16" /></div></div>)}</SkeletonRegion>;
 }

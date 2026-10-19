@@ -42,6 +42,7 @@
   --shadow-profile-tab: 0 0 10px rgb(129 140 248 / 24%);
   --shadow-card-hover-glow: 0 0 0 1px rgb(165 210 225 / 10%), -1px -1px 8px rgb(165 210 225 / 6%), 1px 2px 8px rgb(181 169 207 / 7%);
   --font-sans: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-literary: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
   --font-brand: Georgia, "Times New Roman", serif;
   --radius-control: 0.625rem;
   --radius-panel: 1rem;

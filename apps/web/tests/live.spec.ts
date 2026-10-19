@@ -15,7 +15,8 @@ async function lobby(page: Page, items: typeof room[] = []) {
     await route.fulfill({ json: { items } });
   });
   await page.goto('/live');
-  await expect(page.getByRole('button', { name: '刷新列表' })).toBeEnabled();
+  await expect(page.getByRole('searchbox', { name: '搜索直播间' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '刷新列表' })).toHaveCount(0);
 }
 
 test('create and close update immediately even when subsequent list requests fail', async ({ page, context }) => {
@@ -42,7 +43,10 @@ test('create and close update immediately even when subsequent list requests fai
   await expect(page.getByRole('link', { name: '我的直播间', exact: true })).toHaveAttribute('href', `/live/${room.id}`);
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: '刷新列表' }).click();
+  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '小说', exact: true }).click();
+  await expect(page).toHaveURL(/\/novels$/);
+  await expect(page.getByRole('heading', { name: '小说', exact: true })).toBeVisible();
+  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '直播', exact: true }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('列表更新失败');
   await expect(page.getByRole('article', { name: room.title })).toBeVisible();
   expect(creates).toBe(1);
@@ -118,9 +122,11 @@ test('legacy duplicate rooms can be managed but cannot create another room', asy
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toHaveCount(0);
 });
 
-test('a delayed manual refresh cannot undo a newer pushed snapshot', async ({ page, context }) => {
+test('a delayed error retry cannot undo a newer pushed snapshot', async ({ page, context }) => {
   await login(context);
-  await lobby(page);
+  await page.route('**/api/v1/rooms', route => route.fulfill({ status: 503, json: { error: { message: '列表暂不可用' } } }));
+  await page.goto('/live');
+  await expect(page.getByRole('button', { name: '重新加载' })).toBeEnabled();
   let release!: () => void;
   const delayed = new Promise<void>((resolve) => { release = resolve; });
   let listStarted!: () => void;
@@ -130,12 +136,16 @@ test('a delayed manual refresh cannot undo a newer pushed snapshot', async ({ pa
     await delayed;
     await route.fulfill({ json: { items: [] } }).catch(() => {});
   });
-  await page.getByRole('button', { name: '刷新列表' }).click();
+  await page.getByRole('button', { name: '重新加载' }).click();
   await started;
   await page.request.post(fixture, { data: { rooms: [room] } });
   await expect(page.getByRole('article', { name: room.title })).toBeVisible();
+  const finished = page.waitForResponse(response => response.url().endsWith('/rooms/refresh'));
   release();
-  await expect(page.getByRole('button', { name: '刷新列表' })).toBeEnabled();
+  await finished;
+  await expect(page.getByRole('link', { name: '我的直播间', exact: true })).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: '搜索直播间' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '刷新列表' })).toHaveCount(0);
   await expect(page.getByRole('article', { name: room.title })).toBeVisible();
 });
 
@@ -161,7 +171,8 @@ test('failed create preserves the title; Chinese composition does not submit', a
   expect(creates).toBe(1);
 });
 
-test('guests see errors and can retry without a misleading empty state', async ({ page }) => {
+for (const width of [390, 768, 1440]) test(`guests see errors and can retry without a misleading empty state at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
   await page.request.post(fixture, { data: { failures: { '/api/v1/rooms': 503 } } });
   await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, (route) => route.fulfill({ status: 503, json: { error: { message: '直播服务暂不可用' } } }));
   await page.goto('/live');
@@ -169,7 +180,8 @@ test('guests see errors and can retry without a misleading empty state', async (
   await expect(page.getByText('暂无直播间', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toHaveCount(0);
   await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, (route) => route.fulfill({ json: { items: [room] } }));
-  await page.getByRole('button', { name: '刷新列表' }).click();
+  await page.screenshot({ path: test.info().outputPath(`retry-${width}.png`), fullPage: true });
+  await page.getByRole('button', { name: '重新加载' }).click();
   await expect(page.getByRole('article', { name: room.title })).toBeVisible();
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
 });

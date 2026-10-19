@@ -28,7 +28,7 @@ export function LiveChatLoading() {
     <div className="live-chat-log" aria-hidden="true" />
     <div className="live-chat-form">
       <div className="live-chat-compose">
-      <textarea aria-label="发送消息" disabled readOnly value="" rows={2} />
+      <textarea aria-label="发送消息" disabled readOnly value="" rows={1} />
       <div className="live-chat-form-footer" aria-hidden="true"><SkeletonBlock className="h-2 w-24 md:hidden" /><div className="flex h-11 items-center"><SkeletonBlock className="h-7 w-14" /></div></div>
       </div>
     </div>
@@ -42,13 +42,12 @@ export function LiveRoomLoading() {
     <div className="md:hidden"><MobileLiveRoomHeader title="直播间" pendingTitle role={null} status="" count={null}
       back={<Link href="/live" prefetch={false} aria-label="返回直播大厅" className="grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-soft"><LiveIcon name="back" size={21} /></Link>}
     /></div>
-    <div className="live-room-sync mb-4 flex h-11 items-center justify-end md:hidden"><SkeletonBlock className="h-3 w-32" /></div>
     <div className="live-studio">
       <div className="live-stage-column">
         <div className="live-stage" data-connecting>
     <header className="live-studio-heading hidden md:flex">
       <div className="live-room-title"><LiveRoomTitle /><SkeletonBlock className="h-3 w-16" /></div>
-      <div className="ml-auto flex shrink-0 items-center gap-2"><button type="button" disabled className="live-icon-button" aria-label="刷新状态"><LiveIcon name="refresh" size={17} /></button><button type="button" disabled className="live-button live-button-secondary" aria-label="分享直播间"><LiveIcon name="link" size={16} />分享</button></div>
+      <div className="ml-auto flex shrink-0 items-center gap-2"><button type="button" disabled className="live-button live-button-secondary" aria-label="分享直播间"><LiveIcon name="link" size={16} />分享</button></div>
     </header>
           <div className="live-stage-top invisible" aria-hidden="true"><span><LiveIcon name="video" size={15} />直播画面</span></div>
           <LiveConnectionPending label="正在准备直播间" />
@@ -58,7 +57,7 @@ export function LiveRoomLoading() {
         <div className="live-studio-footer" aria-hidden="true"><SkeletonBlock className="h-3 w-48 max-w-full" /></div>
       </div>
       <aside className="live-sidebar" aria-label="直播互动">
-        <div aria-hidden="true" className="flex min-h-16 shrink-0 items-center justify-between border-b border-line px-4 md:min-h-14"><SkeletonBlock className="h-3 w-12" /><SkeletonBlock className="h-3 w-16" /></div>
+        <div aria-hidden="true" className="flex min-h-14 shrink-0 items-center justify-between border-b border-line px-4 md:min-h-14"><SkeletonBlock className="h-3 w-12" /><SkeletonBlock className="h-3 w-16" /></div>
         <div className="live-chat-panel"><LiveChatLoading /></div>
       </aside>
     </div>

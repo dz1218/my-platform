@@ -28,9 +28,9 @@ test('lobby snapshots reach two pages, preserve guest permissions and recover af
     }
     await request.post(`${controls}/__performance`, { data: { rooms: [room] } });
     for (const current of [page, guest]) await expect(current.getByRole('article', { name: room.title })).toBeVisible();
-    await expect(page.getByRole('link', { name: '进入我的直播间' })).toBeVisible();
+    await expect(page.getByRole('link', { name: '我的直播间', exact: true })).toBeVisible();
     await expect(guest.getByRole('button', { name: /^关闭直播间/ })).toHaveCount(0);
-    await expect(guest.getByRole('link', { name: '进入我的直播间' })).toHaveCount(0);
+    await expect(guest.getByRole('link', { name: '我的直播间', exact: true })).toHaveCount(0);
 
     const before = await (await request.get(`${controls}/__performance`)).json();
     await request.post(`${controls}/__rooms/heartbeat`);
@@ -41,8 +41,8 @@ test('lobby snapshots reach two pages, preserve guest permissions and recover af
     await expect.poll(async () => (await (await request.get(`${controls}/__performance`)).json()).roomSocketTicketsIssued).toBeGreaterThanOrEqual(before.roomSocketTicketsIssued + 2);
     expect(sockets).toHaveLength(4);
     for (const current of [page, guest]) await expect(current.getByRole('article', { name: room.title })).toContainText('直播中');
-    await expect(page.getByRole('link', { name: '进入我的直播间' })).toBeVisible();
-    await expect(guest.getByRole('link', { name: '进入我的直播间' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: '我的直播间', exact: true })).toBeVisible();
+    await expect(guest.getByRole('link', { name: '我的直播间', exact: true })).toHaveCount(0);
     // The reconnect snapshot repairs all missed changes without an HTTP poll.
     const requests = (await (await request.get(`${controls}/__performance`)).json()).requests as { path: string }[];
     expect(requests.filter(item => /^\/api\/v1\/rooms(?:\/refresh)?$/.test(item.path))).toEqual([]);
@@ -53,22 +53,20 @@ test('lobby snapshots reach two pages, preserve guest permissions and recover af
   }
 });
 
-test('an idle lobby performs no interval room requests, while manual refresh remains available', async ({ page }) => {
+test('an idle lobby performs no interval room requests and needs no refresh control', async ({ page }) => {
   const reads: string[] = [];
   page.on('request', request => {
     if (/^\/api\/(?:v1\/rooms(?:\/refresh)?|live\/connection)$/.test(new URL(request.url()).pathname)) reads.push(`${request.method()} ${request.url()}`);
   });
   await page.goto('/live');
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '刷新列表' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '刷新列表' })).toHaveCount(0);
   await expect(page.getByText('实时更新', { exact: true })).toBeVisible();
   const before = reads.length;
   // Cross two former five-second poll boundaries with the actual browser clock.
   await page.waitForTimeout(11_000);
   expect(reads).toHaveLength(before);
-  const refreshed = page.waitForResponse(response => response.url().endsWith('/rooms/refresh') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: '刷新列表' }).click();
-  expect((await refreshed).ok()).toBe(true);
+  expect(reads.some(value => value.includes('/rooms/refresh'))).toBe(false);
 });
 
 for (const leave of ['close', 'navigate'] as const) {

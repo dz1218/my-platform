@@ -14,7 +14,7 @@ export function DesktopLiveLobbyFrame({ directory }: { directory: ReactNode }) {
   </div>;
 }
 
-export function LiveDirectoryFrame({ count, liveCount, waitingCount, filter = '全部', search = '', onFilter, onSearch, onRefresh, refreshing = false, refreshDisabled = false, updatesLabel = '正在连接实时更新…', children, result, action }: {
+export function LiveDirectoryFrame({ count, liveCount, waitingCount, filter = '全部', search = '', onFilter, onSearch, updatesLabel = '正在连接实时更新…', children, result, action }: {
   count?: number;
   liveCount?: number;
   waitingCount?: number;
@@ -22,9 +22,6 @@ export function LiveDirectoryFrame({ count, liveCount, waitingCount, filter = '�
   search?: string;
   onFilter?: (filter: LobbyFilter) => void;
   onSearch?: (search: string) => void;
-  onRefresh?: () => void;
-  refreshing?: boolean;
-  refreshDisabled?: boolean;
   updatesLabel?: string;
   children: ReactNode;
   result?: ReactNode;
@@ -34,7 +31,7 @@ export function LiveDirectoryFrame({ count, liveCount, waitingCount, filter = '�
     <div className="sr-only"><h2>直播间列表{count !== undefined && `，共 ${count} 个`}</h2><span role="status">{updatesLabel}</span></div>
     <div className="live-directory-toolbar">
       <div className="live-filters" aria-label="筛选直播间">{(['全部', '直播中', '准备中'] as const).map(value => <button type="button" key={value} aria-pressed={filter === value} disabled={!onFilter} onClick={() => onFilter?.(value)}>{value}{value !== '全部' && (value === '直播中' ? liveCount : waitingCount) !== undefined && <span>({value === '直播中' ? liveCount : waitingCount})</span>}</button>)}</div>
-      <div className="live-search-actions"><label className="live-search"><LiveIcon name="search" size={16} /><input type="search" aria-label="搜索直播间" placeholder="搜索直播间" value={search} disabled={!onSearch} onChange={event => onSearch?.(event.target.value)} /></label><button type="button" className="live-icon-button" aria-label="刷新列表" title="刷新列表" disabled={!onRefresh || refreshing || refreshDisabled} onClick={onRefresh}><LiveIcon name="refresh" className={refreshing ? 'live-spin' : undefined} /></button>{action}</div>
+      <div className="live-search-actions"><label className="live-search"><LiveIcon name="search" size={16} /><input type="search" aria-label="搜索直播间" placeholder="搜索直播间" value={search} disabled={!onSearch} onChange={event => onSearch?.(event.target.value)} /></label>{action}</div>
     </div>
     {children}
     <p className="sr-only" aria-live="polite">{result}</p>

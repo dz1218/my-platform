@@ -6,7 +6,7 @@ import { LiveChat } from './live-chat';
 import { LiveVoiceControls, LiveVoicePanel, LiveViewerCall } from './live-voice';
 import { LiveStageMedia } from './live-stage-media';
 import { LiveConnectionPending, LiveRoomTitle, LiveRoomControlsLoading } from './live-room-loading';
-import { MobileLiveRoomHeader, MobileLiveRoomPanels } from '@my-platform/mobile-web/live-room';
+import { MobileLiveControls, MobileLiveLeave, MobileLiveRoomHeader, MobileLiveRoomPanels } from '@my-platform/mobile-web/live-room';
 import { useViewport } from '@/components/use-viewport';
 import { useLiveRoom, type LiveRoomProps, type Role } from './use-live-room';
 
@@ -37,12 +37,11 @@ const LiveRoomScene = memo(function LiveRoomScene({ model, viewport }: {
     {viewport !== 'desktop' && <div className="md:hidden"><MobileLiveRoomHeader
       back={<button type="button" onClick={returnToHall} disabled={isClosing} aria-label="返回直播大厅" className="grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-soft"><LiveIcon name="back" size={21} /></button>}
       title={roomTitle} pendingTitle={roomTitlePending} role={role} status={isReconnecting ? '正在重连…' : isConnected ? '已连接' : isJoining ? '连接中' : '未连接'}
-      count={isInRoom ? participants.length : null} onShare={() => void shareRoom()}
+      count={isInRoom ? participants.length : null} onRefresh={roomEnded || isClosing ? undefined : () => void refreshRoom()} refreshing={isRefreshing} onShare={() => void shareRoom()}
     /></div>}
     {roomNotice && <div role="status" className="live-notice"><LiveIcon name="info" /><p>{roomNotice}</p></div>}
     {notice && <div role="status" className="live-toast"><LiveIcon name="info" size={16} />{notice}</div>}
-    <div aria-hidden={roomEnded || undefined} className={`live-room-sync mb-4 flex h-11 items-center justify-end md:hidden ${roomEnded ? 'invisible' : ''}`}><button type="button" className="live-icon-button" title="刷新状态" aria-label="刷新状态" disabled={isRefreshing || isClosing} onClick={() => void refreshRoom()}><LiveIcon name="refresh" size={15} className={isRefreshing ? 'live-spin' : undefined} /></button></div>
-    {refreshError && !roomEnded && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>{refreshError}</p></div>}
+    {refreshError && !roomEnded && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>{refreshError}</p><button type="button" className="live-button live-button-secondary" disabled={isRefreshing || isClosing} onClick={() => void refreshRoom()}>{isRefreshing ? '正在同步…' : '重新同步'}</button></div>}
 
     <div className="live-studio">
       <div className="live-stage-column">
@@ -50,7 +49,6 @@ const LiveRoomScene = memo(function LiveRoomScene({ model, viewport }: {
           {viewport !== 'mobile' && <header className="live-studio-heading hidden md:flex">
       <div className="live-room-title"><LiveRoomTitle title={roomTitlePending ? undefined : roomTitle} /><span className={`live-connection ${isConnected ? 'is-connected' : ''}`} role="status"><i />{isReconnecting ? '正在重连…' : isConnected ? '已连接' : isJoining ? '连接中' : '未连接'}</span></div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        <button type="button" className={`live-icon-button ${roomEnded ? 'invisible' : ''}`} title="刷新状态" aria-label="刷新状态" disabled={roomEnded || isRefreshing || isClosing} onClick={() => void refreshRoom()}><LiveIcon name="refresh" size={17} className={isRefreshing ? 'live-spin' : undefined} /></button>
         <button type="button" className="live-button live-button-secondary" aria-label="分享直播间" onClick={() => void shareRoom()}><LiveIcon name="link" size={16} />分享</button>
       </div>
     </header>}
@@ -67,19 +65,26 @@ const LiveRoomScene = memo(function LiveRoomScene({ model, viewport }: {
           <div className={`live-stage-bottom ${joining ? 'invisible' : ''}`} aria-hidden={joining || undefined}><button type="button" className="live-icon-button" title={isFullscreen ? '退出全屏' : '全屏观看'} aria-label={isFullscreen ? '退出全屏' : '全屏观看'} onClick={() => void toggleFullscreen()}><LiveIcon name="expand" size={18} /></button></div>
         </div>
 
-        {!isTerminal && <div className="live-control-bar">
-          <div className="live-device-controls">{isHost ? <>
+        {!isTerminal && (viewport === 'mobile' ? <MobileLiveControls host={isHost} joining={joining} connected={isConnected}
+          callStatus={voice.own ? voice.slot?.status : null}
+          devices={<>{isHost ? <>
             <button type="button" className={`live-device-button ${cameraEnabled ? 'is-enabled' : ''}`} aria-pressed={cameraEnabled} disabled={!isConnected || mediaBusy !== null} onClick={() => void toggleLocalMedia('camera')}><LiveIcon name={cameraEnabled ? 'video' : 'videoOff'} size={21} /><span>{mediaBusy === 'camera' ? '切换中…' : cameraEnabled ? '关闭摄像头' : '开启摄像头'}</span></button>
             <button type="button" className={`live-device-button ${microphoneEnabled ? 'is-enabled' : ''}`} aria-pressed={microphoneEnabled} disabled={!isConnected || mediaBusy !== null} onClick={() => void toggleLocalMedia('microphone')}><LiveIcon name={microphoneEnabled ? 'mic' : 'micOff'} size={21} /><span>{mediaBusy === 'microphone' ? '切换中…' : microphoneEnabled ? '关闭麦克风' : '开启麦克风'}</span></button>
           </> : role === '观众' ? <LiveVoiceControls voice={voice} connected={isConnected} /> : joining ? <LiveRoomControlsLoading /> : <span className="live-viewer-note">加入成功后显示房间操作</span>}
-          {audioBlocked && <button type="button" className="live-button live-button-secondary" disabled={!isConnected} onClick={() => void enableAudio()}><LiveIcon name="volume" size={17} />播放声音</button>}</div>
-          <button type="button" className="live-button live-button-leave" disabled={(!isInRoom && !isJoining) || isClosing} onClick={() => joining ? void leaveRoom() : isHost ? setCloseConfirmOpen(true) : void leaveRoom()}><LiveIcon name="leave" size={17} />{joining ? '取消连接' : isHost ? '结束直播' : '离开房间'}</button>
-        </div>}
-        {!isHost && isInRoom && voice.own && voice.slot?.status === 'approved' && <LiveViewerCall voice={voice} connected={isConnected} />}
+</>}
+          call={!isHost && isInRoom && voice.own && voice.slot?.status === 'approved' ? <LiveViewerCall voice={voice} connected={isConnected} /> : undefined}
+          error={error || voice.error} sharing={cameraEnabled || microphoneEnabled}
+          playback={audioBlocked && <button type="button" className="live-button live-button-primary" disabled={!isConnected} onClick={() => void enableAudio()}><LiveIcon name="volume" size={17} />播放声音</button>}
+          leave={<MobileLiveLeave joining={joining} host={isHost} disabled={(!isInRoom && !isJoining) || isClosing} onLeave={() => joining ? void leaveRoom() : isHost ? setCloseConfirmOpen(true) : void leaveRoom()} />} assistant={isHost ? <button type="button" className="live-agent-button" disabled={!isConnected || isDispatchingAgent || agentRequested || hasAgent} onClick={() => void dispatchAgent()}><LiveIcon name="robot" size={16} />{isDispatchingAgent ? '呼叫中…' : hasAgent ? 'AI 助手已在线' : agentRequested ? '已呼叫，等待助手加入' : '呼叫 AI 助手'}</button> : undefined} /> : <div className="live-control-bar"><div className="live-device-controls">{isHost ? <>
+            <button type="button" className={`live-device-button ${cameraEnabled ? 'is-enabled' : ''}`} aria-pressed={cameraEnabled} disabled={!isConnected || mediaBusy !== null} onClick={() => void toggleLocalMedia('camera')}><LiveIcon name={cameraEnabled ? 'video' : 'videoOff'} size={21} /><span>{mediaBusy === 'camera' ? '切换中…' : cameraEnabled ? '关闭摄像头' : '开启摄像头'}</span></button>
+            <button type="button" className={`live-device-button ${microphoneEnabled ? 'is-enabled' : ''}`} aria-pressed={microphoneEnabled} disabled={!isConnected || mediaBusy !== null} onClick={() => void toggleLocalMedia('microphone')}><LiveIcon name={microphoneEnabled ? 'mic' : 'micOff'} size={21} /><span>{mediaBusy === 'microphone' ? '切换中…' : microphoneEnabled ? '关闭麦克风' : '开启麦克风'}</span></button>
+          </> : role === '观众' ? <LiveVoiceControls voice={voice} connected={isConnected} /> : joining ? <LiveRoomControlsLoading /> : <span className="live-viewer-note">加入成功后显示房间操作</span>}
+          {audioBlocked && <button type="button" className="live-button live-button-secondary" disabled={!isConnected} onClick={() => void enableAudio()}><LiveIcon name="volume" size={17} />播放声音</button>}</div><button type="button" className="live-button live-button-leave" disabled={(!isInRoom && !isJoining) || isClosing} onClick={() => joining ? void leaveRoom() : isHost ? setCloseConfirmOpen(true) : void leaveRoom()}><LiveIcon name="leave" size={17} />{joining ? '取消连接' : isHost ? '结束直播' : '离开房间'}</button></div>)}
+        {viewport !== 'mobile' && !isHost && isInRoom && voice.own && voice.slot?.status === 'approved' && <LiveViewerCall voice={voice} connected={isConnected} />}
         {isInRoom && error && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>{error}</p><button type="button" className="live-icon-button" aria-label="关闭提示" onClick={() => setError(null)}><LiveIcon name="close" size={16} /></button></div>}
         {isInRoom && voice.error && <div role="alert" className="live-notice live-notice-error"><LiveIcon name="info" /><p>{voice.error}</p><button type="button" className="live-agent-button" disabled={!isConnected || voice.busy} onClick={() => void voice.refresh()}>重试连麦状态</button><button type="button" className="live-icon-button" aria-label="关闭连线提示" onClick={voice.dismissError}><LiveIcon name="close" size={16} /></button></div>}
         {isReconnecting && <div role="status" className="live-notice"><LiveIcon name="refresh" className="live-spin" /><p>连接暂时中断，正在尝试恢复。恢复后即可继续聊天和控制设备。</p></div>}
-        <div className="live-studio-footer" data-pending={joining || undefined}>{isHost && <button type="button" className="live-agent-button" disabled={!isConnected || isDispatchingAgent || agentRequested || hasAgent} onClick={() => void dispatchAgent()}><LiveIcon name="robot" size={16} />{isDispatchingAgent ? '呼叫中…' : hasAgent ? 'AI 助手已在线' : agentRequested ? '已呼叫，等待助手加入' : '呼叫 AI 助手'}</button>}</div>
+        <div className="live-studio-footer hidden md:flex" data-pending={joining || undefined}>{isHost && <button type="button" className="live-agent-button" disabled={!isConnected || isDispatchingAgent || agentRequested || hasAgent} onClick={() => void dispatchAgent()}><LiveIcon name="robot" size={16} />{isDispatchingAgent ? '呼叫中…' : hasAgent ? 'AI 助手已在线' : agentRequested ? '已呼叫，等待助手加入' : '呼叫 AI 助手'}</button>}</div>
       </div>
 
       <aside className="live-sidebar" aria-label="直播互动">

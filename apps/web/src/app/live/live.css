@@ -7,7 +7,7 @@
   width: 100%; max-width: 1440px; margin-inline: auto;
   padding-inline: clamp(16px, 3vw, 48px);
 }
-.live-page h1, .live-page h2, .live-page h3, .live-page p { margin: 0; }
+@media (min-width: 768px) { .live-page h1, .live-page h2, .live-page h3, .live-page p { margin: 0; } }
 .live-page a { text-decoration: none; }
 .live-page button, .live-page a, .live-page input, .live-page textarea { transition: background-color .15s, border-color .15s, color .15s; }
 .live-page button:disabled { cursor: not-allowed; opacity: .48; }
@@ -36,7 +36,7 @@
 .live-page .live-create-name:focus { @apply border-ink/25 bg-ink/10 outline-none shadow-none ring-0; }
 .live-create-name[aria-invalid=true] { @apply border-danger; }
 @media (min-width: 768px) {
-  .live-lobby-page { @apply min-h-dvh max-w-none px-8 py-10 xl:px-10; }
+  .live-lobby-page { @apply min-h-dvh max-w-none px-8 pt-8 pb-10 xl:px-10; }
 }
 .live-directory { @apply flex min-w-0 flex-1 flex-col; }
 .live-directory-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; margin-bottom: 17px; }
@@ -420,12 +420,6 @@
 
 /* The mobile controls reorder around one persistent stage and chat log. */
 @media (max-width: 767px) {
-  .live-room-page { padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
-  .live-room-page .live-stage { min-height: 300px; aspect-ratio: 4 / 3; @apply rounded-scene; }
-  .live-room-page .live-studio { gap: 20px; }
-  .live-room-page .live-sidebar { height: min(580px, 70dvh); min-height: 380px; @apply rounded-scene border-line/60 bg-panel; }
-  .live-room-page .live-control-bar { @apply rounded-panel border-0 bg-surface-soft; }
-  .live-room-page .live-studio-footer { min-height: 136px; padding-inline: 4px; align-content: center; }
   .live-room-page .live-stage-empty > p { font-size: 12px; }
 }
 
@@ -525,3 +519,48 @@
 /* Keep the remaining assistant action compact after removing helper copy. */
 .live-room-page .live-studio-footer { min-height: 64px; }
 .live-stage-bottom { justify-content: flex-end; }
+
+/* Phone live experience: a compact stage, one action dock and a persistent chat.
+   Media elements keep their existing DOM parents at every viewport. */
+@media (max-width: 767px) {
+  .live-page { @apply bg-canvas; }
+  .live-lobby-page { min-height: calc(100dvh - 64px); }
+  .live-room-page { padding: max(8px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+  .live-room-page .live-stage { min-height: 220px; aspect-ratio: 16 / 10; @apply rounded-panel; }
+  .live-room-page .live-stage:has(> .live-stage-empty) { min-height: 340px; }
+  .live-room-page .live-studio { gap: 8px; }
+  .live-room-page .live-studio-footer { display: none; }
+  .live-room-page .live-studio-footer[data-pending=true] { display: none; }
+  .live-room-page .live-sidebar { height: max(320px, calc(100dvh - 380px)); min-height: 320px; @apply rounded-panel border-0 bg-panel; }
+  .live-room-page .live-stage-top { min-height: 44px; padding: 8px 12px; @apply bg-transparent; }
+  .live-room-page .live-stage-bottom { position: absolute; bottom: 8px; right: 8px; padding: 0; @apply bg-transparent; }
+  .live-room-page .live-control-bar { min-height: 64px; padding: 8px 0; @apply bg-transparent; }
+  .live-room-page .live-chat-form { margin: 0; padding: 12px; border: 0; border-radius: 0; @apply bg-transparent; }
+  .live-room-page .live-chat-form:focus-within { box-shadow: none; }
+  .live-room-page .live-chat-compose { display: flex; align-items: flex-end; gap: 8px; padding: 6px; @apply rounded-scene bg-surface-soft; }
+  .live-room-page .live-chat-form textarea { min-height: 44px; max-height: 112px; padding: 10px; font-size: 16px; line-height: 24px; field-sizing: content; @apply bg-transparent; }
+  .live-room-page .live-chat-form-footer { padding: 0; flex-shrink: 0; }
+  .live-room-page .live-chat-form-footer > span { display: none; }
+  .live-room-page .live-chat-form-footer .live-button { width: 44px; height: 44px; padding: 0; border-radius: 999px; }
+  .live-room-page .live-message { padding: 8px 0; }
+  .live-room-page .live-message-body { border: 0; background: transparent; }
+  .live-room-page .live-dialog, .live-page .live-dialog { position: fixed; inset: auto 0 0; margin: 0 auto; width: 100%; max-width: 640px; border-radius: 24px 24px 0 0; padding: 24px 20px max(24px, env(safe-area-inset-bottom)); }
+  .live-room-page .live-dialog-actions, .live-page .live-dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .live-room-page .live-dialog-actions button, .live-page .live-dialog-actions button { min-height: 48px; }
+  .mobile-live-device-sheet .live-viewer-call { border: 0; padding: 0; margin: 0; background: transparent; }
+  .mobile-live-device-sheet .live-viewer-call-intro, .mobile-live-device-sheet .live-viewer-call-footnote { display: none; }
+  .mobile-live-device-sheet .live-call-devices { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .mobile-live-device-sheet .live-call-device { min-height: 72px; }
+}
+
+@media (max-width: 767px) {
+  .live-room-page .live-stage-top:not(.has-call) { display: none; }
+  .live-room-page .live-stage:has(.live-stage-media.has-call) { min-height: 340px; }
+  .live-room-page:has(.live-stage-media.has-call) .live-sidebar { height: max(280px, calc(100dvh - 500px)); min-height: 280px; }
+  .mobile-live-device-sheet .live-call-switch { position: relative; }
+  .mobile-live-device-sheet .live-call-switch::before { content: ""; position: absolute; inset: -9px 0; }
+  .live-room-page .live-voice-panel { padding: 0; }
+  .live-room-page .live-voice-card { margin-top: 16px; padding: 24px 12px; background: transparent; }
+  .live-room-page .live-voice-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .live-room-page .live-voice-actions button { min-height: 48px; }
+}

@@ -70,10 +70,10 @@ export function LiveChat({ room, connected, nickname, visible, pending = false }
       {error && <p role="alert" className="live-form-error">{error}</p>}
       <div className="live-chat-compose">
       <label className="sr-only" htmlFor="live-message">发送消息</label>
-      <textarea id="live-message" title="消息仅在本次直播中显示。Enter 发送，Shift + Enter 换行。" ref={inputRef} maxLength={liveChatMaxLength} rows={viewport === 'desktop' ? 1 : 2} disabled={!connected || sending} placeholder={connected ? '说点什么…' : '连接后即可发送消息'} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => {
+      <textarea id="live-message" title={viewport === 'mobile' ? '消息仅在本次直播中显示。回车换行，点击发送。' : '消息仅在本次直播中显示。Enter 发送，Shift + Enter 换行。'} ref={inputRef} maxLength={liveChatMaxLength} rows={1} disabled={!connected || sending} placeholder={connected ? '说点什么…' : '连接后即可发送消息'} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => {
         if (viewport === 'desktop' && event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); void send(); }
       }} />
-      <div className="live-chat-form-footer"><span data-near-limit={draft.length >= liveChatMaxLength - 100 || undefined}>{draft.length ? `${draft.length}/${liveChatMaxLength}` : null}</span><button type="submit" className="live-button live-button-primary" disabled={!connected || !draft.trim() || sending}><LiveIcon name="send" size={15} />{sending ? '发送中…' : '发送'}</button></div>
+      <div className="live-chat-form-footer"><span data-near-limit={draft.length >= liveChatMaxLength - 100 || undefined}>{draft.length ? `${draft.length}/${liveChatMaxLength}` : null}</span><button type="submit" className="live-button live-button-primary" disabled={!connected || !draft.trim() || sending}><LiveIcon name="send" size={17} /><span className="max-md:sr-only">{sending ? '发送中…' : '发送'}</span></button></div>
       </div>
     </form>
   </div>;
