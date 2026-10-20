@@ -5,7 +5,7 @@ const item = { id: 'sleeve-review', title: '下班了，一起聊聊今天', sta
 for (const width of [768, 1440]) test(`room directory preserves the sleeve layout at ${width}px`, async ({ page }) => {
  await page.setViewportSize({ width, height: 1000 });
  await page.request.post(fixture,{ data: { rooms: [] } });
- await page.goto('/live');
+ await page.goto('/');
  const sleeve = page.getByRole('region',{name:'Radio Friday 电台'});
  await expect(page.getByText('暂无直播间',{exact:true})).toBeVisible();
  const expanded = (await sleeve.boundingBox())!.height;
@@ -50,7 +50,7 @@ for (const width of [320, 390, 768, 1440]) test(`owned rooms and empty artwork a
  await context.addCookies([{ name: 'companion_session', value: 'live-test-host', domain: '127.0.0.1', path: '/' }]);
  await page.setViewportSize({ width, height: 980 });
  await page.request.post(fixture, { data: { rooms: [] } });
- await page.goto('/live');
+ await page.goto('/');
  if (width < 768) await expect(page.getByRole('img', { name: '等待开播的耳机' })).toBeVisible();
  else {
    const search = page.getByRole('searchbox', { name: '搜索直播间' });

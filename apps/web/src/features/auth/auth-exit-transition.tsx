@@ -22,8 +22,8 @@ export function AuthExitTransition({ children }: { children: ReactNode }) {
   const { setClosing } = store.getState();
   const running = useRef(false);
   const committed = useRef<(() => void) | null>(null);
-  const transition = useRef<ViewTransition | null>(null);
   const outgoing = useRef<Animation | undefined>(undefined);
+  const incoming = useRef<Animation | undefined>(undefined);
 
   const onHomeReady = useCallback(() => {
     // The pathname can commit while AppFrame still shows its Suspense fallback.
@@ -34,9 +34,8 @@ export function AuthExitTransition({ children }: { children: ReactNode }) {
 
   useEffect(() => () => {
     committed.current?.();
-    transition.current?.skipTransition();
     outgoing.current?.cancel();
-    document.documentElement.removeAttribute('data-auth-exit');
+    incoming.current?.cancel();
   }, []);
 
   const dismiss = useCallback(async () => {
@@ -46,46 +45,38 @@ export function AuthExitTransition({ children }: { children: ReactNode }) {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const destinationReady = new Promise<void>(resolve => { committed.current = resolve; });
     const navigate = () => {
-      router.replace('/companion', { scroll: true });
+      router.replace('/', { scroll: true });
       return destinationReady;
     };
 
     try {
-      if (!reducedMotion && typeof document.startViewTransition === 'function') {
-        document.documentElement.dataset.authExit = 'native';
-        const current = document.startViewTransition(navigate);
-        transition.current = current;
-        // A hidden tab or a slow response may skip the visual transition.
-        void current.ready.catch(() => {});
-        await current.finished;
-      } else {
-        if (!reducedMotion) {
-          outgoing.current = document.querySelector<HTMLElement>('.auth-page')?.animate?.([
-            { opacity: 1, transform: 'none' },
-            { opacity: 0.35, transform: 'translateY(-8px) scale(.985)' },
-          ], { duration: 180, easing: 'ease-out', fill: 'forwards' });
-          await outgoing.current?.finished.catch(() => {});
-        }
-        // Keep the outgoing page visible while the destination is loading.
-        await navigate();
-        if (!reducedMotion) {
-          const incoming = document.querySelector<HTMLElement>('.app-shell')?.animate?.([
-            { opacity: 0.35 },
-            { opacity: 1 },
-          ], { duration: 280, easing: 'ease-out' });
-          await incoming?.finished.catch(() => {});
-        }
+      if (!reducedMotion) {
+        // Give feedback immediately, without freezing a full-page snapshot or
+        // waiting for an outgoing animation before starting the route request.
+        outgoing.current = document.querySelector<HTMLElement>('.auth-page')?.animate?.([
+          { opacity: 1 },
+          { opacity: 0.8 },
+        ], { duration: 100, easing: 'ease-out', fill: 'forwards' });
+      }
+      await navigate();
+      if (!reducedMotion) {
+        // Opacity leaves fixed navigation and the saved sidebar geometry intact.
+        incoming.current = document.querySelector<HTMLElement>('.app-shell')?.animate?.([
+          { opacity: 0.8 },
+          { opacity: 1 },
+        ], { duration: 140, easing: 'ease-out' });
       }
       document.getElementById('main-content')?.focus({ preventScroll: true });
+      await incoming.current?.finished.catch(() => {});
     } catch {
       // Closing remains usable if a browser cannot animate the navigation.
-      router.replace('/companion');
+      router.replace('/');
     } finally {
       committed.current = null;
-      transition.current = null;
       outgoing.current?.cancel();
       outgoing.current = undefined;
-      document.documentElement.removeAttribute('data-auth-exit');
+      incoming.current?.cancel();
+      incoming.current = undefined;
       running.current = false;
       setClosing(false);
     }

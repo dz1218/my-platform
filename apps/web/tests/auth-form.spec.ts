@@ -39,7 +39,7 @@ async function verifyPhone(page: Page, phone = '13800138002') {
 }
 
 for (const phone of ['13800138000', '13800138004']) {
-  test(`phone login errors clear on refresh and login opens companion for ${phone}`, async ({ page }) => {
+  test(`phone login errors clear on refresh and login opens the lobby for ${phone}`, async ({ page }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', error => pageErrors.push(error.message));
     await page.route('**/api/v1/matches', route => route.fulfill({ json: { items: [] } }));
@@ -62,21 +62,32 @@ for (const phone of ['13800138000', '13800138004']) {
     await page.getByRole('button', { name: '显示密码' }).click();
     await expect(page.getByLabel('密码', { exact: true })).toHaveAttribute('type', 'text');
     await page.getByRole('button', { name: '登录', exact: true }).click();
-    await expect(page).toHaveURL('/companion');
+    await expect(page).toHaveURL('/');
     // A successful redirect alone also passes when the destination has crashed.
+    const expectLobby = async () => {
+      await expect(page.getByRole('searchbox', { name: '搜索直播间', exact: true })).toBeEnabled();
+      await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+    };
+    const navigation = page.getByRole('navigation', { name: '主导航', exact: true });
     const expectCompanion = async () => {
       await expect(page.getByRole('heading', { name: '今天想和谁聊聊？' })).toBeVisible();
       await expect(page.getByRole('button', { name: '和登录测试朋友打个招呼' })).toBeEnabled();
       await expect(page.getByText('你们的故事，从这里开始')).toBeVisible();
       await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
     };
-    await expectCompanion();
+    await expectLobby();
     await page.reload();
+    await expect(page).toHaveURL('/');
+    await expectLobby();
+    await navigation.getByRole('link', { name: '陪伴', exact: true }).click();
     await expectCompanion();
     await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '我的', exact: true }).click();
     await page.getByRole('button', { name: /账户与身份 ·/ }).click();
     await page.getByRole('navigation', { name: '账户与身份', exact: true }).getByRole('button', { name: '退出登录' }).click();
-    await expect(page).toHaveURL('/companion');
+    await expect(page).toHaveURL('/');
+    await expectLobby();
+    await expect(page.getByRole('link', { name: '登录 / 注册', exact: true })).toBeVisible();
+    await navigation.getByRole('link', { name: '陪伴', exact: true }).click();
     await expect(page.getByRole('button', { name: '和登录测试朋友打个招呼' })).toBeEnabled();
     await expect(page.getByRole('link', { name: '登录后聊天', exact: true })).toBeVisible();
     expect((await page.context().cookies()).some(cookie => cookie.name === 'companion_session')).toBe(false);
@@ -85,7 +96,9 @@ for (const phone of ['13800138000', '13800138004']) {
     await page.getByRole('textbox', { name: '手机号', exact: true }).fill(phone);
     await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');
     await page.getByRole('button', { name: '登录', exact: true }).click();
-    await expect(page).toHaveURL('/companion');
+    await expect(page).toHaveURL('/');
+    await expectLobby();
+    await navigation.getByRole('link', { name: '陪伴', exact: true }).click();
     await expectCompanion();
     expect(pageErrors).toEqual([]);
   });

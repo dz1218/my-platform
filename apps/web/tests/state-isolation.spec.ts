@@ -34,8 +34,9 @@ test('draft survives client navigation but is cleared when logging into a differ
   await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138000');
   await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL('/companion');
+  await expect(page).toHaveURL('/');
   await expect(page.getByRole('button', { name: /账户与身份 · 第二测试用户/ })).toBeVisible();
+  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '陪伴', exact: true }).click();
   await page.getByRole('link', { name: '状态隔离测试朋友 继续你们的对话', exact: true }).click();
   await expect(input).toHaveValue('');
   await expect(page.locator('html')).toHaveAttribute('data-state-scope-test', 'same-document');

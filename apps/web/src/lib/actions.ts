@@ -15,7 +15,7 @@ async function authenticate(kind: 'register' | 'login', formData: FormData): Pro
   const gender = String(formData.get('gender') ?? '');
   if (kind === 'register' && gender !== 'FEMALE' && gender !== 'MALE') return { error: 'gender_required' };
   let failure = '';
-  const destination = kind === 'register' ? '/choose-identity' : '/companion';
+  const destination = kind === 'register' ? '/choose-identity' : '/';
   try {
     const result = await serverFetch(`/auth/${kind}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -51,7 +51,7 @@ export async function verifyCodeAction(phone: string, code: string) { return pho
 export async function logoutAction() {
   const store = await cookies();
   store.delete(sessionCookie); store.delete('mp_auth'); store.delete('mp_nickname');
-  redirect('/companion');
+  redirect('/');
 }
 // Form adapters only. Validation, ownership checks and persistence live in Go.
 const field = (form: FormData, name: string) => String(form.get(name) ?? '');

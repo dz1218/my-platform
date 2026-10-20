@@ -1,3 +1,9 @@
+import { publicMetadata } from "@/lib/seo";
+export const metadata = publicMetadata(
+  "平台互动说明",
+  "了解 Radio Friday 的 AI 与真人回复、角色继承及历史聊天访问机制。",
+  "/privacy",
+);
 import { InteractionNotice } from "@/components/interaction-notice";
 import Link from "next/link";
 export default function PrivacyPage() {

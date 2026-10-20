@@ -98,15 +98,14 @@ test('idle and refocused companion keeps cached matches until manual refresh', a
   await expect(page.getByText('你们的故事，从这里开始', { exact: true })).toBeVisible();
 });
 
-test('sidebar toggle and repeated home links do not request data or refresh the route', async ({ page }) => {
+test('sidebar toggle and repeated companion links do not request data or refresh the route', async ({ page }) => {
   const state = await setup(page);
   await expect.poll(state.activeAccountSockets).toBe(1);
   const connections = state.accountConnections();
   state.requests.length = 0;
   await page.getByRole('button', { name: '收起侧边栏' }).click();
   await page.getByRole('button', { name: '展开侧边栏' }).click();
-  for (let i = 0; i < 3; i++) await page.getByRole('link', { name: 'Radio Friday 首页' }).click();
-  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '陪伴', exact: true }).click();
+  for (let i = 0; i < 3; i++) await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '陪伴', exact: true }).click();
   await page.getByRole('button', { name: /账户与身份 ·/ }).click();
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
@@ -212,7 +211,7 @@ test('a socket snapshot wins over a stale HTTP response still in flight', async 
   }
 });
 
-test('home link still returns from chat and refreshes matches invalidated by a WebSocket send', async ({ page }) => {
+test('companion navigation returns from chat and refreshes matches invalidated by a WebSocket send', async ({ page }) => {
   const state = await setup(page);
   await page.getByRole('link', { name: /继续聊天\s*，和林晚/ }).click();
   await expect(page.getByTestId('chat-overlay')).toBeVisible();
@@ -221,7 +220,7 @@ test('home link still returns from chat and refreshes matches invalidated by a W
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByText('你好', { exact: true })).toBeVisible();
   expect(state.matchReads()).toBe(before);
-  await page.getByRole('link', { name: 'Radio Friday 首页' }).click();
+  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '陪伴', exact: true }).click();
   await expect(page).toHaveURL('/companion');
   await expect(page.getByTestId('chat-overlay')).toHaveCount(0);
   await expect.poll(state.matchReads).toBe(before + 1);
@@ -256,7 +255,7 @@ test('WebSocket receives and deduplicates messages, resumes after disconnect, an
   await expect(page.getByText(first.content, { exact: true })).toHaveCount(1);
   await expect(page.getByText(missed.content, { exact: true })).toHaveCount(1);
   expect(state.matchReads()).toBe(before);
-  await page.getByRole('link', { name: 'Radio Friday 首页' }).click();
+  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '陪伴', exact: true }).click();
   await expect(page).toHaveURL('/companion');
   await expect.poll(state.matchReads).toBe(before + 1);
 });
@@ -328,5 +327,8 @@ test('a delayed greeting still opens its conversation while its original page re
   await expect(page.getByRole('textbox', { name: '给迟来朋友发消息' })).toBeVisible();
   await expect.poll(state.connections).toBe(1);
   await page.getByRole('link', { name: 'Radio Friday 首页' }).click();
+  await expect(page).toHaveURL('/');
+  await expect(page.getByTestId('chat-overlay')).toHaveCount(0);
+  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '陪伴', exact: true }).click();
   await expect(page.getByRole('link', { name: /继续聊天\s*，和迟来朋友/ })).toBeVisible();
 });

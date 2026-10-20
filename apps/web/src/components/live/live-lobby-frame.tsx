@@ -1,3 +1,5 @@
+'use client';
+
 import type { ReactNode } from 'react';
 import { SkeletonBlock, SkeletonRegion } from '@/components/skeleton';
 import { LiveIcon } from './live-icon';
@@ -10,6 +12,7 @@ type LobbyFilter = '全部' | '直播中' | '准备中';
 export function DesktopLiveLobbyFrame({ directory }: { directory: ReactNode }) {
   return <div className="flex min-h-[calc(100dvh-80px)] flex-col">
     <h1 className="sr-only">直播大厅</h1>
+
     {directory}
   </div>;
 }

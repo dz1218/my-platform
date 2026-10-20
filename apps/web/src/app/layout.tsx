@@ -1,17 +1,23 @@
 import type { Metadata, Viewport } from "next";
-import { Suspense } from 'react';
-import { cookies } from 'next/headers';
-import { sessionCookie } from '@/services/api/server';
+import { Suspense } from "react";
+import { cookies } from "next/headers";
+import { sessionCookie } from "@/services/api/server";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { AppShell, AppStartup } from "@/components/main-nav";
 import { getCurrentUser } from "@/lib/auth";
+import { siteUrl, siteDescription } from "@/lib/seo";
 export const metadata: Metadata = {
+  metadataBase: siteUrl,
+  robots: { index: false, follow: true },
   title: { default: "Radio Friday · 陪伴", template: "%s · Radio Friday" },
-  description: "聊天、阅读，留一点时间给自己。",
+  description: siteDescription,
 };
 // Keep browser chrome aligned with --rf-canvas in theme.css.
-export const viewport: Viewport = { themeColor: "#1B1B19", viewportFit: "cover" };
+export const viewport: Viewport = {
+  themeColor: "#1B1B19",
+  viewportFit: "cover",
+};
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -24,9 +30,15 @@ export default async function RootLayout({
         <a href="#main-content" className="skip-link">
           跳到主要内容
         </a>
-        {hasSession ? <Suspense fallback={<AppStartup />}>
-          <AccountShell>{children}</AccountShell>
-        </Suspense> : <Providers key="guest" initialUser={null}><AppShell>{children}</AppShell></Providers>}
+        {hasSession ? (
+          <Suspense fallback={<AppStartup />}>
+            <AccountShell>{children}</AccountShell>
+          </Suspense>
+        ) : (
+          <Providers key="guest" initialUser={null}>
+            <AppShell>{children}</AppShell>
+          </Providers>
+        )}
       </body>
     </html>
   );
@@ -34,5 +46,9 @@ export default async function RootLayout({
 
 async function AccountShell({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
-  return <Providers key={user?.id ?? 'guest'} initialUser={user}><AppShell>{children}</AppShell></Providers>;
+  return (
+    <Providers key={user?.id ?? "guest"} initialUser={user}>
+      <AppShell>{children}</AppShell>
+    </Providers>
+  );
 }

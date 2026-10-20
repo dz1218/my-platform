@@ -35,7 +35,7 @@ export function CompanionLoadingContent({ tab = null }: { tab?: 'recent' | 'disc
       <MobileCompanionHeading />
       <MobileCompanionTabs tab={tab} />
       {tab === 'discover' && <><div className="section-heading min-h-11"><h2 className="text-base font-semibold">这里的朋友</h2></div><CatalogFiltersLoading mobile /></>}
-      {tab === 'recent' ? <MobileRecentConversations refreshing footer={<><Link href="/live" className="link-muted inline-flex min-h-11 items-center">看看直播</Link><Link href="/novels" className="link-muted inline-flex min-h-11 items-center">读本小说</Link></>}><ConversationSkeleton /></MobileRecentConversations> : tab === 'discover' ? <MobileCatalogSkeleton label="正在加载页面…" /> : <ConversationSkeleton label="正在加载页面…" />}
+      {tab === 'recent' ? <MobileRecentConversations refreshing footer={<><Link href="/" className="link-muted inline-flex min-h-11 items-center">看看直播</Link><Link href="/novels" className="link-muted inline-flex min-h-11 items-center">读本小说</Link></>}><ConversationSkeleton /></MobileRecentConversations> : tab === 'discover' ? <MobileCatalogSkeleton label="正在加载页面…" /> : <ConversationSkeleton label="正在加载页面…" />}
     </div>
   </>;
 }

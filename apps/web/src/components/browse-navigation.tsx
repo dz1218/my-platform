@@ -6,7 +6,7 @@ import { CompanionHome } from '@/features/companion/companion-home';
 import { CompanionNavigation } from '@/features/companion/companion-navigation';
 import { ProfilePage } from '@/features/account/profile-page';
 import { NovelShelf } from '@/features/novels/novel-shelf';
-import { LiveLobbyPage } from '@/components/live/live-lobby-page';
+import { LiveLobbyPage } from './live/live-lobby-page';
 import { useBrowseUI } from '@/stores/provider';
 import type { User } from '@/types/companion';
 
@@ -257,7 +257,7 @@ export function BrowsingPages({ children, user }: { children: ReactNode; user: U
   const visited = useRef(pathname === '/companion');
   if (pathname === '/companion') visited.current = true;
   const bounds = navigation.backgroundSnapshot.current?.bounds;
-  const ordinaryPage = pathname === '/me' ? <ProfilePage /> : pathname === '/novels' ? <NovelShelf /> : pathname === '/live' ? <LiveLobbyPage /> : null;
+  const ordinaryPage = pathname === '/' ? <LiveLobbyPage /> : pathname === '/me' ? <ProfilePage /> : pathname === '/novels' ? <NovelShelf /> : null;
   return <>
     {visited.current && <div className={navigation.companionVisible ? undefined : 'pointer-events-none invisible fixed inset-0 overflow-hidden'} aria-hidden={!navigation.companionVisible || navigation.companionPaused || undefined} inert={navigation.companionPaused}>
       <div ref={navigation.background} data-testid="companion-background" style={!navigation.companionVisible ? {

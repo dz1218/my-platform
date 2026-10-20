@@ -144,7 +144,7 @@ test('mobile create-room sheet uses the same mutation and retains title across r
     return route.fulfill({ json: { items: rooms } });
   });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/live');
+  await page.goto('/');
   await expect(page.getByRole('textbox', { name: '房间名称' })).toHaveCount(0);
   await page.getByRole('button', { name: '开播', exact: true }).click();
   await page.getByRole('textbox', { name: '房间名称' }).fill('雨夜来信');
@@ -170,7 +170,7 @@ test('four-width page review, warm theme, long content and immersive route cover
   await mkdir('/tmp/radio-friday-review', { recursive: true });
   await page.route('**/api/v1/rooms/*/join', route => route.fulfill({ status: 503, json: { error: { message: '测试：暂时无法连接，请重试' } } }));
   await page.route('**/api/v1/rooms', route => route.fulfill({ json: { items: [{ id: 'design-room', title: '雨夜的电台，聊聊那些还没来得及说完的故事', status: '准备中', viewers: 0, canManage: false }] } }));
-  const routes = ['/companion?view=discover', '/companion?view=recent', '/chat/design-match', '/live', '/live/design-room', '/novels', '/novels/design-novel', '/novels/design-novel/chapters/design-chapter', '/novels/create', '/novels/design-novel/edit', '/novels/design-novel/chapters/design-chapter/edit', '/me', '/choose-identity', '/privacy'];
+  const routes = ['/companion?view=discover', '/companion?view=recent', '/chat/design-match', '/', '/live/design-room', '/novels', '/novels/design-novel', '/novels/design-novel/chapters/design-chapter', '/novels/create', '/novels/design-novel/edit', '/novels/design-novel/chapters/design-chapter/edit', '/me', '/choose-identity', '/privacy'];
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     for (const [index, path] of routes.entries()) {
@@ -179,7 +179,7 @@ test('four-width page review, warm theme, long content and immersive route cover
       await expect(page.locator('[data-app-startup]')).toHaveCount(0);
       await expect(page.getByRole('status', { name: '正在准备页面…', exact: true })).toHaveCount(0);
       if (path.startsWith('/companion?view=discover')) await expect(page.getByRole('button', { name: '和沈知远打个招呼' })).toBeVisible();
-      if (path === '/live') await expect(page.getByRole('article')).toBeVisible();
+      if (path === '/') await expect(page.getByRole('article')).toBeVisible();
       const immersive = path.startsWith('/chat/') || path.startsWith('/live/') || path.endsWith('/design-chapter');
       const nav = page.getByRole('navigation', { name: '手机主导航' });
       if (width < 768 && !immersive) await expect(nav).toBeVisible(); else await expect(nav).toBeHidden();

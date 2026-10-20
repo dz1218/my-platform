@@ -16,8 +16,8 @@ test('lobby snapshots reach two pages, preserve guest permissions and recover af
     if (['/api/v1/rooms/socket', '/ws/rooms'].includes(url.pathname)) sockets.push(url);
   });
   try {
-    await page.goto('/live');
-    await guest.goto('/live');
+    await page.goto('/');
+    await guest.goto('/');
     for (const current of [page, guest]) await expect(current.getByText('暂无直播间', { exact: true })).toBeVisible();
     await expect.poll(async () => (await (await request.get(`${controls}/__performance`)).json()).roomSockets).toBe(2);
     expect(sockets).toHaveLength(2);
@@ -58,7 +58,7 @@ test('an idle lobby performs no interval room requests and needs no refresh cont
   page.on('request', request => {
     if (/^\/api\/(?:v1\/rooms(?:\/refresh)?|live\/connection)$/.test(new URL(request.url()).pathname)) reads.push(`${request.method()} ${request.url()}`);
   });
-  await page.goto('/live');
+  await page.goto('/');
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '刷新列表' })).toHaveCount(0);
   await expect(page.getByText('实时更新', { exact: true })).toBeVisible();
@@ -77,7 +77,7 @@ for (const leave of ['close', 'navigate'] as const) {
     page.on('websocket', socket => {
       if (['/api/v1/rooms/socket', '/ws/rooms'].includes(new URL(socket.url()).pathname)) sockets.push(socket.url());
     });
-    await page.goto('/live');
+    await page.goto('/');
     await expect.poll(async () => {
       const stats = await (await request.get(`${controls}/__performance`)).json();
       return stats.requests.some((item: { path: string; finishedAt: number | null }) => item.path === '/api/v1/rooms/socket-ticket' && item.finishedAt === null);
@@ -105,7 +105,7 @@ test('room socket bootstrap respects Retry-After and resumes after an offline ev
     if (attempts.length === 1) return route.fulfill({ status: 429, headers: { 'Retry-After': '2' }, json: { error: { code: 'rate_limit', message: '稍后重试' } } });
     return route.continue();
   });
-  await page.goto('/live');
+  await page.goto('/');
   await expect(page.getByText('重新连接中…', { exact: true })).toBeVisible();
   await page.evaluate(() => {
     window.dispatchEvent(new Event('offline'));

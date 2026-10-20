@@ -19,7 +19,7 @@ export default defineConfig({
     { command: 'node tests/fixtures/api.mjs', url: 'http://127.0.0.1:18181/health' },
     {
       command: 'pnpm exec next dev --hostname 127.0.0.1 --port 3012',
-      url: 'http://127.0.0.1:3012/live',
+      url: 'http://127.0.0.1:3012/',
       timeout: 120_000,
       env: { COMPANION_API_URL: 'http://127.0.0.1:18181', NEXT_BUILD_DIR: '.next-live-e2e' },
     },

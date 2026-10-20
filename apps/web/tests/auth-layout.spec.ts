@@ -17,7 +17,7 @@ test('auth documents keep their full width before hydration', async ({ browser, 
       await expect(page.locator('.auth-frame')).toHaveCSS('width', '1200px');
       expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(844);
       await page.getByRole('link', { name: '关闭并进入首页' }).click();
-      await expect(page).toHaveURL('/companion');
+      await expect(page).toHaveURL('/');
     }
   } finally {
     await context.close();

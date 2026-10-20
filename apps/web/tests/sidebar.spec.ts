@@ -141,7 +141,7 @@ test('inherited account shows its role and logs out through the existing action'
   await expect(panel.getByRole('link', { name: '陈念 以此身份回复消息' })).toHaveAttribute('href', '/operator');
   await expect(panel.getByText('拥有一个 AI 身份')).toHaveCount(0);
   await panel.getByRole('button', { name: '退出登录' }).click();
-  await expect(page).toHaveURL('/companion');
+  await expect(page).toHaveURL('/');
   await expect(page.getByRole('link', { name: '登录 / 注册', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '账户与身份 · 继承测试用户', exact: true })).toHaveCount(0);
   expect((await context.cookies()).some(cookie => cookie.name === 'companion_session')).toBe(false);

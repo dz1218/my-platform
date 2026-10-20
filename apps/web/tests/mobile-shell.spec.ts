@@ -49,6 +49,9 @@ for (const width of [320, 390]) {
   test(`mobile account keeps private data and working account actions at ${width}px`, async ({ page, context }, testInfo) => {
     await context.addCookies([cookie]);
     await page.route('**/api/v1/matches', route => route.fulfill({ json: { items: [{ id: 'mobile-shell-match', conversationId: 'mobile-shell-conversation', identity: { id: 'mobile-shell-identity', name: '林晚', age: 24, avatarUrl: '' } }] } }));
+    // This account-action test owns its chat fixture; the default empty socket
+    // snapshot must not replace the HTTP response before the logout assertions.
+    await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/me');
     const main = page.getByRole('main');
@@ -73,7 +76,7 @@ for (const width of [320, 390]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`mobile-account-${width}.png`), fullPage: true });
     await main.getByRole('button', { name: '退出登录', exact: true }).click();
-    await expect(page).toHaveURL('/companion');
+    await expect(page).toHaveURL('/');
     expect((await context.cookies()).some(item => item.name === 'companion_session')).toBe(false);
   });
 

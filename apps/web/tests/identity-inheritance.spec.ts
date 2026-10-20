@@ -179,7 +179,8 @@ test('skipping preserves the personal account and does not claim an identity', a
   const mock = await mockInheritance(page);
   await page.goto('/choose-identity');
   await page.getByRole('button', { name: '暂不继承，以本账户继续', exact: true }).click();
-  await expect(page).toHaveURL('/companion');
+  await expect(page).toHaveURL('/');
+  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '陪伴', exact: true }).click();
   await expect(page.getByRole('button', { name: '和林晚打个招呼', exact: true })).toBeVisible();
   expect(mock.skipped).toEqual([{}]);
   expect(mock.claims).toEqual([]);
@@ -317,7 +318,8 @@ test('male account has no female inheritance options and can continue without in
   await expect(page.getByRole('heading', { name: '要继承一个 AI 身份吗？' })).toBeVisible();
   await expect(page.getByRole('button', { name: /^选择/ })).toHaveCount(0);
   await page.getByRole('button', { name: '暂不继承，以本账户继续', exact: true }).click();
-  await expect(page).toHaveURL('/companion');
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('searchbox', { name: '搜索直播间', exact: true })).toBeEnabled();
   expect(mock.claims).toEqual([]);
 });
 
@@ -378,7 +380,7 @@ test('same-tab logout and login cannot reuse another account’s cached inherite
   await expect(page).toHaveURL('/me');
   await page.getByRole('button', { name: /账户与身份 ·/ }).click();
   await page.getByRole('navigation', { name: '账户与身份', exact: true }).getByRole('button', { name: '退出登录', exact: true }).click();
-  await expect(page).toHaveURL('/companion');
+  await expect(page).toHaveURL('/');
   await expect(page.getByRole('link', { name: '以陈念的身份回复', exact: true })).toHaveCount(0);
   await page.getByRole('link', { name: '登录 / 注册', exact: true }).click();
   await expect(page).toHaveURL('/login');
@@ -400,7 +402,7 @@ test('same-tab logout and login cannot reuse another account’s cached inherite
   await page.getByRole('textbox', { name: '手机号', exact: true }).fill('13800138000');
   await page.getByLabel('密码', { exact: true }).fill('only-for-browser-test');
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL('/companion');
+  await expect(page).toHaveURL('/');
   await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '我的', exact: true }).click();
   await page.getByRole('tab', { name: 'AI 身份', exact: true }).click();
   await page.getByRole('link', { name: '选择 AI 身份', exact: true }).click();

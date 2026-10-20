@@ -265,7 +265,7 @@ for (const width of [1440, 390]) {
       await back.click();
       await page.screenshot({ path: test.info().outputPath(`return-dialog-${width}.png`), fullPage: true });
       await page.getByRole('button', { name: '结束直播', exact: true }).click();
-      await expect(page).toHaveURL(/\/live$/);
+      await expect(page).toHaveURL('/');
       await expectEnded(viewer);
     } finally {
       await viewerContext.close();
@@ -307,7 +307,7 @@ test('a signed departure persists a real 60-second recovery deadline before clos
     // A raw SDK spectator keeps LiveKit nonempty but never requests our room
     // detail endpoint. Once the host page is closed there is no browser left
     // that can trigger reconciliation; the authenticated webhook must do it.
-    await sdkViewer.goto('/live');
+    await sdkViewer.goto('/');
     await sdkViewer.addScriptTag({ path: resolve('node_modules/livekit-client/dist/livekit-client.umd.js') });
     await sdkViewer.evaluate(async ({ url, token }) => {
       const sdk = (window as unknown as { LivekitClient: typeof import('livekit-client') }).LivekitClient;
@@ -438,7 +438,7 @@ test('lobby return stays put on an unaccepted close and confirms a lost accepted
     await expect(page.getByText('已连接', { exact: true })).toBeVisible();
     accepted = true;
     await page.getByRole('button', { name: '结束直播', exact: true }).click();
-    await expect(page).toHaveURL(/\/live$/);
+    await expect(page).toHaveURL('/');
   } finally { await rpc('DeleteRoom', { room: roomId }, { roomCreate: true }); }
 });
 
@@ -539,7 +539,7 @@ for (const width of [1440, 390]) {
         sample();
       });
       await page.getByRole('button', { name: '结束直播', exact: true }).click();
-      await expect(page).toHaveURL(/\/live$/);
+      await expect(page).toHaveURL('/');
       const frames = await page.evaluate(() => (window as unknown as { lobbyReturnFrames: { dialog: boolean; ended: boolean; controls: boolean }[] }).lobbyReturnFrames);
       expect(frames.length).toBeGreaterThan(0);
       expect(frames.every(frame => frame.dialog && !frame.ended && frame.controls), JSON.stringify(frames)).toBe(true);

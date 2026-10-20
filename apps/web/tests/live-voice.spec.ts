@@ -275,7 +275,7 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       // Exercise the actual LiveKit publish checks from a browser SDK participant,
       // using a credential and approval issued by the real application handlers.
       const probe = await one.context.newPage();
-      await probe.goto('/live');
+      await probe.goto('/');
       await probe.addScriptTag({ path: resolve('node_modules/livekit-client/dist/livekit-client.umd.js') });
       const probeJoined = await probe.evaluate(async (roomId) => {
         const sdk = (window as unknown as { LivekitClient: typeof import('livekit-client') }).LivekitClient;

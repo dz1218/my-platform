@@ -4,7 +4,7 @@ import { BookOpen, MessageCircle, Radio, UserRound } from 'lucide-react';
 export type MobileNavigationLinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; children?: ReactNode };
 const tabs = [
   { href: '/companion', label: '陪伴', Icon: MessageCircle },
-  { href: '/live', label: '直播', Icon: Radio },
+  { href: '/', label: '直播', Icon: Radio },
   { href: '/novels', label: '小说', Icon: BookOpen },
   { href: '/me', label: '我的', Icon: UserRound },
 ] as const;
@@ -18,7 +18,7 @@ export function MobileNavigation({ path, pendingHref, Link }: {
   const pendingPath = pendingHref?.split('?')[0];
   return <nav aria-label="手机主导航" className="mobile-nav">
     {tabs.map(({ href, label, Icon }) => {
-      const current = path.startsWith(href)
+      const current = (href === '/' ? path === '/' || path.startsWith('/live/') : path.startsWith(href))
         || (href === '/companion' && path.startsWith('/chat/'))
         || (href === '/me' && (path === '/operator' || path === '/choose-identity'));
       const active = pendingPath ? pendingPath === href : current;

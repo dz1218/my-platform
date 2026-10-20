@@ -14,7 +14,7 @@ async function lobby(page: Page, items: typeof room[] = []) {
   await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, async (route) => {
     await route.fulfill({ json: { items } });
   });
-  await page.goto('/live');
+  await page.goto('/');
   await expect(page.getByRole('searchbox', { name: '搜索直播间' })).toBeEnabled();
   await expect(page.getByRole('button', { name: '刷新列表' })).toHaveCount(0);
 }
@@ -23,18 +23,24 @@ test('create and close update immediately even when subsequent list requests fai
   await login(context);
   let listFails = false;
   let creates = 0;
+  let listReads = 0;
   await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, async (route) => {
     if (route.request().method() === 'POST' && !route.request().url().endsWith('/refresh')) {
       creates++;
       listFails = true;
+      await page.request.post(fixture, { data: { rooms: [room] } });
       return route.fulfill({ status: 201, json: { item: room } });
     }
+    listReads++;
     return route.fulfill(listFails
       ? { status: 503, json: { error: { message: '测试服务暂不可用' } } }
       : { json: { items: [] } });
   });
-  await page.route(`**/api/v1/rooms/${room.id}`, (route) => route.fulfill({ json: { ok: true, state: 'closed' } }));
-  await page.goto('/live');
+  await page.route(`**/api/v1/rooms/${room.id}`, async route => {
+    await page.request.post(fixture, { data: { rooms: [] } });
+    await route.fulfill({ json: { ok: true, state: 'closed' } });
+  });
+  await page.goto('/');
   await page.getByRole('button', { name: '我要开播', exact: true }).click();
   await page.getByRole('textbox', { name: '房间名称' }).fill(room.title);
   await page.getByRole('button', { name: '创建直播间', exact: true }).click();
@@ -42,13 +48,17 @@ test('create and close update immediately even when subsequent list requests fai
   await expect(page.getByRole('textbox', { name: '房间名称' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: '我的直播间', exact: true })).toHaveAttribute('href', `/live/${room.id}`);
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toHaveCount(0);
+  const readsBeforeLeaving = listReads;
   await page.keyboard.press('Escape');
   await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '小说', exact: true }).click();
   await expect(page).toHaveURL(/\/novels$/);
   await expect(page.getByRole('heading', { name: '小说', exact: true })).toBeVisible();
   await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '直播', exact: true }).click();
-  await expect(page.getByRole('main').getByRole('alert')).toContainText('列表更新失败');
+  await expect(page).toHaveURL('/');
+  await expect(page.getByText('实时更新', { exact: true })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
   await expect(page.getByRole('article', { name: room.title })).toBeVisible();
+  expect(listReads).toBe(readsBeforeLeaving);
   expect(creates).toBe(1);
   await page.getByRole('button', { name: `关闭直播间：${room.title}` }).click();
   await page.getByRole('dialog').getByRole('button', { name: '确认关闭' }).click();
@@ -125,7 +135,7 @@ test('legacy duplicate rooms can be managed but cannot create another room', asy
 test('a delayed error retry cannot undo a newer pushed snapshot', async ({ page, context }) => {
   await login(context);
   await page.route('**/api/v1/rooms', route => route.fulfill({ status: 503, json: { error: { message: '列表暂不可用' } } }));
-  await page.goto('/live');
+  await page.goto('/');
   await expect(page.getByRole('button', { name: '重新加载' })).toBeEnabled();
   let release!: () => void;
   const delayed = new Promise<void>((resolve) => { release = resolve; });
@@ -175,7 +185,7 @@ for (const width of [390, 768, 1440]) test(`guests see errors and can retry with
   await page.setViewportSize({ width, height: 900 });
   await page.request.post(fixture, { data: { failures: { '/api/v1/rooms': 503 } } });
   await page.route(/\/api\/v1\/rooms(?:\/refresh)?$/, (route) => route.fulfill({ status: 503, json: { error: { message: '直播服务暂不可用' } } }));
-  await page.goto('/live');
+  await page.goto('/');
   await expect(page.getByRole('main').getByRole('alert')).toContainText('直播服务暂不可用');
   await expect(page.getByText('暂无直播间', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '创建直播间', exact: true })).toHaveCount(0);
@@ -224,7 +234,7 @@ test('temporary join errors allow retry; leaving waits for identity and cancels 
   release();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('直播服务暂时不可用');
   await page.getByRole('button', { name: '返回大厅', exact: true }).click();
-  await expect(page).toHaveURL('/live');
+  await expect(page).toHaveURL('/');
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
   const requestsAtExit = attempts;
   await page.waitForTimeout(1500);

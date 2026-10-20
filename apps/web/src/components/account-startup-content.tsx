@@ -17,8 +17,8 @@ function CompanionStartup() {
 /** Render the destination's chrome before account data, without a guest owner or data requests. */
 export function AccountStartupContent({ path }: { path: string }) {
   if (path === '/me') return <ProfileLoading />;
-  if (path === '/companion' || path === '/') return <Suspense fallback={<CompanionLoading />}><CompanionStartup /></Suspense>;
-  if (path === '/live') return <LiveLobbyLoading />;
+  if (path === '/companion') return <Suspense fallback={<CompanionLoading />}><CompanionStartup /></Suspense>;
+  if (path === '/') return <LiveLobbyLoading />;
   if (path === '/novels') return <NovelShelfLoading />;
   if (path.startsWith('/chat/')) return <PageLoading kind="chat" />;
   if (path.startsWith('/live/')) return <LiveRoomLoading />;

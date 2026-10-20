@@ -27,8 +27,8 @@ test.afterEach(async ({ request }) => { await configure(request); });
 for (const prefetched of [false, true]) {
   test(`production navigation with ${prefetched ? 'available' : 'blocked'} prefetch`, async ({ page, request }, testInfo) => {
     test.skip(!testInfo.config.configFile?.includes('production'), 'Default Link prefetch runs in the production build.');
-    await page.route('**/live?*', route => route.request().headers()['next-router-prefetch'] === '1' && !prefetched ? route.abort() : route.continue());
-    const prefetch = prefetched ? page.waitForResponse(response => new URL(response.url()).pathname === '/live' && response.request().headers()['next-router-prefetch'] === '1') : null;
+    await page.route(url => url.pathname === '/' && url.searchParams.has('_rsc'), route => route.request().headers()['next-router-prefetch'] === '1' && !prefetched ? route.abort() : route.continue());
+    const prefetch = prefetched ? page.waitForResponse(response => new URL(response.url()).pathname === '/' && response.request().headers()['next-router-prefetch'] === '1') : null;
     await prepare(page);
     // A dynamic route prefetch streams its loading boundary; waiting for the
     // whole response to close would also wait for deferred page content.
@@ -61,7 +61,7 @@ for (const width of [390, 768, 1440]) {
         const start = performance.now();
         document.documentElement.dataset.navigationStartedAt = String(start);
         const observer = new MutationObserver(() => {
-          if (document.querySelector('[data-navigation-pending="/live"], [role="status"][aria-label="正在加载直播间…"]')) {
+          if (document.querySelector('[data-navigation-pending="/"], [role="status"][aria-label="正在加载直播间…"]')) {
             document.documentElement.dataset.navigationFeedbackMs = String(performance.now() - start);
             observer.disconnect();
           }
@@ -186,7 +186,7 @@ test('keyboard navigation and reduced motion retain immediate feedback', async (
 });
 
 test('guest skips authentication requests and fresh lobby data is not fetched twice', async ({ page, request }) => {
-  await page.goto('/live');
+  await page.goto('/');
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
   const reads = await requests(request);
   expect(reads.filter(r => r.path === '/api/v1/me')).toHaveLength(0);
@@ -361,14 +361,14 @@ for (const width of [390, 1440]) {
       });
       try {
         // Deliberately inspect streamed HTML before hydration can replace it.
-        await page.goto(`/${tab}`, { waitUntil: 'commit' });
+        await page.goto(tab === 'live' ? '/' : `/${tab}`, { waitUntil: 'commit' });
         const startup = page.locator('[data-app-startup]:visible');
         await expect(startup).toBeVisible();
         await expect.poll(() => blockedScripts).toBeGreaterThan(0);
         const nav = startup.getByRole('navigation', { name: width < 768 ? '手机主导航' : '主导航', exact: true });
         await expect(nav).toBeVisible();
         const active = nav.locator('[aria-current="page"]');
-        await expect(active).toHaveAttribute('href', `/${tab}`);
+        await expect(active).toHaveAttribute('href', tab === 'live' ? '/' : `/${tab}`);
         expect(await active.evaluate(element => {
           const bounds = element.getBoundingClientRect();
           return element.contains(document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2));
@@ -530,7 +530,7 @@ test('four tabs reuse ordinary data and one account subscription until an explic
   });
   for (const label of ['陪伴', '我的', '小说', '直播', '小说']) {
     await nav.getByRole('link', { name: label, exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/${({ 陪伴: 'companion', 我的: 'me', 小说: 'novels', 直播: 'live' } as Record<string, string>)[label]}(?:\\?.*)?$`));
+    await expect(page).toHaveURL(new RegExp(`/${({ 陪伴: 'companion', 我的: 'me', 小说: 'novels', 直播: '' } as Record<string, string>)[label]}(?:\\?.*)?$`));
     await expect(page.locator('[data-page-skeleton]')).toHaveCount(0);
   }
   await page.evaluate(() => {
@@ -583,8 +583,8 @@ test('failed manual refresh retains the bookshelf and retries only its data', as
   expect((await requests(request)).filter(item => item.path === '/api/v1/me')).toHaveLength(0);
 });
 
-test('leaving the live tab stops room updates and cached rooms survive a slow return check', async ({ page, request }) => {
-  await page.goto('/live');
+test('leaving the live tab stops room updates and returning reuses cached rooms without another read', async ({ page, request }) => {
+  await page.goto('/');
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
   const nav = page.getByRole('navigation', { name: '主导航', exact: true });
   await nav.getByRole('link', { name: '小说', exact: true }).click();
@@ -598,7 +598,8 @@ test('leaving the live tab stops room updates and cached rooms survive a slow re
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
   await expect(page.getByRole('status', { name: '正在加载直播间…', exact: true })).toHaveCount(0);
   await expect(page.getByRole('main').locator('[data-loading-overlay]')).toHaveCount(0);
-  await expect.poll(async () => (await requests(request)).some(item => item.path === '/api/v1/rooms' && item.finishedAt === null)).toBe(true);
+  await expect.poll(async () => (await (await request.get(fixture)).json()).roomSockets).toBe(1);
+  expect((await requests(request)).filter(item => item.path === '/api/v1/rooms')).toEqual([]);
 });
 
 test('saved novel metadata and chapter creation invalidate an already visited bookshelf', async ({ page, request }, testInfo) => {

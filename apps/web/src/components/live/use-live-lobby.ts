@@ -20,8 +20,8 @@ export function useLiveLobby({ apiBaseUrl, isLoggedIn, hostNickname }: LiveLobby
   const roomsQuery = useQuery({
     ...sessionQueryOptions,
     queryKey,
+    // Reuse session data on return; the room socket sends a fresh snapshot.
     queryFn: ({ signal }) => service.list(signal),
-    refetchOnMount: 'always',
   });
   const rooms = roomsQuery.data ?? [];
   const ownedRooms = isLoggedIn ? rooms.filter((room) => room.canManage) : [];

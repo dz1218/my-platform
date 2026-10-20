@@ -94,7 +94,7 @@ function Discovery({ model: m, mobile = false }: { model: CompanionModel; mobile
 }
 
 function MobileRecent({ model: m, onDiscover }: { model: CompanionModel; onDiscover: () => void }) {
-  return <MobileRecentConversations count={m.recent?.length} showRefresh={m.isLoggedIn} refreshing={m.conversations.isFetching} onRefresh={() => void m.conversations.refetch()} footer={<><Link href="/live" className="link-muted inline-flex min-h-11 items-center">看看直播</Link><Link href="/novels" className="link-muted inline-flex min-h-11 items-center">读本小说</Link></>}>
+  return <MobileRecentConversations count={m.recent?.length} showRefresh={m.isLoggedIn} refreshing={m.conversations.isFetching} onRefresh={() => void m.conversations.refetch()} footer={<><Link href="/" className="link-muted inline-flex min-h-11 items-center">看看直播</Link><Link href="/novels" className="link-muted inline-flex min-h-11 items-center">读本小说</Link></>}>
     {!m.isLoggedIn ? <MobileConversationEmpty guest action={<Link href="/login" className="btn-secondary">登录后聊天</Link>} /> : m.conversations.isPending ? <ConversationSkeleton /> : m.recent?.length ? <ul className="divide-y divide-line">{m.recent.map(match => <li key={match.id} data-browse-anchor={`match:${match.id}`}><MatchLink match={match} scroll={false} onClick={m.prepareChat} className="flex min-w-0 items-center gap-3 rounded-control py-5 transition-colors hover:bg-surface-soft"><MobileConversationSummary identity={match.identity} /></MatchLink></li>)}</ul> : !m.conversations.error && <MobileConversationEmpty guest={false} action={<button type="button" className="btn-secondary" onClick={onDiscover}>认识朋友</button>} />}
   </MobileRecentConversations>;
 }

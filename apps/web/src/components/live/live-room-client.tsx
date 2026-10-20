@@ -60,7 +60,7 @@ const LiveRoomScene = memo(function LiveRoomScene({ model, viewport }: {
             <h2>{roomEnded ? '直播间已结束' : roomInUse ? '此直播间已在其他页面打开' : recovering ? '正在恢复直播连接' : error ? '暂时无法进入直播间' : '你已离开直播间'}</h2>
             {isTerminal ? <p role="status">{terminalMessage}</p> : error ? <p role="alert">{error}</p> : <p>摄像头和麦克风已关闭，随时可以重新加入。</p>}
             {!isTerminal && !isHost && <label className="live-guest-name"><span>{role === '观众' ? '观众昵称' : '房间昵称'}</span><input className="live-input" autoComplete="nickname" maxLength={80} value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="输入你的昵称" /></label>}
-            <div className="live-stage-actions">{isTerminal ? <Link href="/live" className="live-button live-button-light"><LiveIcon name="back" size={16} />返回直播大厅</Link> : <button type="button" className="live-button live-button-light" onClick={() => void joinRoom()}><LiveIcon name="refresh" size={16} />重新加入</button>}</div>
+            <div className="live-stage-actions">{isTerminal ? <Link href="/" className="live-button live-button-light"><LiveIcon name="back" size={16} />返回直播大厅</Link> : <button type="button" className="live-button live-button-light" onClick={() => void joinRoom()}><LiveIcon name="refresh" size={16} />重新加入</button>}</div>
           </div>}
           <div className={`live-stage-bottom ${joining ? 'invisible' : ''}`} aria-hidden={joining || undefined}><button type="button" className="live-icon-button" title={isFullscreen ? '退出全屏' : '全屏观看'} aria-label={isFullscreen ? '退出全屏' : '全屏观看'} onClick={() => void toggleFullscreen()}><LiveIcon name="expand" size={18} /></button></div>
         </div>

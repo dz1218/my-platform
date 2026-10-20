@@ -22,7 +22,7 @@ for (const width of [1440, 768, 390]) {
     expect(Math.abs(await top() - before)).toBeLessThan(2);
     await page.screenshot({ path: test.info().outputPath(`closed-${width}.png`), fullPage: true });
     await page.getByRole('button', { name: width < 768 ? '返回直播大厅' : '返回大厅', exact: true }).click();
-    await expect(page).toHaveURL(/\/live$/);
+    await expect(page).toHaveURL('/');
     await expect(page.getByRole('heading', { name: width < 768 ? '今晚，还很安静。' : '暂无直播间', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '刷新列表', exact: true })).toHaveCount(0);
     await page.screenshot({ path: test.info().outputPath(`lobby-${width}.png`), fullPage: true });

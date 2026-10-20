@@ -7,7 +7,7 @@ for (const width of [320, 390]) {
     await page.route('**/api/v1/rooms', route => route.fulfill({ json: { items: rooms } }));
     await page.routeWebSocket('**/api/v1/rooms/socket?*', () => {});
     await page.setViewportSize({ width, height: 844 });
-    await page.goto('/live');
+    await page.goto('/');
     await expect(page.getByRole('heading', { name: '今晚，还很安静。' })).toBeVisible();
     await expect(page.getByRole('searchbox')).toHaveCount(0);
     await expect(page.getByRole('button', { name: '全部', exact: true })).toHaveCount(0);

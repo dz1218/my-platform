@@ -127,7 +127,7 @@ export function IdentityOnboarding({
       client,
       accountId,
       refresh: () => router.refresh(),
-      openHome: () => router.replace("/companion"),
+      openHome: () => router.replace("/"),
     }),
   );
   const {

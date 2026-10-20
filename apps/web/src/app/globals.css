@@ -3,30 +3,6 @@
 @source "../../../../packages/web-ui/src";
 @source "../../../../packages/mobile-web/src";
 
-/* Scoped to closing auth; normal route changes keep their existing behavior. */
-@keyframes auth-view-out {
-  to { opacity: 0; transform: translateY(-12px) scale(.975); }
-}
-@keyframes auth-view-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-/* Keep the destination and its fixed navigation at their final geometry. */
-html[data-auth-exit="native"]::view-transition-group(root) { animation: none; }
-html[data-auth-exit="native"]::view-transition-old(root) {
-  animation: auth-view-out 280ms cubic-bezier(.4, 0, .2, 1) both;
-  mix-blend-mode: normal;
-}
-html[data-auth-exit="native"]::view-transition-new(root) {
-  animation: auth-view-in 380ms cubic-bezier(.2, .7, .2, 1) both;
-  mix-blend-mode: normal;
-}
-@media (prefers-reduced-motion: reduce) {
-  html[data-auth-exit="native"]::view-transition-group(root),
-  html[data-auth-exit="native"]::view-transition-old(root),
-  html[data-auth-exit="native"]::view-transition-new(root) { animation: none; }
-}
-
 @layer base {
   * { box-sizing: border-box; }
   html { min-height: 100%; color-scheme: dark; scroll-padding-top: 76px; }

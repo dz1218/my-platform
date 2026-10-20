@@ -7,7 +7,7 @@ test.afterEach(async ({ request }) => { await request.post(fixture, { data: {} }
 for (const width of [320, 390, 768, 1440]) {
   test(`lobby reference layout and guest entry at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/live');
+    await page.goto('/');
     await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '刷新列表' })).toBeEnabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -36,7 +36,7 @@ for (const width of [320, 390, 768, 1440]) {
 test('desktop create dialog preserves drafts, closes after creation and links directly to the owned room', async ({ page, context }) => {
   await context.addCookies([{ name: 'companion_session', value: 'live-test-host', domain: '127.0.0.1', path: '/' }]);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/live');
+  await page.goto('/');
   await page.getByRole('button', { name: '我要开播', exact: true }).click();
   const input = page.getByRole('textbox', { name: '房间名称' });
   await input.fill('晚间电台');
@@ -62,7 +62,7 @@ test('desktop create dialog preserves drafts, closes after creation and links di
 
 test('desktop filters, search and pushed room updates remain usable', async ({ page, request }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/live');
+  await page.goto('/');
   await expect(page.getByText('暂无直播间', { exact: true })).toBeVisible();
   await request.post(fixture, { data: { rooms: [
     { id: 'on-air', title: '晚安电台', status: '直播中', viewers: 3, canManage: false },

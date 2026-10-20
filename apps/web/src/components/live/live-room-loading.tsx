@@ -37,10 +37,10 @@ export function LiveChatLoading() {
 
 export function LiveRoomLoading() {
   return <main id="main-content" tabIndex={-1} data-page-loading="room" className="live-page live-room-page">
-    <div className="live-room-back hidden md:flex"><Link href="/live" prefetch={false} aria-label="返回大厅" title="返回大厅" className="live-header-back"><span className="live-header-back-icon"><LiveIcon name="back" size={21} /></span><span>返回大厅</span></Link></div>
+    <div className="live-room-back hidden md:flex"><Link href="/" prefetch={false} aria-label="返回大厅" title="返回大厅" className="live-header-back"><span className="live-header-back-icon"><LiveIcon name="back" size={21} /></span><span>返回大厅</span></Link></div>
 
     <div className="md:hidden"><MobileLiveRoomHeader title="直播间" pendingTitle role={null} status="" count={null}
-      back={<Link href="/live" prefetch={false} aria-label="返回直播大厅" className="grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-soft"><LiveIcon name="back" size={21} /></Link>}
+      back={<Link href="/" prefetch={false} aria-label="返回直播大厅" className="grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-soft"><LiveIcon name="back" size={21} /></Link>}
     /></div>
     <div className="live-studio">
       <div className="live-stage-column">
