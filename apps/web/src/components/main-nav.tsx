@@ -231,14 +231,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     window.addEventListener("popstate", cancelNavigation);
     return () => window.removeEventListener("popstate", cancelNavigation);
   }, [cancelNavigation]);
-  // Keep this boundary mounted across auth and public routes. A new boundary
-  // would immediately show AppStartup even when the lobby data is cached.
+  const isAuth = path === "/login" || path === "/register";
+  // Keep the public boundary mounted even while auth is visible, so returning
+  // home retains the outgoing page until AppFrame is ready. Auth stays outside:
+  // its server-rendered form must not be hidden behind the account fallback.
   return (
     <AuthExitTransition>
+      {isAuth ? children : null}
       <Suspense fallback={<AppStartup />}>
-        {path === "/login" || path === "/register" ? (
-          children
-        ) : (
+        {isAuth ? null : (
           <AppFrame user={user}>{children}</AppFrame>
         )}
       </Suspense>

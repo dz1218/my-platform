@@ -61,14 +61,15 @@ for (const width of [1440, 390]) {
     }
   });
 
-  test(`lobby login never displays an unframed lobby skeleton at ${width}px`, async ({ page }, testInfo) => {
+  test(`lobby login waits for the complete form without flashing placeholders at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
-    // Hold the auth layout chunk so its parent loading boundary stays visible.
+    // Delay both the layout and form chunks to exercise the first uncached visit.
     await page.route('**/_next/static/chunks/**', async route => {
-      if (decodeURIComponent(route.request().url()).includes('/(auth)/layout')) {
-        await new Promise(resolve => setTimeout(resolve, 800));
+      const path = decodeURIComponent(route.request().url());
+      if (path.includes('/(auth)/layout') || path.includes('/(auth)/login/page')) {
+        await new Promise(resolve => setTimeout(resolve, path.includes('/login/page') ? 1600 : 800));
       }
       await route.continue();
     });
@@ -77,6 +78,11 @@ for (const width of [1440, 390]) {
     await expect(emptyLobby).toBeVisible();
     await page.evaluate(() => {
       const sample = () => {
+        for (const panel of document.querySelectorAll('.auth-panel')) {
+          if (panel.getBoundingClientRect().height > 0 && panel.textContent?.includes('正在加载表单')) {
+            document.documentElement.dataset.authFormPlaceholder = 'true';
+          }
+        }
         for (const skeleton of document.querySelectorAll('[data-skeleton="rooms"]')) {
           if (skeleton.getBoundingClientRect().height > 0 && !skeleton.closest('.app-shell')) {
             document.documentElement.dataset.unframedLobby = 'true';
@@ -89,6 +95,7 @@ for (const width of [1440, 390]) {
     await page.getByRole('link', { name: width < 768 ? '登录开播' : '登录 / 注册', exact: true }).click();
     await expect(page).toHaveURL('/login');
     await expect(page.getByRole('textbox', { name: '手机号', exact: true })).toBeVisible();
+    await expect(page.locator('html')).not.toHaveAttribute('data-auth-form-placeholder');
     await expect(page.locator('html')).not.toHaveAttribute('data-unframed-lobby');
     await expect(page.locator('[data-skeleton="rooms"]')).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath(`login-${width}.png`) });

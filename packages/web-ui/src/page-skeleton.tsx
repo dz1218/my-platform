@@ -43,7 +43,3 @@ export function PageLoading({ kind = 'page' }: { kind?: LoadingKind }) {
     <LoadingPlaceholder label={page.label} className="min-h-[40dvh]" />
   </main>;
 }
-
-export function AuthFormLoading() {
-  return <div className="auth-panel"><LoadingPlaceholder label="正在加载表单…" /></div>;
-}
