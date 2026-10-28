@@ -1,4 +1,4 @@
-import type { LiveLobbyStore } from './store';
+import type { LiveLobbyStore } from "./store";
 
 export const liveLobbySelectors = {
   view: (s: LiveLobbyStore) => ({
@@ -6,7 +6,6 @@ export const liveLobbySelectors = {
     isCreating: s.isCreating,
     closingRoomId: s.closingRoomId,
     roomToClose: s.roomToClose,
-    createdRoomId: s.createdRoomId,
     error: s.error,
     closeError: s.closeError,
     isRefreshing: s.isRefreshing,
@@ -15,4 +14,3 @@ export const liveLobbySelectors = {
     creating: s.creating,
   }),
 };
-
