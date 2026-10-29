@@ -13,7 +13,7 @@ import { useCompanionNavigation } from './companion-navigation';
 import { useAccountLifecycle } from '@/features/account/account-lifecycle';
 import type { Identity, Match } from '@/types/companion';
 
-export type CardContext = { known: Map<string, Match>; matchesReady: boolean; pendingIds: string[]; enteringId: string | null; meet: (id: string) => void; prepareChat: () => void };
+export type CardContext = { known: Map<string, Match>; matchesReady: boolean; pendingIds: string[]; enteringId: string | null; meet: (id: string) => void; beginEntry: (id: string) => boolean };
 export function useCompanionHome(accountId: string | null, inheritedIdentity?: Identity | null) {
   const isLoggedIn = !!accountId;
   const router = useRouter();
@@ -27,8 +27,8 @@ export function useCompanionHome(accountId: string | null, inheritedIdentity?: I
   }, []);
   const isOwnerActive = useCallback(() => mounted.current && !isLeavingAccount(), [isLeavingAccount]);
   const ui = useStoreInstance(() => createCompanionStore({ client, accountId, isOwnerActive, captureNavigationIntent, openLogin: () => router.push('/login'), prepareChat: captureChat, openChat: id => router.push(`/chat/${id}`, { scroll: false }) }));
-  const { filters, initialTab, pendingIds, enteringId, error: meetError } = useStore(ui, useShallow(companionSelectors.view));
-  const { applyFilters, initializeTab, meetIdentity, clearError, finishEntry } = ui.getState();
+  const { filters, pendingIds, enteringId, error: meetError } = useStore(ui, useShallow(companionSelectors.view));
+  const { applyFilters, meetIdentity, clearError, finishEntry, beginEntry } = ui.getState();
   const prepareChat = useCallback(() => { finishEntry(); captureChat(); }, [finishEntry, captureChat]);
   useLayoutEffect(() => {
     if (paused) finishEntry();
@@ -53,11 +53,11 @@ export function useCompanionHome(accountId: string | null, inheritedIdentity?: I
   const friends = useMemo(() => [...new Map((identities.data?.pages.flatMap(page => page.items) ?? []).filter(identity => identity.id !== inheritedIdentity?.id).map(identity => [identity.id, identity])).values()], [identities.data, inheritedIdentity?.id]);
   const recent = conversations.data?.items.filter(match => match.identity.id !== inheritedIdentity?.id);
   const known = useMemo(() => new Map(conversations.data?.items.map(match => [match.identity.id, match])), [conversations.data]);
-  const cardContext = useMemo<CardContext>(() => ({ known, matchesReady: !isLoggedIn || !!conversations.data, pendingIds, enteringId, meet: meetIdentity, prepareChat }), [known, isLoggedIn, pendingIds, enteringId, conversations.data, meetIdentity, prepareChat]);
+  const cardContext = useMemo<CardContext>(() => ({ known, matchesReady: !isLoggedIn || !!conversations.data, pendingIds, enteringId, meet: meetIdentity, beginEntry }), [known, isLoggedIn, pendingIds, enteringId, conversations.data, meetIdentity, beginEntry]);
   const loadMore = useCallback(() => { if (!paused && !identities.isFetching) void identities.fetchNextPage(); }, [paused, identities.isFetching, identities.fetchNextPage]);
   const error = conversations.error ?? meetError;
   const page = identities.data?.pages[0];
   const retry = () => { if (isLoggedIn && conversations.error) void conversations.refetch(); clearError(); };
-  return { initialTab, initializeTab, isLoggedIn, paused, prepareChat, filters, applyFilters, heading, identities, conversations, friends, recent, cardContext, loadMore, error, page, retry };
+  return { isLoggedIn, paused, prepareChat, filters, applyFilters, heading, identities, conversations, friends, recent, cardContext, loadMore, error, page, retry };
 }
 export type CompanionModel = ReturnType<typeof useCompanionHome>;

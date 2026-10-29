@@ -19,7 +19,7 @@ export function NovelShelfFrame({ actions, count, refreshing = false, onRefresh,
   children: ReactNode;
 }) {
   const viewport = useViewport();
-  if (viewport === 'mobile') return <MobileNovelShelfFrame actions={actions} count={count} refreshing={refreshing} onRefresh={onRefresh}>{children}</MobileNovelShelfFrame>;
+  if (viewport === 'mobile') return <MobileNovelShelfFrame actions={actions} count={count}>{children}</MobileNovelShelfFrame>;
   return <main id="main-content" tabIndex={-1} className="page-shell page-content">
     <PageHeading title="小说" description="找一本小说，慢慢读。" actions={actions} />
     <SceneBanner scene="reading" title="翻开一页，走进另一种生活。" description="读几页书，让想象慢下来。下一段故事，从此刻开始。" />

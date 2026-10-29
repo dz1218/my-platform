@@ -193,7 +193,6 @@ test('chat settings lock the history and become a nonmodal panel on desktop', as
 
 for (const scenario of [
   { path: '/companion?view=discover', endpoint: '**/api/v1/discover?*', json: { items: [], total: 0, nextPage: null, occupations: [] } },
-  { path: '/companion?view=recent', endpoint: '**/api/v1/matches', json: { items: [] } },
   { path: '/novels', endpoint: '**/api/v1/novels', json: { items: [] } },
   { path: '/me', endpoint: '**/api/v1/matches', json: { items: [] } },
 ]) {

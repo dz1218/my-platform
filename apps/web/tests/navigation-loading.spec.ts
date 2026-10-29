@@ -235,7 +235,7 @@ async function signIn(page: Page) {
   await page.context().addCookies([{ name: 'companion_session', value: 'inheritance-test-completed', domain: '127.0.0.1', path: '/' }]);
 }
 
-for (const width of [390, 1440]) {
+for (const width of [1440]) {
   test(`recent chats keep their loading frame through account resolution and reload at ${width}px`, async ({ page, request }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
     await signIn(page);
@@ -379,7 +379,7 @@ for (const width of [390, 1440]) {
         const main = startup.getByRole('main');
         const label = { companion: '正在加载页面…', live: '正在加载直播间…', novels: '正在加载书架…', me: '正在加载账户…' }[tab];
         const loading = main.getByRole('status', { name: label, exact: true });
-        await expect(loading).toHaveAttribute('data-skeleton', { companion: width < 768 ? 'conversations' : 'catalog', live: 'rooms', novels: 'bookshelf', me: 'profile' }[tab]);
+        await expect(loading).toHaveAttribute('data-skeleton', { companion: 'catalog', live: 'rooms', novels: 'bookshelf', me: 'profile' }[tab]);
         await expect(main.locator('[data-loading-overlay]')).toHaveCount(0);
         let frameBottom: number;
         if (tab === 'me') {
@@ -396,14 +396,14 @@ for (const width of [390, 1440]) {
           expect(skeleton.y + skeleton.height).toBeLessThanOrEqual(details.y + details.height + 1);
           frameBottom = details.y;
         } else {
-          const title = tab === 'companion' ? width < 768 ? '陪伴' : '今天想和谁聊聊？' : tab === 'live' ? width < 768 ? '直播' : '直播大厅' : '小说';
+          const title = tab === 'companion' ? width < 768 ? '发现朋友' : '今天想和谁聊聊？' : tab === 'live' ? width < 768 ? '直播' : '直播大厅' : '小说';
           await expect(main.getByRole('heading', { name: title, exact: true, level: 1 })).toBeVisible();
           if (tab === 'companion' && width < 768) {
-            const tabs = main.getByRole('navigation', { name: '陪伴内容', exact: true });
-            await expect(tabs).toBeVisible();
-            await expect(tabs.getByRole('button', { name: '最近聊天', exact: true })).toBeDisabled();
-            await expect(tabs.getByRole('button', { name: '发现朋友', exact: true })).toBeDisabled();
-            const bounds = (await tabs.boundingBox())!;
+            await expect(main.getByRole('navigation', { name: '陪伴内容', exact: true })).toHaveCount(0);
+            const search = main.getByRole('searchbox', { name: '姓名', exact: true });
+            await expect(search).toBeDisabled();
+            await expect(main.getByRole('button', { name: '筛选朋友', exact: true })).toBeDisabled();
+            const bounds = (await search.boundingBox())!;
             frameBottom = bounds.y + bounds.height;
           } else if (tab === 'live' && width < 768) {
             // Mobile opens with room controls rather than the desktop scene.
@@ -444,7 +444,10 @@ for (const width of [390, 1440]) {
         if (tab === 'me') await expect(page.getByRole('heading', { name: '继承测试用户', exact: true })).toBeVisible();
         else if (tab === 'companion') await expect(page.getByRole('searchbox', { name: '姓名', exact: true })).toBeEnabled();
         else if (tab === 'live') await expect(page.getByRole('searchbox', { name: '搜索直播间', exact: true })).toBeEnabled();
-        else await expect(page.getByRole('button', { name: '刷新小说', exact: true })).toBeEnabled();
+        else if (width < 768) {
+          await expect(page.getByRole('button', { name: '刷新小说', exact: true })).toHaveCount(0);
+          await expect(page.getByRole('button', { name: '刷新当前页面', exact: true })).toBeEnabled();
+        } else await expect(page.getByRole('button', { name: '刷新小说', exact: true })).toBeEnabled();
         expect(errors).toEqual([]);
       } finally { release(); }
     });

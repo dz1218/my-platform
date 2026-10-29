@@ -6,11 +6,13 @@ import { Check, ChevronDown, Search } from 'lucide-react';
 type Option = { value: string; label: string };
 
 /** Shared themed picker. The native select only participates in form validation. */
-export function Select({ id, label, options, value, onChange, placeholder = '请选择', searchPlaceholder, name, required = false, disabled = false, describedBy, requiredMessage = '请选择一项。' }: {
+export function Select({ id, label, options, value, onChange, placeholder = '请选择', searchPlaceholder, name, required = false, disabled = false, describedBy, requiredMessage = '请选择一项。', appearance = 'default' }: {
   id: string; label: string; options: Option[]; value: string; onChange: (value: string) => void;
   placeholder?: string; searchPlaceholder?: string; name?: string; required?: boolean;
   disabled?: boolean; describedBy?: string; requiredMessage?: string;
+  appearance?: 'default' | 'quiet';
 }) {
+  const quiet = appearance === 'quiet';
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -35,7 +37,7 @@ export function Select({ id, label, options, value, onChange, placeholder = '请
     const below = viewportTop + viewportHeight - rect.bottom - 12;
     const above = rect.top - viewportTop - 12;
     const placeAbove = below < 240 && above > below;
-    const maxHeight = Math.max(0, Math.min(352, placeAbove ? above : below));
+    const maxHeight = Math.max(0, Math.min(quiet ? 264 : 352, placeAbove ? above : below));
     const width = Math.min(Math.max(rect.width, searchPlaceholder ? 260 : 0), viewportWidth - 24);
     panel.current.style.width = `${width}px`;
     panel.current.style.maxHeight = `${maxHeight}px`;
@@ -151,20 +153,20 @@ export function Select({ id, label, options, value, onChange, placeholder = '请
       aria-haspopup="listbox" aria-expanded={open} aria-controls={`${id}-options`}
       aria-activedescendant={searchPlaceholder ? undefined : activeId} aria-required={required || undefined}
       aria-invalid={invalid || undefined} aria-describedby={[describedBy, invalid ? `${id}-error` : undefined].filter(Boolean).join(' ') || undefined}
-      className="input-field select-trigger" onClick={() => open ? close() : expand()} onKeyDown={handleKey}>
+      className={quiet ? 'flex min-h-11 w-full items-center justify-between gap-3 rounded-control bg-surface-soft px-3 text-base text-ink transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-control aria-invalid:ring-danger' : 'input-field select-trigger'} onClick={() => open ? close() : expand()} onKeyDown={handleKey}>
       <span className={`truncate ${selected ? '' : 'text-muted'}`}>{selected?.label ?? placeholder}</span>
       <ChevronDown aria-hidden="true" size={16} strokeWidth={1.75} className={`shrink-0 text-muted transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`} />
     </button>
-    <div ref={panel} popover="auto" className="select-menu select-popover" onToggle={event => { if (event.newState === 'closed') setOpen(false); }}>
-      {searchPlaceholder && <div className="relative shrink-0 border-b border-line p-2">
+    <div ref={panel} popover="auto" className={`select-menu select-popover ${quiet ? 'rounded-panel text-sm' : ''}`} onToggle={event => { if (event.newState === 'closed') setOpen(false); }}>
+      {searchPlaceholder && <div className={`relative shrink-0 p-2 ${quiet ? '' : 'border-b border-line'}`}>
         <Search aria-hidden="true" size={16} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-muted" />
         <input ref={search} type="search" aria-label={searchPlaceholder} aria-controls={`${id}-options`} aria-activedescendant={activeId}
-          autoComplete="off" placeholder={searchPlaceholder} className="input-field pl-9" value={query}
+          autoComplete="off" placeholder={searchPlaceholder} className={quiet ? 'h-11 w-full min-w-0 rounded-control bg-surface-soft pr-3 pl-9 text-base leading-6 text-ink caret-ink placeholder:text-muted focus:placeholder:text-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-control [&::-webkit-search-cancel-button]:appearance-none' : 'input-field pl-9 focus:placeholder:text-transparent'} value={query}
           onChange={event => { setQuery(event.target.value); setActive(0); }} onKeyDown={handleKey} />
       </div>}
       <ul ref={list} id={`${id}-options`} role="listbox" aria-label={label} className="min-h-0 overflow-y-auto overscroll-contain p-1">
         {filtered.map((option, index) => <li key={option.value} id={`${id}-option-${index}`} role="option" aria-selected={value === option.value}
-          data-active={activeIndex === index} className="select-option gap-3" onPointerMove={() => setActive(index)}
+          data-active={activeIndex === index} className={`select-option gap-3 ${quiet ? 'aria-selected:font-medium aria-selected:text-ink' : ''}`} onPointerMove={() => setActive(index)}
           onMouseDown={event => event.preventDefault()} onClick={() => choose(option)}>
           <span className="min-w-0 break-words">{option.label}</span>
           {value === option.value && <Check aria-hidden="true" size={16} className="shrink-0" />}

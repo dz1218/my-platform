@@ -4,9 +4,8 @@ import { RefreshCw } from 'lucide-react';
 import { ConversationSkeleton } from '@/features/chat/conversation-skeleton';
 
 /** Keep the same panel geometry before account resolution and while chats load. */
-export function RecentConversationsFrame({ children, mobile = false, headingId = 'recent-heading', count, showRefresh = true, refreshing = false, onRefresh }: {
+export function RecentConversationsFrame({ children, headingId = 'recent-heading', count, showRefresh = true, refreshing = false, onRefresh }: {
   children: ReactNode;
-  mobile?: boolean;
   headingId?: string;
   count?: number;
   showRefresh?: boolean;
@@ -15,7 +14,7 @@ export function RecentConversationsFrame({ children, mobile = false, headingId =
 }) {
   return <section aria-labelledby={headingId}>
     <h2 id={headingId} className="section-heading min-h-11 pb-3 text-base">
-      {mobile ? '接着上次的故事' : '最近聊天'}
+      最近聊天
       <span className="ml-auto text-xs font-normal text-muted">{count ?? '—'}</span>
       {showRefresh && <button type="button" aria-label="刷新最近聊天" title="刷新最近聊天" disabled={!onRefresh || refreshing} onClick={onRefresh} className="grid size-11 place-items-center rounded-control text-muted hover:bg-surface-hover hover:text-ink disabled:opacity-50"><RefreshCw aria-hidden="true" className={`size-4 ${refreshing ? 'motion-safe:animate-spin' : ''}`} /></button>}
     </h2>
@@ -24,8 +23,8 @@ export function RecentConversationsFrame({ children, mobile = false, headingId =
   </section>;
 }
 
-export function RecentConversationsLoading({ mobile = false }: { mobile?: boolean }) {
-  return <RecentConversationsFrame mobile={mobile} headingId={`recent-loading-${mobile ? 'mobile' : 'desktop'}-heading`} refreshing>
+export function RecentConversationsLoading() {
+  return <RecentConversationsFrame headingId="recent-loading-heading" refreshing>
     <ConversationSkeleton />
   </RecentConversationsFrame>;
 }

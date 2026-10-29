@@ -2,11 +2,9 @@ import type { ReactNode } from 'react';
 import { PageHeading } from '@/components/page-heading';
 import { SceneBanner } from '@/components/scene-banner';
 import { CatalogSkeleton } from '@/features/catalog/catalog-skeleton';
-import { ConversationSkeleton } from '@/features/chat/conversation-skeleton';
 import { CatalogFiltersLoading } from '@/features/catalog/catalog-filters';
 import { RecentConversationsLoading } from './recent-conversations-frame';
-import { MobileCompanionHeading, MobileCompanionTabs, MobileRecentConversations, MobileCatalogSkeleton } from '@my-platform/mobile-web/companion';
-import Link from 'next/link';
+import { MobileCompanionHeading, MobileCatalogSkeleton } from '@my-platform/mobile-web/companion';
 
 export function CompanionHeading({ actions }: { actions?: ReactNode } = {}) {
   return <PageHeading title="今天想和谁聊聊？" description="认识一位新朋友，或继续上次没聊完的话题。" actions={actions} />;
@@ -17,7 +15,7 @@ export function CompanionScene() {
 }
 
 /** Only presentation mounts here; catalog requests and subscriptions wait for the account owner. */
-export function CompanionLoadingContent({ tab = null }: { tab?: 'recent' | 'discover' | null }) {
+export function CompanionLoadingContent() {
   return <>
     <div className="hidden md:block">
       <CompanionHeading />
@@ -33,13 +31,13 @@ export function CompanionLoadingContent({ tab = null }: { tab?: 'recent' | 'disc
     </div>
     <div className="md:hidden">
       <MobileCompanionHeading />
-      <MobileCompanionTabs tab={tab} />
-      {tab === 'discover' && <><div className="section-heading min-h-11"><h2 className="text-base font-semibold">这里的朋友</h2></div><CatalogFiltersLoading mobile /></>}
-      {tab === 'recent' ? <MobileRecentConversations refreshing footer={<><Link href="/" className="link-muted inline-flex min-h-11 items-center">看看直播</Link><Link href="/novels" className="link-muted inline-flex min-h-11 items-center">读本小说</Link></>}><ConversationSkeleton /></MobileRecentConversations> : tab === 'discover' ? <MobileCatalogSkeleton label="正在加载页面…" /> : <ConversationSkeleton label="正在加载页面…" />}
+      <h2 className="sr-only">这里的朋友</h2>
+      <CatalogFiltersLoading mobile />
+      <MobileCatalogSkeleton label="正在加载页面…" />
     </div>
   </>;
 }
 
-export function CompanionLoading({ tab }: { tab?: 'recent' | 'discover' | null }) {
-  return <main id="main-content" tabIndex={-1} className="page-shell page-content"><CompanionLoadingContent tab={tab} /></main>;
+export function CompanionLoading() {
+  return <main id="main-content" tabIndex={-1} className="page-shell page-content"><CompanionLoadingContent /></main>;
 }

@@ -1,18 +1,15 @@
 import type { ReactNode } from 'react';
-import { BookOpen, ChevronRight, RefreshCw } from 'lucide-react';
+import { BookOpen, ChevronRight } from 'lucide-react';
 import { SkeletonBlock, SkeletonRegion } from '@my-platform/web-ui/skeleton';
 
-export function MobileNovelShelfFrame({ actions, count, refreshing, onRefresh, children }: {
-  actions?: ReactNode; count?: number; refreshing?: boolean; onRefresh?: () => void; children: ReactNode;
+export function MobileNovelShelfFrame({ actions, count, children }: {
+  actions?: ReactNode; count?: number; children: ReactNode;
 }) {
   return <main id="main-content" tabIndex={-1} data-mobile-page="novels" className="page-shell page-content">
     <h1 className="sr-only">小说</h1>
-    {actions && <div className="mb-5 flex justify-end [&>a]:min-h-11 [&>a]:rounded-full [&>a]:px-4 [&>button]:rounded-full">{actions}</div>}
     <div className="mb-4 flex min-h-11 items-center justify-between gap-3">
-      <div className="flex items-baseline gap-3"><h2 className="text-base font-semibold">书架</h2>{count !== undefined && <span className="text-xs text-muted">{count} 本小说</span>}</div>
-      <button type="button" aria-label="刷新小说" title="刷新小说" onClick={onRefresh} disabled={refreshing || !onRefresh} className="grid size-11 place-items-center rounded-full text-muted hover:bg-surface-soft hover:text-ink disabled:opacity-50">
-        <RefreshCw aria-hidden="true" className={`size-4 ${refreshing ? 'motion-safe:animate-spin' : ''}`} />
-      </button>
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1"><h2 className="text-base font-semibold">书架</h2>{count !== undefined && <span className="text-xs text-muted">{count} 本小说</span>}</div>
+      {actions && <div className="shrink-0 [&>a]:min-h-11 [&>a]:rounded-full [&>a]:px-4 [&>button]:min-h-11 [&>button]:rounded-full [&>button]:px-4">{actions}</div>}
     </div>
     {children}
   </main>;

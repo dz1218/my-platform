@@ -15,14 +15,15 @@ type MobileCatalogState = {
   reset: () => void;
   apply: () => CatalogFilters | null;
   submitSearch: (applied: CatalogFilters) => CatalogFilters;
+  clearSearch: (applied: CatalogFilters) => CatalogFilters;
 };
 
-/** A sheet draft lives only for this mounted mobile editor; it is never persisted. */
+/** The filter draft lives only for this mounted mobile editor; it is never persisted. */
 export function createMobileCatalogStore(value: CatalogFilters) {
   return createDomainStore<MobileCatalogState>()((set, get) => ({
     open: false, search: value.q, draft: { ...value }, error: null,
     editSearch: search => set({ search }),
-    syncSearch: search => set({ search }),
+    syncSearch: search => set(state => ({ search, draft: { ...state.draft, q: search } })),
     begin: applied => set({ open: true, draft: { ...applied }, error: null }),
     cancel: () => set({ open: false, error: null }),
     edit: patch => set(state => ({ draft: { ...state.draft, ...patch }, error: null })),
@@ -38,5 +39,9 @@ export function createMobileCatalogStore(value: CatalogFilters) {
       return { ...draft, q: draft.q.trim() };
     },
     submitSearch: applied => ({ ...applied, q: get().search.trim() }),
+    clearSearch: applied => {
+      set({ search: '' });
+      return { ...applied, q: '' };
+    },
   }));
 }

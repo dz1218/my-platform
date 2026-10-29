@@ -13,6 +13,10 @@ async function setup(page: Page, inheritance = false) {
   await page.context().addCookies([{ name: 'companion_session', value: 'inheritance-test-completed', domain: '127.0.0.1', path: '/' }]);
   const requests: string[] = [];
   const known = new Map([[identities[130].id, asMatch(identities[130])]]);
+  // Keep the fixture's HTTP list and realtime snapshot consistent.
+  await page.routeWebSocket('**/api/v1/matches/socket?*', socket => {
+    socket.send(JSON.stringify({ type: 'matches.updated', items: [...known.values()] }));
+  });
   let failPage = 0;
   let stateReads = 0;
   let claimed = false;
@@ -103,7 +107,7 @@ test('1000 variable-height roles stay virtualized, finish loading once, and resi
     await page.setViewportSize({ width, height: 900 });
     await settle(page);
     const size = await page.getByTestId('identity-catalog').evaluate(el => ({ width: el.clientWidth, columns: Number((el as HTMLElement).dataset.columns) }));
-    expect(size.columns).toBe(size.width < 480 ? 1 : size.width < 760 ? 2 : size.width < 1040 ? 3 : 4);
+    expect(size.columns).toBe(width < 768 ? 2 : size.width < 480 ? 1 : size.width < 760 ? 2 : size.width < 1040 ? 3 : 4);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   expect(mock.requests.length).toBe(requests);

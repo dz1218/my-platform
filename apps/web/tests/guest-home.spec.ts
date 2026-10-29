@@ -51,11 +51,8 @@ for (const width of [390, 1440]) {
     await expect(greet).toBeEnabled();
     if (width >= 768) await expect(page.getByRole('link', { name: '登录 / 注册', exact: true })).toBeVisible();
     if (width < 768) {
-      await expect(page.getByRole('button', { name: '发现朋友', exact: true })).toHaveAttribute('aria-pressed', 'true');
-      await page.getByRole('button', { name: '最近聊天', exact: true }).click();
-      await expect(page.getByRole('link', { name: '登录后聊天', exact: true })).toBeVisible();
-      await expect(page.getByText('正在加载聊天…')).toHaveCount(0);
-      await page.getByRole('button', { name: '发现朋友', exact: true }).click();
+      await expect(page.getByRole('navigation', { name: '陪伴内容' })).toHaveCount(0);
+      await expect(page.getByTestId('identity-catalog')).toHaveAttribute('data-columns', '2');
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`guest-home-${width}.png`), fullPage: true });

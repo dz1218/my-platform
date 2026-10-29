@@ -28,53 +28,59 @@ function setup() {
   return { client, store, responses, calls, opened };
 }
 
-for (const firstToFinish of ['a', 'b']) {
-  test(`greetings are independent and only the latest intent navigates when ${firstToFinish} finishes first`, async () => {
-    const { client, store, responses, calls, opened } = setup();
-    try {
-      const a = store.getState().meetIdentity('a');
-      await store.getState().meetIdentity('a');
-      const b = store.getState().meetIdentity('b');
-      assert.deepEqual(calls, ['a', 'b']);
-      assert.deepEqual(store.getState().pendingIds, ['a', 'b']);
-      const lastToFinish = firstToFinish === 'a' ? 'b' : 'a';
-      responses.get(firstToFinish)!.resolve(match(firstToFinish));
-      await (firstToFinish === 'a' ? a : b);
-      assert.deepEqual(store.getState().pendingIds, [lastToFinish]);
-      assert.deepEqual(opened, firstToFinish === 'b' ? ['match-b'] : []);
-      responses.get(lastToFinish)!.resolve(match(lastToFinish));
-      await Promise.all([a, b]);
-      assert.deepEqual(store.getState().pendingIds, []);
-      assert.equal(store.getState().enteringId, 'b');
-      await store.getState().meetIdentity('b');
-      assert.deepEqual(calls, ['a', 'b']);
-      store.getState().finishEntry();
-      assert.equal(store.getState().enteringId, null);
-      assert.deepEqual(opened, ['match-b']);
-      assert.equal(client.getQueryData<{ items: Match[] }>(['matches', 'account'])!.items.length, 2);
-    } finally { client.clear(); }
-  });
-}
-
-test('failed greetings release only their own button and can be retried without stale errors replacing current feedback', async () => {
+test('the first greeting locks every card until navigation commits, including rapid calls before a render', async () => {
   const { client, store, responses, calls, opened } = setup();
   try {
     const a = store.getState().meetIdentity('a');
-    const b = store.getState().meetIdentity('b');
-    responses.get('a')!.reject(new Error('stale failure'));
+    await store.getState().meetIdentity('a');
+    await store.getState().meetIdentity('b');
+    assert.equal(store.getState().beginEntry('known'), false);
+    assert.deepEqual(calls, ['a']);
+    assert.deepEqual(store.getState().pendingIds, ['a']);
+    responses.get('a')!.resolve(match('a'));
     await a;
-    assert.deepEqual(store.getState().pendingIds, ['b']);
-    assert.equal(store.getState().error, null);
-    responses.get('b')!.reject(new Error('current failure'));
-    await b;
-    assert.equal(store.getState().error?.message, 'current failure');
+    assert.deepEqual(store.getState().pendingIds, []);
+    assert.equal(store.getState().enteringId, 'a');
+    await store.getState().meetIdentity('b');
+    assert.equal(store.getState().beginEntry('known'), false);
+    assert.deepEqual(calls, ['a']);
+    assert.deepEqual(opened, ['match-a']);
+    assert.equal(client.getQueryData<{ items: Match[] }>(['matches', 'account'])!.items.length, 1);
+    store.getState().finishEntry();
+    assert.equal(store.getState().beginEntry('known'), true);
+  } finally { client.clear(); }
+});
+
+test('a failed greeting releases every card and the next attempt clears its error', async () => {
+  const { client, store, responses, calls, opened } = setup();
+  try {
+    const a = store.getState().meetIdentity('a');
+    await store.getState().meetIdentity('b');
+    responses.get('a')!.reject(new Error('request failed'));
+    await a;
+    assert.equal(store.getState().error?.message, 'request failed');
     assert.deepEqual(store.getState().pendingIds, []);
     assert.equal(store.getState().enteringId, null);
     const retry = store.getState().meetIdentity('b');
     assert.equal(store.getState().error, null);
     responses.get('b')!.resolve(match('b'));
     await retry;
-    assert.deepEqual(calls, ['a', 'b', 'b']);
+    assert.deepEqual(calls, ['a', 'b']);
     assert.deepEqual(opened, ['match-b']);
+  } finally { client.clear(); }
+});
+
+test('opening an existing chat also locks other existing chats and new greetings', async () => {
+  const { client, store, calls } = setup();
+  try {
+    assert.equal(store.getState().beginEntry('known'), true);
+    assert.equal(store.getState().beginEntry('known'), false);
+    assert.equal(store.getState().beginEntry('other-known'), false);
+    await store.getState().meetIdentity('a');
+    assert.deepEqual(calls, []);
+    assert.equal(store.getState().enteringId, 'known');
+    store.getState().finishEntry();
+    assert.equal(store.getState().enteringId, null);
+    assert.equal(store.getState().beginEntry('other-known'), true);
   } finally { client.clear(); }
 });
