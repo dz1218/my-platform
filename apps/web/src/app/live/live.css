@@ -524,7 +524,8 @@
    Media elements keep their existing DOM parents at every viewport. */
 @media (max-width: 767px) {
   .live-page { @apply bg-canvas; }
-  .live-lobby-page { min-height: calc(100dvh - 64px); }
+  /* The shell already reserves the bottom navigation and its safe area. */
+  .live-lobby-page { @apply flex flex-col; min-height: calc(100dvh - var(--mobile-nav-height) - env(safe-area-inset-bottom)); }
   .live-room-page { padding: max(8px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
   .live-room-page .live-stage { min-height: 220px; aspect-ratio: 16 / 10; @apply rounded-panel; }
   .live-room-page .live-stage:has(> .live-stage-empty) { min-height: 340px; }
@@ -558,6 +559,7 @@
   .live-room-page .live-stage:has(.live-stage-media.has-call) { min-height: 340px; }
   .live-room-page:has(.live-stage-media.has-call) .live-sidebar { height: max(280px, calc(100dvh - 500px)); min-height: 280px; }
   .mobile-live-device-sheet .live-call-switch { position: relative; }
+  .live-room-page .live-dialog, .live-page .live-dialog { bottom: var(--dialog-keyboard-offset, 0px); max-height: calc(var(--dialog-viewport-height, 100dvh) - max(12px, env(safe-area-inset-top))); overflow-y: auto; overscroll-behavior: contain; }
   .mobile-live-device-sheet .live-call-switch::before { content: ""; position: absolute; inset: -9px 0; }
   .live-room-page .live-voice-panel { padding: 0; }
   .live-room-page .live-voice-card { margin-top: 16px; padding: 24px 12px; background: transparent; }

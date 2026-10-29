@@ -24,8 +24,8 @@ export function MobileNavigation({ path, pendingHref, Link }: {
       const active = pendingPath ? pendingPath === href : current;
       return <Link key={href} href={href} aria-label={label} aria-current={current ? 'page' : undefined}
         aria-busy={pendingPath === href || undefined} data-pending={pendingPath === href || undefined}
-        className={`nav-item group min-h-16 bg-transparent py-1.5 hover:bg-transparent focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-focus ${active ? 'nav-item-active text-accent' : 'text-muted'}`}>
-        <span className={`grid h-8 w-14 place-items-center rounded-full transition-colors motion-reduce:transition-none ${active ? 'bg-accent-soft' : 'group-hover:bg-surface-soft'}`}>
+        className={`nav-item group min-h-16 bg-transparent py-1.5 hover:bg-transparent focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-focus ${active ? 'nav-item-active text-ink' : 'text-muted'}`}>
+        <span className={`grid h-8 w-14 place-items-center rounded-full transition-colors motion-reduce:transition-none ${active ? 'bg-surface-selected' : 'group-hover:bg-surface-soft group-active:bg-surface-selected'}`}>
           <Icon aria-hidden="true" className={`size-5 ${pendingPath === href ? 'motion-safe:animate-pulse' : ''}`} strokeWidth={active ? 2 : 1.75} />
         </span>
         <span className="text-xs leading-4">{label}</span>

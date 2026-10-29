@@ -53,10 +53,10 @@ export function MobileLiveLobbyFrame({
   return (
     <div
       data-mobile-page="live"
-      className="flex min-h-[calc(100dvh-136px-env(safe-area-inset-bottom))] flex-col"
+      className="flex flex-1 flex-col"
     >
       {children}
-      <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] mt-6 bg-canvas py-3 [&>a]:min-h-14 [&>a]:w-full [&>a]:rounded-full [&>button]:min-h-14 [&>button]:w-full [&>button]:rounded-full">
+      <div className="sticky bottom-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom))] mt-6 shrink-0 bg-canvas py-3 [&>a]:min-h-14 [&>a]:w-full [&>a]:rounded-full [&>button]:min-h-14 [&>button]:w-full [&>button]:rounded-full">
         {actions}
       </div>
     </div>
@@ -68,7 +68,7 @@ function QuietRecord() {
     <svg
       aria-hidden="true"
       viewBox="0 0 180 180"
-      className="mb-8 size-40 text-line"
+      className="mb-8 size-40 shrink-0 text-line [@media(max-height:700px)]:mb-4 [@media(max-height:700px)]:size-28"
       fill="none"
     >
       <circle cx="90" cy="90" r="84" stroke="currentColor" />
@@ -137,9 +137,9 @@ export function MobileLiveDirectory({
   const filtered = !!search || filter !== "全部";
   return (
     <section aria-label="直播间列表" className="flex flex-1 flex-col">
-      <header className="mb-5 flex min-h-12 items-center gap-2">
-        <h1 className="mr-auto text-xl font-medium">直播</h1>
-        {(!!total || filtered) && (
+      <h1 className="sr-only">直播</h1>
+      {(!!total || filtered) && (
+        <div className="mb-5 flex justify-end">
           <button
             type="button"
             aria-label="查找直播间"
@@ -149,8 +149,8 @@ export function MobileLiveDirectory({
           >
             <Search className="size-5" />
           </button>
-        )}
-      </header>
+        </div>
+      )}
       {updatesLabel && (
         <p className="sr-only" role="status">
           {updatesLabel}
@@ -245,7 +245,7 @@ export function MobileLiveDirectory({
         </>
       ) : (
         !error && (
-          <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 text-center">
+          <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 text-center [@media(max-height:700px)]:py-4">
             <QuietRecord />
             <h2 className="font-literary text-[28px] leading-relaxed">
               {filtered ? "还没找到这个声音" : "今晚，还很安静。"}

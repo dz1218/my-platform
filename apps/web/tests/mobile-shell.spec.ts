@@ -7,6 +7,9 @@ test.afterEach(async ({ request }) => { await request.post(`${fixture}/__perform
 
 test('profile keeps one pending matches request across mobile and desktop layouts', async ({ page, context }) => {
   await context.addCookies([cookie]);
+  // This test controls the pending HTTP snapshot; an unrelated empty socket
+  // snapshot would legitimately replace the loading state before it resolves.
+  await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
   let started = 0;

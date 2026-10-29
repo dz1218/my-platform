@@ -21,6 +21,7 @@ import { useCompanionHome, type CompanionModel } from './use-companion-home';
 import type { Identity } from '@/types/companion';
 import { MobileCompanionHeading, MobileCompanionTabs, MobileRecentConversations, MobileConversationSummary, MobileConversationEmpty, MobileCatalogSkeleton } from '@my-platform/mobile-web/companion';
 import { MobileFriendCardAdapter } from './friend-card';
+import { MobilePullToRefresh } from '@my-platform/mobile-web/pull-to-refresh';
 
 type Tab = 'recent' | 'discover';
 export function CompanionHome({ accountId, inheritedIdentity }: { accountId: string | null; inheritedIdentity?: Identity | null }) {
@@ -58,6 +59,7 @@ export function CompanionHome({ accountId, inheritedIdentity }: { accountId: str
   };
   if (!viewport) return <main id={model.paused ? undefined : 'main-content'} tabIndex={-1} className="page-shell page-content"><CompanionLoadingContent tab={tab} /></main>;
   return <main id={model.paused ? undefined : 'main-content'} tabIndex={-1} className="page-shell page-content">
+    <MobilePullToRefresh key={tab} enabled={viewport === 'mobile' && !model.paused && (tab !== 'recent' || model.isLoggedIn)} label={tab === 'recent' ? '最近聊天' : '人物目录'} busy={tab === 'recent' ? model.conversations.isFetching : model.identities.isFetching} onRefresh={() => tab === 'recent' ? model.conversations.refetch({ throwOnError: true, cancelRefetch: false }) : model.identities.refetch({ throwOnError: true, cancelRefetch: false })} />
     {viewport === 'mobile' ? <MobileCompanionHeading actions={!model.isLoggedIn && <Link href="/login" className="btn-secondary">登录 / 注册</Link>} /> : <CompanionHeading />}
     {inheritedIdentity && <IdentityModeSwitch identity={inheritedIdentity} />}
     {model.error && <div role="alert" className="mb-6 flex items-center justify-between gap-4 rounded-control border border-danger-line bg-danger-soft p-4 text-sm text-danger"><span>{model.error.message}</span><button className="min-h-11 shrink-0 hover:text-danger-hover" onClick={model.retry}>重试</button></div>}

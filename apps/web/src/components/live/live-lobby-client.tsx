@@ -1,6 +1,8 @@
 "use client";
 import Link from "next/link";
 import { AudioLines } from "lucide-react";
+import { useDialogScrollLock } from '@my-platform/web-ui/dialog-scroll-lock';
+import { MobilePullToRefresh } from '@my-platform/mobile-web/pull-to-refresh';
 import { Sheet } from "@/components/sheet";
 import { useViewport } from "@/components/use-viewport";
 import { LiveIcon } from "./live-icon";
@@ -38,6 +40,7 @@ export function LiveLobbyClient(props: LiveLobbyProps) {
   const { creating, setCreating } = model;
   return (
     <>
+      <MobilePullToRefresh enabled={viewport === 'mobile'} busy={model.isMutating || model.roomsQuery.isFetching} onRefresh={model.refreshMobileRooms} label="直播间列表" />
       {!viewport ? (
         <LiveLobbyLoadingContent />
       ) : viewport === "desktop" ? (
@@ -423,6 +426,7 @@ function CreateRoomPanel({ model }: { model: LiveLobbyModel }) {
 }
 
 function CloseRoomDialog({ model }: { model: LiveLobbyModel }) {
+  useDialogScrollLock(model.dialogRef);
   const {
     title,
     closingRoomId,

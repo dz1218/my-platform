@@ -109,6 +109,16 @@
 .auth-notice-footer { flex-shrink: 0; padding: 16px 24px 24px; @apply border-t border-t-line; }
 .auth-notice-footer .auth-submit { margin-top: 0; }
 
+@media (max-width: 767px) {
+  .auth-notice-dialog { inset: auto 0 var(--dialog-keyboard-offset, 0px); margin: 0; width: 100%; max-height: calc(var(--dialog-viewport-height, 100dvh) - max(12px, env(safe-area-inset-top))); @apply rounded-t-scene rounded-b-none border-x-0 border-b-0 bg-panel; }
+  .auth-notice-dialog::backdrop { backdrop-filter: none; }
+  .auth-notice-header { @apply min-h-16 px-5 py-2; }
+  .auth-notice-header h2 { @apply text-base; }
+  .auth-notice-header button { @apply rounded-full; }
+  .auth-notice-content { padding: 16px 20px; }
+  .auth-notice-footer { padding: 16px 20px max(24px, env(safe-area-inset-bottom)); }
+}
+
 @media (prefers-reduced-motion: reduce) { .auth-mobile-scene { transition: none; } }
 
 /* A compact photographic masthead leads into one focused, solid mobile form. */

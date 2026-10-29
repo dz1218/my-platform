@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
 import { X } from 'lucide-react';
+import { useDialogScrollLock } from './dialog-scroll-lock';
 
 /** Native modal semantics provide focus trapping, Escape and focus restoration. */
 export function Sheet({ open, onClose, title, children, fullHeight = false, desktopCentered = false, footer, className = '', returnFocusRef }: {
@@ -8,17 +9,15 @@ export function Sheet({ open, onClose, title, children, fullHeight = false, desk
   desktopCentered?: boolean; footer?: ReactNode; className?: string; returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  useDialogScrollLock(ref);
   const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
     if (!open || !dialog) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const overflow = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
     dialog.showModal();
     return () => {
       dialog.close();
-      document.documentElement.style.overflow = overflow;
       const target = returnFocusRef?.current ?? previous;
       if (target?.isConnected) target.focus({ preventScroll: true });
     };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode, type RefObject } from "react";
+import { useDialogScrollLock } from '@my-platform/web-ui/dialog-scroll-lock';
 
 export function ChatSettings({
   dialogRef,
@@ -11,6 +12,7 @@ export function ChatSettings({
   identityName: string;
   children: ReactNode;
 }) {
+  useDialogScrollLock(dialogRef);
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;

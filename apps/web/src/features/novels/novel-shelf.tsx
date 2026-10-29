@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { MobileNovelSummary } from '@my-platform/mobile-web/novels';
+import { MobilePullToRefresh } from '@my-platform/mobile-web/pull-to-refresh';
 import { useViewport } from '@my-platform/web-ui/use-viewport';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen } from 'lucide-react';
@@ -17,6 +18,7 @@ export function NovelShelf() {
   const novels = shelf.data?.items;
 
   return <NovelShelfFrame actions={user && <Link href="/novels/create" className="btn-primary">创建小说</Link>} count={novels?.length} refreshing={shelf.isFetching} onRefresh={() => void shelf.refetch()}>
+    <MobilePullToRefresh enabled={viewport === 'mobile'} label="书架" busy={shelf.isFetching} onRefresh={() => shelf.refetch({ throwOnError: true, cancelRefetch: false })} />
     {shelf.isError && <div role="alert" className="mb-6 flex items-center justify-between gap-4 rounded-control border border-danger-line bg-danger-soft p-4 text-sm text-danger">
       <span>{novels ? '书架更新失败，已保留上次内容' : '书架暂时加载失败'}</span>
       <button type="button" disabled={shelf.isFetching} onClick={() => void shelf.refetch()} className="min-h-11 shrink-0 hover:text-danger-hover">重试</button>

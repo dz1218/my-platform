@@ -2,6 +2,7 @@
 
 import { useState, type KeyboardEvent } from 'react';
 import { MobileAccountContent } from '@my-platform/mobile-web/account';
+import { MobilePullToRefresh } from '@my-platform/mobile-web/pull-to-refresh';
 import { useViewport } from '@my-platform/web-ui/use-viewport';
 import { useBrowseUI } from '@/stores/provider';
 import Link from 'next/link';
@@ -64,6 +65,7 @@ export function ProfileContent({ accountId, identity }: { accountId: string; ide
       </details>}
   </>;
   return <div>
+    <MobilePullToRefresh enabled={viewport === 'mobile'} label="最近聊天" busy={conversations.isFetching} onRefresh={() => conversations.refetch({ throwOnError: true, cancelRefetch: false })} />
     <ProfileTabs tab={tab} indicatorMotion={indicatorMotion} onSelect={selectTab} onKeyDown={onTabKey} />
     {viewport === 'mobile' ? <MobileAccountContent tab={tab} recent={recentPanel} identity={identityPanel} /> : <>
       <section role="tabpanel" id="profile-panel-recent" aria-labelledby="profile-tab-recent" hidden={tab !== 'recent'} tabIndex={0} className="p-4 sm:p-6">{recentPanel}</section>

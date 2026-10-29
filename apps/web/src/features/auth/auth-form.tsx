@@ -1,5 +1,6 @@
 "use client";
 import { MobileAuthHeading } from "@my-platform/mobile-web/auth";
+import { useDialogScrollLock } from '@my-platform/web-ui/dialog-scroll-lock';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { useStoreInstance } from '@/stores/use-store-instance';
@@ -36,6 +37,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
   const noticeDialog = useRef<HTMLDialogElement>(null);
   const stepHeading = useRef<HTMLHeadingElement>(null);
   const passwordStep = register && !!ticket;
+  const switchingBlocked = pending || verifying || sending;
   const error = localError || state.error;
   const phoneError = !passwordStep && (error === "invalid_phone" || error === "exists") ? error : undefined;
   const codeError = register && !passwordStep && error === "invalid_code" ? error : undefined;
@@ -52,14 +54,12 @@ export function AuthForm({ register = false }: { register?: boolean }) {
   useEffect(() => {
     if (!noticeOpen) return;
     const dialog = noticeDialog.current;
-    const previousOverflow = document.body.style.overflow;
     dialog?.showModal();
-    document.body.style.overflow = "hidden";
     return () => {
       dialog?.close();
-      document.body.style.overflow = previousOverflow;
     };
   }, [noticeOpen]);
+  useDialogScrollLock(noticeDialog);
 
   async function sendCode() {
     if (await ui.getState().sendCode() === 'invalid_phone') phoneRef.current?.focus();
@@ -116,7 +116,12 @@ export function AuthForm({ register = false }: { register?: boolean }) {
               <SubmitButton pendingLabel={register ? "正在处理…" : "正在登录…"} className="auth-submit">{register ? passwordStep ? "完成注册" : "验证并继续" : "登录"}</SubmitButton>
             </fieldset>
           </form>
-          <p className="auth-switch">{register ? "已经有账号？" : "第一次来到这里？"}<Link href={register ? "/login" : "/register"} scroll={false}>{register ? "返回登录" : "手机号注册"}</Link></p>
+          <p className="auth-switch">{register ? "已经有账号？" : "第一次来到这里？"}<Link href={register ? "/login" : "/register"} scroll={false}
+            aria-disabled={switchingBlocked} className="aria-disabled:cursor-wait aria-disabled:opacity-50"
+            onNavigate={event => {
+              // A competing route can discard the server action's session redirect.
+              if (switchingBlocked) event.preventDefault();
+            }}>{register ? "返回登录" : "手机号注册"}</Link></p>
         </div>
         <footer className="auth-footer"><span>让每一次相遇，都有回音。</span><button type="button" aria-haspopup="dialog" onClick={() => setNoticeOpen(true)}>隐私与互动说明</button></footer>
       </section>

@@ -48,7 +48,7 @@ export function LiveLobbyLoadingContent() {
     <div className="hidden md:block">
       <DesktopLiveLobbyFrame directory={directory} />
     </div>
-    <div className="md:hidden">
+    <div className="flex flex-1 flex-col md:hidden">
       <MobileLiveLobbyFrame actions={<button type="button" className="btn-primary" disabled>我的直播间</button>}><MobileLiveDirectory rooms={[]} loading /></MobileLiveLobbyFrame>
     </div>
   </>;

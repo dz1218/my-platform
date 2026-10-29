@@ -8,15 +8,15 @@ import { SkeletonBlock, SkeletonRegion } from '@my-platform/web-ui/skeleton';
 export type CompanionTab = 'recent' | 'discover';
 
 export function MobileCompanionHeading({ actions }: { actions?: ReactNode }) {
-  return <header className="mb-6 flex items-start justify-between gap-3" data-mobile-page="companion">
-    <div className="min-w-0"><h1 className="text-3xl font-semibold tracking-tight">陪伴</h1><p className="mt-2 text-sm leading-6 text-muted">认识一位新朋友，或继续上次没聊完的话题。</p></div>
-    {actions && <div className="shrink-0">{actions}</div>}
-  </header>;
+  return <div data-mobile-page="companion">
+    <h1 className="sr-only">陪伴</h1>
+    {actions && <div className="mb-5 flex justify-end [&>a]:rounded-full [&>a]:px-4">{actions}</div>}
+  </div>;
 }
 
 export function MobileCompanionTabs({ tab, onSelect }: { tab: CompanionTab | null; onSelect?: (tab: CompanionTab) => void }) {
-  return <nav aria-label="陪伴内容" className="mb-6 flex rounded-full bg-surface-soft p-1">
-    {(['recent', 'discover'] as const).map(value => <button key={value} type="button" disabled={!onSelect} aria-pressed={tab === value} onClick={() => onSelect?.(value)} className={`min-h-11 flex-1 rounded-full px-3 text-sm transition-colors disabled:cursor-default ${tab === value ? 'bg-action font-semibold text-on-action' : 'text-muted hover:text-ink'}`}>{value === 'recent' ? '最近聊天' : '发现朋友'}</button>)}
+  return <nav aria-label="陪伴内容" className="mb-5 flex rounded-full bg-panel p-1">
+    {(['recent', 'discover'] as const).map(value => <button key={value} type="button" disabled={!onSelect} aria-pressed={tab === value} onClick={() => onSelect?.(value)} className={`min-h-11 flex-1 rounded-full px-3 text-sm transition-colors disabled:cursor-default ${tab === value ? 'bg-surface-selected font-semibold text-ink' : 'text-muted hover:text-ink active:bg-surface-soft'}`}>{value === 'recent' ? '最近聊天' : '发现朋友'}</button>)}
   </nav>;
 }
 
@@ -43,7 +43,7 @@ export function MobileFriendCard({ identity, index, action }: {
   identity: { id: string; name: string; age: number; city?: string; occupation?: string; background?: string };
   index: number; action: ReactNode;
 }) {
-  return <div className="px-2"><article data-identity-id={identity.id} data-identity-index={index} className="border-b border-line py-5">
+  return <div className="px-2"><article data-identity-id={identity.id} data-identity-index={index} className="border-b border-line/60 py-5">
     <div className="flex items-center gap-3"><Avatar identity={identity} large /><div className="min-w-0 flex-1"><h3 className="text-lg font-semibold">{identity.name}</h3><p className="mt-1 text-xs leading-5 text-muted">{identity.age} 岁{identity.city ? `，${identity.city}` : ''}{identity.occupation ? ` / ${identity.occupation}` : ''}</p></div></div>
     {identity.background && <p className="mt-3 text-sm leading-7 text-muted">{identity.background}</p>}
     <div className="mt-3 flex justify-end [&>a]:min-w-28 [&>button]:min-w-28">{action}</div>

@@ -6,7 +6,7 @@ export type MobileAccountTab = 'recent' | 'identity';
 export function MobileAccountHeader({ avatar, details, cover, actions }: {
   avatar: ReactNode; details: ReactNode; cover: ReactNode; actions?: ReactNode;
 }) {
-  return <header className="relative isolate px-5 pb-6 pt-14">
+  return <header className="relative isolate px-5 pb-6 pt-[max(56px,calc(env(safe-area-inset-top)+32px))]">
       <div aria-hidden="true" className="profile-cover-media pointer-events-none absolute inset-x-0 top-0 -z-10 h-56 overflow-hidden opacity-70">{cover}</div>
       {actions && <div className="absolute right-4 top-3">{actions}</div>}
       <span aria-hidden="true" className="mb-4 grid size-16 place-items-center rounded-full border border-line bg-panel text-2xl text-ink">{avatar}</span>

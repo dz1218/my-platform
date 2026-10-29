@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { memo } from 'react';
+import { useDialogScrollLock } from '@my-platform/web-ui/dialog-scroll-lock';
 import { LiveIcon } from './live-icon';
 import { LiveChat } from './live-chat';
 import { LiveVoiceControls, LiveVoicePanel, LiveViewerCall } from './live-voice';
@@ -108,6 +109,7 @@ const LiveRoomScene = memo(function LiveRoomScene({ model, viewport }: {
 }, (_previous, next) => next.model.returnToLobby && next.model.isClosing);
 
 function EndRoomDialog({ model }: { model: ReturnType<typeof useLiveRoom> }) {
+  useDialogScrollLock(model.closeDialogRef);
   const { closeDialogRef, isClosing, setCloseConfirmOpen, returnToLobby, closeError, endRoom } = model;
   return (
     <dialog ref={closeDialogRef} className="live-dialog live-dialog-confirm" aria-label={returnToLobby ? '结束直播？' : '结束这个直播间？'} aria-describedby="end-live-description" onCancel={event => { if (isClosing) event.preventDefault(); else setCloseConfirmOpen(false); }} onClose={() => setCloseConfirmOpen(false)}>

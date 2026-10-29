@@ -6,6 +6,8 @@
 @layer base {
   * { box-sizing: border-box; }
   html { min-height: 100%; color-scheme: dark; scroll-padding-top: 76px; }
+  html.has-pull-refresh { overscroll-behavior-y: contain; }
+  dialog:modal { overscroll-behavior: contain; }
   body { @apply m-0 min-h-screen bg-canvas font-sans text-ink antialiased; }
   ::selection { @apply bg-accent-soft text-ink; }
   button, input, textarea, select { font: inherit; }
@@ -175,6 +177,19 @@ html { scrollbar-gutter: stable; }
   .sheet::backdrop { @apply bg-overlay; }
   .sheet-full { height: 100dvh; max-height: 100dvh; border-radius: 0; }
   .sheet-content { overflow-y: auto; overscroll-behavior: contain; padding: 20px 20px max(24px, env(safe-area-inset-bottom)); }
+  @media (max-width: 767px) {
+    .page-shell { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+    .page-content { padding-top: max(20px, env(safe-area-inset-top)); }
+    .mobile-nav { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+    .mobile-nav .nav-item-active, .mobile-nav .nav-item-active svg { @apply text-ink; }
+    .sheet { bottom: var(--dialog-keyboard-offset, 0px); max-height: calc(var(--dialog-viewport-height, 100dvh) - max(12px, env(safe-area-inset-top))); @apply border-x-0 border-b-0; }
+    .sheet-full { height: var(--dialog-viewport-height, 100dvh); max-height: var(--dialog-viewport-height, 100dvh); }
+    .sheet > header { @apply min-h-16 gap-3 px-5 py-2; }
+    .sheet > header h2 { @apply text-base font-semibold; }
+    .sheet > header button { @apply rounded-full active:bg-surface-selected; }
+    .sheet-content { padding-top: 16px; }
+    .input-field { font-size: 16px; }
+  }
   .book-cover { @apply relative flex aspect-[3/4] flex-col justify-between overflow-hidden rounded-r-panel border border-accent-line/60 bg-accent-soft p-5 text-accent; box-shadow: inset 5px 0 0 var(--rf-surface-selected); }
   .book-cover::after { content: ''; @apply pointer-events-none absolute inset-3 border border-accent-line/40; }
 }

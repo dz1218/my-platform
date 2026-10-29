@@ -178,6 +178,11 @@ export function useLiveLobby({
     refreshRooms,
     isRefreshing,
     listError,
+    refreshMobileRooms: async () => {
+      await refreshRooms();
+      const error = ui.getState().refreshError;
+      if (error) throw new Error(error);
+    },
     updatesLabel,
     isLoggedIn,
     hostNickname,

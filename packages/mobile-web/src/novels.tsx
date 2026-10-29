@@ -5,12 +5,10 @@ import { SkeletonBlock, SkeletonRegion } from '@my-platform/web-ui/skeleton';
 export function MobileNovelShelfFrame({ actions, count, refreshing, onRefresh, children }: {
   actions?: ReactNode; count?: number; refreshing?: boolean; onRefresh?: () => void; children: ReactNode;
 }) {
-  return <main id="main-content" tabIndex={-1} data-mobile-page="novels" className="px-5 pb-8 pt-7">
-    <header className="mb-8 flex items-start justify-between gap-4">
-      <div><h1 className="text-2xl font-semibold tracking-tight">小说</h1><p className="mt-2 text-sm text-muted">找一本小说，慢慢读。</p></div>
-      {actions && <div className="shrink-0 [&>a]:min-h-11 [&>a]:rounded-full [&>a]:px-4 [&>button]:rounded-full">{actions}</div>}
-    </header>
-    <div className="mb-5 flex items-center justify-between gap-3 border-b border-line/60 pb-3">
+  return <main id="main-content" tabIndex={-1} data-mobile-page="novels" className="page-shell page-content">
+    <h1 className="sr-only">小说</h1>
+    {actions && <div className="mb-5 flex justify-end [&>a]:min-h-11 [&>a]:rounded-full [&>a]:px-4 [&>button]:rounded-full">{actions}</div>}
+    <div className="mb-4 flex min-h-11 items-center justify-between gap-3">
       <div className="flex items-baseline gap-3"><h2 className="text-base font-semibold">书架</h2>{count !== undefined && <span className="text-xs text-muted">{count} 本小说</span>}</div>
       <button type="button" aria-label="刷新小说" title="刷新小说" onClick={onRefresh} disabled={refreshing || !onRefresh} className="grid size-11 place-items-center rounded-full text-muted hover:bg-surface-soft hover:text-ink disabled:opacity-50">
         <RefreshCw aria-hidden="true" className={`size-4 ${refreshing ? 'motion-safe:animate-spin' : ''}`} />
@@ -32,7 +30,7 @@ export function MobileNovelSummary({ title, author, chapterCount, completed, des
     <div className="min-w-0 flex-1 py-1">
       <h2 className="line-clamp-2 text-base font-semibold leading-7 group-hover:text-accent">{title}</h2>
       <p className="mt-1 truncate text-xs text-muted">{author}</p>
-      {description && <p className="mt-3 line-clamp-2 text-xs leading-6 text-muted">{description}</p>}
+      {description && <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted">{description}</p>}
       <p className="mt-3 flex items-center gap-2 text-xs text-muted"><span>{chapterCount} 章</span><span aria-hidden="true" className="size-0.5 rounded-full bg-muted" /><span>{completed ? '已完结' : '连载中'}</span></p>
     </div>
     <ChevronRight aria-hidden="true" className="size-4 shrink-0 self-center text-muted" />
