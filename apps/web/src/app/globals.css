@@ -30,6 +30,13 @@
   .app-shell { min-height: 100dvh; }
   .shell-ambient { @apply pointer-events-none absolute inset-0 -z-10 hidden overflow-hidden; }
   .app-content { min-width: 0; padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom)); }
+  /* Only page content follows the pull; viewport navigation stays in place. */
+  [data-pull-refresh-content] {
+    transform: translate3d(0, var(--pull-refresh-distance, 0px), 0);
+    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  [data-pull-refresh-content="idle"] { transform: none; }
+  [data-pull-refresh-content="pulling"] { transition: none; }
   .app-shell[data-immersive="true"] .app-content { padding-bottom: 0; }
   .app-shell[data-immersive="true"] .mobile-nav { display: none; }
   .site-nav { @apply hidden bg-canvas; }

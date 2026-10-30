@@ -3,12 +3,13 @@ import { expect, test, type Page } from '@playwright/test';
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 const cookie = { name: 'companion_session', value: 'inheritance-test-completed', domain: '127.0.0.1', path: '/' };
 
-async function swipe(page: Page, from: { x: number; y: number }, to: { x: number; y: number }, cancel = false) {
+async function swipe(page: Page, from: { x: number; y: number }, to: { x: number; y: number }, cancel = false, beforeRelease?: () => Promise<void>) {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
   for (let step = 1; step <= 12; step++) {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: from.x + (to.x - from.x) * step / 12, y: from.y + (to.y - from.y) * step / 12 }] });
   }
+  await beforeRelease?.();
   await cdp.send('Input.dispatchTouchEvent', { type: cancel ? 'touchCancel' : 'touchEnd', touchPoints: [] });
   await cdp.detach();
 }
@@ -28,22 +29,39 @@ test('lobby refresh requires a deliberate pull, deduplicates requests and retain
   await page.goto('/');
   await expect(page.getByRole('heading', { name: '今晚，还很安静。' })).toBeVisible();
   await expect(page.locator('html')).toHaveClass(/has-pull-refresh/);
+  const main = page.getByRole('main');
+  const initialTop = (await main.boundingBox())!.y;
+  const nav = page.locator('.mobile-nav');
+  const navTop = (await nav.boundingBox())!.y;
   await swipe(page, { x: 30, y: 100 }, { x: 30, y: 160 });
+  await expect.poll(async () => (await main.boundingBox())!.y).toBeCloseTo(initialTop, 0);
   expect(calls).toBe(0);
   await swipe(page, { x: 30, y: 100 }, { x: 230, y: 130 });
   expect(calls).toBe(0);
   await swipe(page, { x: 30, y: 100 }, { x: 30, y: 310 }, true);
+  await expect.poll(async () => (await main.boundingBox())!.y).toBeCloseTo(initialTop, 0);
   expect(calls).toBe(0);
   try {
-    await swipe(page, { x: 30, y: 100 }, { x: 30, y: 310 });
+    await swipe(page, { x: 30, y: 100 }, { x: 30, y: 310 }, false, async () => {
+      await expect(page.locator('[data-pull-refresh]')).toHaveText('松开刷新');
+      expect((await main.boundingBox())!.y - initialTop).toBeGreaterThan(80);
+      expect((await nav.boundingBox())!.y).toBe(navTop);
+      expect(calls).toBe(0);
+      await page.screenshot({ path: test.info().outputPath('pull-following-finger.png') });
+    });
     await expect.poll(() => calls).toBe(1);
     await expect(page.locator('[data-pull-refresh]')).toHaveText('正在刷新…');
+    // The released page springs back to the smaller loading gap.
+    await expect.poll(async () => (await main.boundingBox())!.y - initialTop).toBeCloseTo(56, 0);
+    expect((await nav.boundingBox())!.y).toBe(navTop);
     await swipe(page, { x: 30, y: 100 }, { x: 30, y: 310 });
     expect(calls).toBe(1);
     await page.screenshot({ path: test.info().outputPath('pull-refresh.png') });
   } finally { release(); }
   await expect(page.getByRole('article', { name: '刚开播的电台' })).toBeVisible();
   await expect(page.locator('[data-pull-refresh]')).toHaveText('已更新');
+  await expect.poll(async () => (await main.boundingBox())!.y).toBeCloseTo(initialTop, 0);
+  await expect(page.locator('[data-pull-refresh]')).toBeHidden();
   await expect(page).toHaveURL('/');
   expect(await page.evaluate(() => scrollY)).toBe(0);
 });
@@ -65,6 +83,75 @@ test('refresh failure keeps existing rooms and a later pull retries', async ({ p
   await swipe(page, { x: 25, y: 90 }, { x: 25, y: 300 });
   await expect(page.locator('[data-pull-refresh]')).toHaveText('已更新');
   expect(calls).toBe(2);
+});
+
+test('adding a second finger cancels the pull and restores the page', async ({ page }) => {
+  await page.route('**/api/v1/rooms', route => route.fulfill({ json: { items: [] } }));
+  await page.routeWebSocket('**/api/v1/rooms/socket?*', () => {});
+  let calls = 0;
+  await page.route('**/api/v1/rooms/refresh', route => { calls++; return route.fulfill({ json: { items: [] } }); });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: '今晚，还很安静。' })).toBeVisible();
+  const main = page.getByRole('main');
+  const initialTop = (await main.boundingBox())!.y;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 30, y: 100, id: 0 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 30, y: 300, id: 0 }] });
+  await expect(page.locator('[data-pull-refresh]')).toHaveText('松开刷新');
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 30, y: 300, id: 0 }, { x: 130, y: 300, id: 1 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  await expect(page.locator('[data-pull-refresh]')).toBeHidden();
+  expect((await main.boundingBox())!.y).toBeCloseTo(initialTop, 0);
+  expect(calls).toBe(0);
+});
+
+test('leaving mobile during refresh clears displacement and ignores its late feedback', async ({ page }) => {
+  await page.route('**/api/v1/rooms', route => route.fulfill({ json: { items: [] } }));
+  await page.routeWebSocket('**/api/v1/rooms/socket?*', () => {});
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/v1/rooms/refresh', async route => {
+    await gate;
+    await route.fulfill({ json: { items: [] } });
+  });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: '今晚，还很安静。' })).toBeVisible();
+  try {
+    await swipe(page, { x: 30, y: 100 }, { x: 30, y: 310 });
+    await expect(page.locator('[data-pull-refresh]')).toHaveText('正在刷新…');
+    for (const width of [768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.locator('[data-pull-refresh]')).toHaveCount(0);
+      await expect(page.locator('html')).not.toHaveClass(/has-pull-refresh/);
+      await expect(page.getByRole('main')).toHaveCSS('transform', 'none');
+      expect(await page.getByRole('main').evaluate(element => element.style.getPropertyValue('--pull-refresh-distance'))).toBe('');
+      await page.screenshot({ path: test.info().outputPath(`desktop-${width}.png`) });
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('[data-pull-refresh]')).toBeHidden();
+  } finally { release(); }
+  await expect(page.getByRole('button', { name: '刷新当前页面' })).toBeEnabled();
+  await expect(page.getByRole('main')).toHaveCSS('transform', 'none');
+  await expect(page.locator('[data-pull-refresh]')).toBeHidden();
+});
+
+test('reduced motion retains pulling and refresh without a rebound animation', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.route('**/api/v1/rooms', route => route.fulfill({ json: { items: [] } }));
+  await page.routeWebSocket('**/api/v1/rooms/socket?*', () => {});
+  let calls = 0;
+  await page.route('**/api/v1/rooms/refresh', route => { calls++; return route.fulfill({ json: { items: [] } }); });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: '今晚，还很安静。' })).toBeVisible();
+  await swipe(page, { x: 30, y: 100 }, { x: 30, y: 310 }, false, async () => {
+    expect((await page.getByRole('main').boundingBox())!.y).toBeGreaterThan(80);
+    await expect(page.getByRole('main')).toHaveCSS('transition-duration', '0s');
+    expect(calls).toBe(0);
+  });
+  await expect.poll(() => calls).toBe(1);
+  await expect(page.locator('[data-pull-refresh]')).toBeHidden();
+  await expect(page.getByRole('main')).toHaveCSS('transform', 'none');
 });
 
 test('pulling on a room link refreshes the list without opening the room', async ({ page }) => {
@@ -206,9 +293,16 @@ for (const scenario of [
     await expect.poll(() => calls).toBeGreaterThan(0);
     const before = calls;
     const navCount = await page.evaluate(() => performance.getEntriesByType('navigation').length);
-    await swipe(page, { x: 25, y: 90 }, { x: 25, y: 310 });
+    const initialTop = (await page.getByRole('main').boundingBox())!.y;
+    await swipe(page, { x: 25, y: 90 }, { x: 25, y: 310 }, false, async () => {
+      await expect(page.locator('[data-pull-refresh]')).toHaveText('松开刷新');
+      expect((await page.getByRole('main').boundingBox())!.y - initialTop).toBeGreaterThan(80);
+      expect(calls).toBe(before);
+      await page.screenshot({ path: test.info().outputPath('page-pulled.png') });
+    });
     await expect.poll(() => calls).toBe(before + 1);
     await expect(page.locator('[data-pull-refresh]')).toHaveText('已更新');
+    await expect.poll(async () => (await page.getByRole('main').boundingBox())!.y).toBeCloseTo(initialTop, 0);
     expect(await page.evaluate(() => performance.getEntriesByType('navigation').length)).toBe(navCount);
     await page.screenshot({ path: test.info().outputPath('refreshed-page.png'), fullPage: true });
   });

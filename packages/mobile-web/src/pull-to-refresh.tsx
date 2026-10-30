@@ -1,10 +1,19 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDown, Check, LoaderCircle, RotateCw } from "lucide-react";
 
-type Phase = "idle" | "pulling" | "refreshing" | "success" | "error";
+type Phase =
+  | "idle"
+  | "pulling"
+  | "refreshing"
+  | "success"
+  | "error"
+  | "settling";
 const threshold = 64;
+const refreshDistance = 56;
+const settleDuration = 280;
 
 /** Gesture/animation state only. Data refresh and concurrency belong to the owner. */
 export function MobilePullToRefresh({
@@ -26,9 +35,34 @@ export function MobilePullToRefresh({
     phase: "idle",
     distance: 0,
   });
+  const button = useRef<HTMLButtonElement>(null);
+  const content = useRef<HTMLElement | null>(null);
+  const [portalReady, setPortalReady] = useState(false);
   const refresh = useRef<() => void>(() => {});
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled) return;
+    // Move the whole owning page, including headers above this component.
+    const page = button.current?.closest("main");
+    if (!page) return;
+    content.current = page;
+    setPortalReady(true);
+    return () => {
+      page.removeAttribute("data-pull-refresh-content");
+      page.style.removeProperty("--pull-refresh-distance");
+      content.current = null;
+    };
+  }, [enabled]);
+  useLayoutEffect(() => {
+    if (!enabled || !content.current) return;
+    content.current.dataset.pullRefreshContent = view.phase;
+    content.current.style.setProperty(
+      "--pull-refresh-distance",
+      `${view.distance}px`,
+    );
+  }, [enabled, view]);
+  useEffect(() => {
+    if (!enabled || !content.current) return;
+    const page = content.current;
     let active = true;
     let running = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -43,18 +77,26 @@ export function MobilePullToRefresh({
     setView({ phase: "idle", distance: 0 });
     const idle = () => {
       gesture = null;
-      if (!running) setView({ phase: "idle", distance: 0 });
+      if (running) return;
+      clearTimeout(timer);
+      setView({ phase: "settling", distance: 0 });
+      timer = setTimeout(
+        () => setView({ phase: "idle", distance: 0 }),
+        settleDuration,
+      );
     };
     const run = async () => {
       if (
         running ||
         latest.current.busy ||
-        document.querySelector("dialog:modal")
-      )
+        document.querySelector("dialog:modal, :popover-open")
+      ) {
+        idle();
         return;
+      }
       clearTimeout(timer);
       running = true;
-      setView({ phase: "refreshing", distance: threshold });
+      setView({ phase: "refreshing", distance: refreshDistance });
       let phase: Phase = "success";
       try {
         await latest.current.onRefresh();
@@ -63,13 +105,14 @@ export function MobilePullToRefresh({
       }
       if (!active) return;
       running = false;
-      setView({ phase, distance: threshold });
-      timer = setTimeout(idle, phase === "error" ? 3500 : 1000);
+      setView({ phase, distance: refreshDistance });
+      timer = setTimeout(idle, phase === "error" ? 1600 : 500);
     };
     refresh.current = () => {
       void run();
     };
     const start = (event: TouchEvent) => {
+      if (gesture) idle();
       gesture = null;
       if (
         running ||
@@ -81,7 +124,8 @@ export function MobilePullToRefresh({
         return;
       const target = event.target instanceof Element ? event.target : null;
       if (
-        !target?.closest("main") ||
+        !target ||
+        !page.contains(target) ||
         target.closest(
           'input, textarea, select, button, [contenteditable="true"], [data-no-pull-refresh]',
         )
@@ -99,7 +143,6 @@ export function MobilePullToRefresh({
           return;
       }
       const touch = event.touches[0];
-      clearTimeout(timer);
       gesture = {
         x: touch.clientX,
         y: touch.clientY,
@@ -111,7 +154,8 @@ export function MobilePullToRefresh({
       if (!gesture) return;
       if (
         event.touches.length !== 1 ||
-        document.querySelector("dialog:modal") ||
+        latest.current.busy ||
+        document.querySelector("dialog:modal, :popover-open") ||
         window.scrollY > 1
       ) {
         idle();
@@ -130,21 +174,27 @@ export function MobilePullToRefresh({
           return;
         }
         gesture.captured = true;
+        clearTimeout(timer);
       }
       if (event.cancelable) event.preventDefault();
-      gesture.distance = Math.min(96, Math.max(0, dy * 0.45));
+      gesture.distance = Math.min(112, Math.max(0, dy * 0.45));
       setView({ phase: "pulling", distance: gesture.distance });
     };
     const end = () => {
-      const ready = gesture && gesture.distance >= threshold;
+      if (!gesture) return;
+      const ready = gesture.distance >= threshold;
+      const captured = gesture.captured;
       gesture = null;
       if (ready) void run();
-      else if (!running) idle();
+      else if (captured) idle();
+    };
+    const cancel = () => {
+      if (gesture) idle();
     };
     document.addEventListener("touchstart", start, { passive: true });
     document.addEventListener("touchmove", move, { passive: false });
     document.addEventListener("touchend", end);
-    document.addEventListener("touchcancel", idle);
+    document.addEventListener("touchcancel", cancel);
     return () => {
       active = false;
       clearTimeout(timer);
@@ -153,7 +203,7 @@ export function MobilePullToRefresh({
       document.removeEventListener("touchstart", start);
       document.removeEventListener("touchmove", move);
       document.removeEventListener("touchend", end);
-      document.removeEventListener("touchcancel", idle);
+      document.removeEventListener("touchcancel", cancel);
     };
   }, [enabled]);
   if (!enabled) return null;
@@ -178,6 +228,7 @@ export function MobilePullToRefresh({
   return (
     <>
       <button
+        ref={button}
         type="button"
         aria-label="刷新当前页面"
         title={`刷新${label}`}
@@ -187,25 +238,33 @@ export function MobilePullToRefresh({
       >
         刷新{label}
       </button>
-      <div
-        data-pull-refresh={view.phase}
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="pointer-events-none fixed inset-x-0 top-[env(safe-area-inset-top)] z-40 flex justify-center"
-        style={{
-          visibility: view.phase === "idle" ? "hidden" : "visible",
-          transform: `translateY(${view.distance - 48}px)`,
-        }}
-      >
-        <span className="flex h-11 items-center gap-2 rounded-full border border-line bg-panel px-4 text-xs text-ink shadow-popover">
-          <Icon
-            aria-hidden="true"
-            className={`size-4 ${view.phase === "refreshing" ? "motion-safe:animate-spin" : ""}`}
-          />
-          {text}
-        </span>
-      </div>
+      {portalReady &&
+        createPortal(
+          <div
+            data-pull-refresh={view.phase}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="pointer-events-none fixed inset-x-0 top-[env(safe-area-inset-top)] z-40 flex h-14 items-center justify-center text-muted motion-reduce:transition-none"
+            style={{
+              visibility: view.phase === "idle" ? "hidden" : "visible",
+              transform: `translateY(${view.distance - refreshDistance}px)`,
+              transition:
+                view.phase === "pulling"
+                  ? "none"
+                  : `transform ${settleDuration}ms cubic-bezier(0.22, 1, 0.36, 1)`,
+            }}
+          >
+            <span className="flex items-center gap-2 text-xs">
+              <Icon
+                aria-hidden="true"
+                className={`size-4 transition-transform duration-150 motion-reduce:transition-none ${view.phase === "refreshing" ? "motion-safe:animate-spin" : ""} ${view.phase === "pulling" && view.distance >= threshold ? "rotate-180" : ""}`}
+              />
+              {text}
+            </span>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
