@@ -6,9 +6,13 @@
 @layer base {
   * { box-sizing: border-box; }
   html { min-height: 100%; color-scheme: dark; scroll-padding-top: 76px; }
-  html.has-pull-refresh { overscroll-behavior-y: contain; }
+  html.has-pull-refresh { overscroll-behavior-y: none; }
   dialog:modal { overscroll-behavior: contain; }
-  body { @apply m-0 min-h-screen bg-canvas font-sans text-ink antialiased; }
+  body { @apply m-0 min-h-dvh bg-canvas font-sans text-ink antialiased; }
+  @media (max-width: 767px) {
+    /* Keep the document at its edges; `contain` still allows rubber-band gaps. */
+    html, body { overscroll-behavior-y: none; }
+  }
   ::selection { @apply bg-accent-soft text-ink; }
   button, input, textarea, select { font: inherit; }
   button, a { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
