@@ -200,6 +200,10 @@ func RunRoomMaintenance(ctx context.Context, cfg Config, authentication auth.Han
 		h.RoomCache = cache[0]
 	}
 	var workers sync.WaitGroup
+	if h.Auth.Service.Repo.DB != nil {
+		workers.Add(1)
+		go func() { defer workers.Done(); h.Auth.Service.RunRevocations(ctx, h.CloseRevokedRooms) }()
+	}
 	workers.Add(3)
 	go func() { defer workers.Done(); h.RunRoomRetries(ctx) }()
 	for i := 0; i < 2; i++ {

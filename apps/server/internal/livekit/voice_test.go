@@ -81,7 +81,7 @@ func newVoiceFixture(t *testing.T) *voiceFixture {
 	}))
 	t.Cleanup(upstream.Close)
 	cfg := Config{URL: upstream.URL, APIKey: "key", APISecret: "voice-test-secret"}
-	service := auth.Service{Secret: "voice-session-secret"}
+	service := auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "voice-session-secret"}
 	f.handler = Handler{Client: NewClient(cfg), Auth: auth.Handler{Service: service}}
 	f.router = gin.New()
 	Register(f.router, cfg, f.handler.Auth)

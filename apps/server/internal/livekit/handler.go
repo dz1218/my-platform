@@ -16,6 +16,7 @@ import (
 
 	"companion/server/internal/auth"
 	"companion/server/pkg/database"
+	"companion/server/pkg/response"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
@@ -131,7 +132,12 @@ func (h Handler) sessionUser(c *gin.Context) (string, error) {
 	if raw == "" {
 		return "", nil
 	}
-	return h.Auth.Service.Verify(raw)
+	session, err := h.Auth.Service.Authenticate(c.Request.Context(), raw)
+	if err != nil {
+		return "", err
+	}
+	h.Auth.Service.BindSession(c, session)
+	return session.UserID, nil
 }
 
 func (h Handler) ownsRoom(c *gin.Context, userID string) bool {
@@ -200,6 +206,12 @@ func (h Handler) create(c *gin.Context) {
 	defer unlock()
 	ctx := c.Request.Context()
 	owner := auth.UserID(c)
+	releaseSession, err := h.Auth.Service.LockSession(ctx, auth.Session{UserID: owner, Version: auth.SessionVersion(c)})
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	defer releaseSession()
 	reserved, err := h.loadOwnerRoom(ctx, owner)
 	if upstreamFailed(c, err) {
 		return
@@ -298,7 +310,7 @@ func (h Handler) create(c *gin.Context) {
 		upstreamFailed(c, err)
 		return
 	}
-	item, err := h.Client.CreateRoom(ctx, id, title, owner)
+	item, err := h.Client.CreateRoom(ctx, id, title, owner, auth.SessionVersion(c))
 	if !upstreamFailed(c, err) {
 		if item.ID != id || item.OwnerID != owner {
 			// An incomplete success response must not erase the reservation.
@@ -391,6 +403,10 @@ func (h Handler) join(c *gin.Context) {
 	identity, role, hostUserID, notice := "viewer_"+database.ID(), "viewer", "", ""
 	var token string
 	if userID != "" && item.OwnerID == userID {
+		if item.SessionVersion != auth.SessionVersion(c) {
+			failRoom(c, http.StatusConflict, "room_closing", "原直播间正在结束，请稍后重新开播")
+			return
+		}
 		admission, err := h.admitHost(ctx, *item, attempt, name)
 		var pending *hostPendingError
 		if errors.As(err, &pending) {

@@ -1,3 +1,4 @@
+import { requestSessionVerification } from './session-events';
 import { privateSocketURL } from './socket-url';
 import type { Match } from '@/types/companion';
 
@@ -48,6 +49,7 @@ export class MatchesConnection {
       if (this.stopped || this.socket !== socket) return;
       try {
         const data = JSON.parse(event.data);
+        if (data?.type === 'session.invalidated') { requestSessionVerification(); this.close(); return; }
         if (data.type !== 'ping' && data.type !== 'matches.updated') return;
         this.lastReceived = Date.now();
         clearTimeout(this.watchdog);

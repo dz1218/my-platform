@@ -138,13 +138,13 @@ test('real host/viewer media, viewer rejoin and confirmed host ending', async ({
     expect(dispatches).toBe(1);
 
     // A viewer can leave and rejoin without closing the host's room.
-    await guest.getByRole('button', { name: '离开房间' }).click();
+    await guest.getByRole('button', { name: '退出房间' }).click();
     await expect(page.getByRole('button', { name: '在线 1' })).toBeVisible();
     await guest.getByRole('button', { name: '重新加入', exact: true }).click();
     await expect(guest.getByText('已连接', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '在线 2' })).toBeVisible();
     await expect(guest.getByRole('button', { name: '结束直播', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '离开房间', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '退出房间', exact: true })).toHaveCount(0);
 
     // Cancelling the host confirmation keeps media running; confirming closes
     // the actual LiveKit room and both pages become terminal.
@@ -197,9 +197,9 @@ test('one host page owns the room while the same account can watch another host'
     const watchingPage = await context.newPage();
     await join(watchingPage, otherRoom, false);
     await expect(watchingPage.getByRole('button', { name: '结束直播', exact: true })).toHaveCount(0);
-    await expect(watchingPage.getByRole('button', { name: '离开房间', exact: true })).toBeEnabled();
+    await expect(watchingPage.getByRole('button', { name: '退出房间', exact: true })).toBeEnabled();
     await expect(page.getByText('已连接', { exact: true })).toBeVisible();
-    await watchingPage.getByRole('button', { name: '离开房间', exact: true }).click();
+    await watchingPage.getByRole('button', { name: '退出房间', exact: true }).click();
     await expect(otherHostPage.getByRole('button', { name: '在线 1' })).toBeVisible();
     await expect(page.getByText('已连接', { exact: true })).toBeVisible();
     await watchingPage.getByRole('button', { name: '重新加入', exact: true }).click();

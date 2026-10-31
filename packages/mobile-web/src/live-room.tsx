@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { AudioLines, MoreHorizontal, RefreshCw, Settings2, Share2, Users } from 'lucide-react';
+import { AudioLines, ChevronUp, LogOut, MoreHorizontal, PhoneOff, RefreshCw, Settings2, Share2, Users } from 'lucide-react';
 import { Sheet } from '@my-platform/web-ui/sheet';
 import { useStore } from 'zustand';
 import { createDomainStore } from '@my-platform/client-core';
@@ -54,9 +54,9 @@ export function MobileLiveRoomPanels({ selected, onSelect, participantCount, isH
 }
 
 /** Only presentation moves into a sheet. SDK resources remain in the room owner. */
-export function MobileLiveControls({ host, joining, connected, callStatus, devices, call, leave, assistant, playback, sharing = false, error }: {
+export function MobileLiveControls({ host, joining, connected, callStatus, devices, leave, assistant, playback, sharing = false, error }: {
   host: boolean; joining: boolean; connected: boolean; callStatus?: 'pending' | 'approved' | null;
-  devices: ReactNode; call?: ReactNode; leave: ReactNode; assistant?: ReactNode; playback?: ReactNode; sharing?: boolean; error?: string | null;
+  devices: ReactNode; leave: ReactNode; assistant?: ReactNode; playback?: ReactNode; sharing?: boolean; error?: string | null;
 }) {
   const store = useStoreInstance(createPanel);
   const open = useStore(store, state => state.open);
@@ -71,22 +71,32 @@ export function MobileLiveControls({ host, joining, connected, callStatus, devic
     <Sheet open={open} onClose={close} title={host ? '设备与助手' : '连麦与设备'} className="mobile-live-device-sheet">
       {error && <p role="alert" className="mb-5 rounded-panel bg-danger-soft p-4 text-sm leading-6 text-danger">{error}</p>}
       {!connected && <p role="status" className="mb-4 text-sm text-muted">连接恢复后可继续操作。</p>}
-      {host ? <><p className="mb-5 text-sm text-muted">准备好后，再打开声音和画面。</p><div className="grid gap-3 [&>button]:min-h-14 [&>button]:w-full [&>button]:justify-start [&>button]:rounded-panel [&>button]:px-4">{devices}</div>{assistant && <div className="mt-6 border-t border-line pt-5 [&>button]:min-h-12 [&>button]:w-full">{assistant}</div>}</> : <>{call || <div className="grid gap-4 [&_button]:min-h-12">{devices}</div>}<p className="mt-5 text-xs leading-6 text-muted">声音和画面由你开启。退出连麦后，仍可留在房间观看。</p></>}
+      {host ? <><p className="mb-5 text-sm text-muted">准备好后，再打开声音和画面。</p><div className="grid gap-3 [&>button]:min-h-14 [&>button]:w-full [&>button]:justify-start [&>button]:rounded-panel [&>button]:px-4">{devices}</div>{assistant && <div className="mt-6 border-t border-line pt-5 [&>button]:min-h-12 [&>button]:w-full">{assistant}</div>}</> : <><div className="grid gap-3 [&_button]:min-h-12 [&_button]:w-full [&_button]:justify-start [&_button]:px-4">{devices}</div><p className="mt-5 text-xs leading-6 text-muted">声音和画面由你开启，分享给直播间所有人。退出连麦后，仍可留在房间观看。</p></>}
     </Sheet>
   </div>;
 }
 
-export function MobileLiveLeave({ joining, host, disabled, onLeave }: {
+export function MobileLiveLeave({ joining, host, disabled, onLeave, onEndCall, endCallDisabled = false }: {
   joining: boolean; host: boolean; disabled: boolean; onLeave: () => void;
+  onEndCall?: () => void; endCallDisabled?: boolean;
 }) {
   const store = useStoreInstance(createPanel);
   const open = useStore(store, state => state.open);
   const { show, close } = store.getState();
   return <>
-    <button type="button" className="live-button live-button-leave" disabled={disabled} onClick={() => joining || host ? onLeave() : show()}>{joining ? '取消连接' : host ? '结束直播' : '离开'}</button>
-    <Sheet open={open} onClose={close} title="离开直播间？">
+    <button type="button" className="live-button live-button-leave" disabled={disabled} aria-haspopup={!joining && !host ? 'dialog' : undefined} aria-expanded={!joining && !host ? open : undefined} onClick={() => joining || host ? onLeave() : show()}>{joining ? '取消连接' : host ? '结束直播' : onEndCall ? '退出' : '离开'}{onEndCall && <ChevronUp aria-hidden="true" size={15} />}</button>
+    <Sheet open={open} onClose={close} title={onEndCall ? '离开选项' : '离开直播间？'}>
+      {onEndCall ? <div className="grid gap-2">
+        <button type="button" aria-label="退出连麦" disabled={disabled || endCallDisabled} onClick={() => { close(); onEndCall(); }} className="flex min-h-18 items-center gap-3 rounded-control px-3 py-3 text-left hover:bg-surface-hover">
+          <PhoneOff aria-hidden="true" size={20} className="shrink-0 text-muted" /><span><span className="block text-sm font-medium">退出连麦</span><span className="mt-1 block text-xs text-muted">留在直播间，继续观看</span></span>
+        </button>
+        <button type="button" aria-label="退出房间" disabled={disabled} onClick={() => { close(); onLeave(); }} className="flex min-h-18 items-center gap-3 rounded-control px-3 py-3 text-left hover:bg-danger-soft">
+          <LogOut aria-hidden="true" size={20} className="shrink-0 text-danger" /><span><span className="block text-sm font-medium text-danger">退出房间</span><span className="mt-1 block text-xs text-muted">退出当前直播间</span></span>
+        </button>
+      </div> : <>
       <p className="mb-6 text-sm leading-7 text-muted">离开后关闭你的声音和画面，之后可以重新进入。</p>
       <div className="grid grid-cols-2 gap-3"><button type="button" className="btn-secondary" onClick={close}>继续观看</button><button type="button" className="btn-primary" onClick={() => { close(); onLeave(); }}>确认离开</button></div>
+      </>}
     </Sheet>
   </>;
 }

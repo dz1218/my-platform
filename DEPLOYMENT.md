@@ -11,6 +11,8 @@
 
 不要把模型凭据、LiveKit 密钥或 Agent Token 放入 `NEXT_PUBLIC_*` 环境变量。未配置 LiveKit 时，房间接口返回 503，其余 API 可正常启动。
 
+密码找回复用现有短信配置，新增 `SMS_RESET_TEMPLATE_CODE`，默认 `100003`。发布此功能时先应用 `014_password_recovery.sql`，再更新全部 API 实例，最后发布 Web；旧 API 无法检查会话版本，不应与新版长期混跑。API 内的直播维护任务负责改密后的关房重试，无需额外部署 Worker。部署及待处理任务检查见 [手机号认证文档](docs/phone-auth.md#找回与修改密码)。
+
 ## Docker
 
 仓库提供 API/Worker 的 Go 多阶段镜像，以及 Agent 的 Node 22 镜像。先配置环境，再执行：

@@ -146,9 +146,8 @@
 .live-stage-column { min-width: 0; }
 .live-stage { position: relative; display: flex; flex-direction: column; width: 100%; aspect-ratio: 16 / 9; min-height: 340px; max-height: 560px; border-radius: 16px 16px 0 0; overflow: hidden; @apply theme-night md:theme-graphite bg-media-canvas text-ink; }
 .live-stage:fullscreen { width: 100%; height: 100%; max-height: none; border-radius: 0; }
-.live-stage-top, .live-stage-bottom { z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 20px; font-size: 11px; @apply text-muted bg-photo-shade/85; }
-.live-stage-top > span, .live-stage-bottom > span { display: inline-flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.live-stage-top > span:last-child { font-size: 11px; flex-shrink: 0; @apply text-muted; }
+.live-stage-bottom { z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 20px; font-size: 11px; @apply text-muted bg-photo-shade/85; }
+.live-stage-bottom > span { display: inline-flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .live-stage-bottom { margin-top: auto; padding-block: 6px; min-height: 48px; }
 .live-stage-bottom .live-icon-button { @apply text-ink; }
 .live-stage-bottom .live-icon-button:hover { @apply bg-surface-hover text-ink; }
@@ -166,8 +165,6 @@
 .live-guest-name { display: grid; grid-template-columns: auto minmax(0, 180px); align-items: center; gap: 10px; margin-top: 18px; font-size: 11px; @apply text-muted; }
 .live-guest-name .live-input { height: 36px; @apply bg-surface-soft text-ink border-control; }
 .live-stage-media { position: relative; flex: 1; min-height: 0; }
-.live-stage-swap { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; min-height: 44px; margin-block: -9px; padding: 0 9px; border-radius: 6px; font-size: 11px; @apply border border-control text-ink; }
-.live-stage-swap:hover { @apply bg-surface-hover; }
 .live-camera-pane { position: absolute; overflow: hidden; @apply bg-media-canvas; }
 .live-camera-pane.is-main { inset: 0; }
 .live-camera-pane.is-small { z-index: 1; right: 16px; bottom: 16px; width: clamp(120px, 28%, 240px); aspect-ratio: 16 / 10; border-radius: 9px; @apply border border-control shadow-popover; }
@@ -223,42 +220,14 @@
 .live-voice-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .live-sidebar-tabs .live-voice-badge { padding: 1px 5px; border-radius: 8px; @apply bg-surface-soft text-action; }
 .live-role.is-speaker { @apply bg-surface-soft text-action; }
-.live-viewer-note.is-on-call { @apply text-action; }
 .live-viewer-request { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .live-viewer-request > span { font-size: 12px; @apply text-muted; }
-.live-viewer-call { margin-top: 16px; padding: 20px; border-radius: 12px; @apply bg-panel border border-line border-l-[3px] border-l-action; }
-.live-viewer-call-heading, .live-viewer-call-heading > div { display: flex; align-items: center; gap: 9px; }
-.live-viewer-call-heading { justify-content: space-between; flex-wrap: wrap; }
-.live-viewer-call-heading h2 { font-size: 15px; font-weight: 600; }
-.live-call-dot { width: 6px; height: 6px; border-radius: 50%; @apply bg-action; }
-.live-call-mode { font-size: 11px; @apply text-muted; }
-.live-call-end { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 12px; @apply text-danger; }
-.live-call-end:hover { @apply text-danger-hover; }
-.live-viewer-call-intro { margin-top: 5px !important; font-size: 12px; line-height: 1.8; @apply text-muted; }
-.live-viewer-call-body { margin-top: 12px; }
-.live-call-devices { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
-.live-call-device { display: flex; align-items: center; gap: 12px; min-height: 62px; @apply text-muted; }
-.live-call-device + .live-call-device { @apply border-t border-t-line; }
-.live-call-device > svg { flex-shrink: 0; }
-.live-call-device > div { flex: 1; min-width: 0; display: grid; gap: 5px; }
-.live-call-device strong { font-size: 12px; font-weight: 500; @apply text-ink; }
-.live-call-device div span { font-size: 11px; line-height: 1.4; }
-.live-call-switch { display: inline-flex; align-items: center; flex-shrink: 0; width: 44px; height: 26px; padding: 3px; border-radius: 20px; @apply border border-control bg-surface-selected; }
-.live-call-switch span { width: 18px; height: 18px; border-radius: 50%; transition: transform .15s; @apply bg-panel shadow-panel md:bg-ink; }
-.live-call-switch[aria-checked=true] { @apply border-action bg-action; }
-.live-call-switch[aria-checked=true] span { transform: translateX(18px); @apply md:bg-on-action; }
-.live-viewer-call-footnote { display: flex; align-items: flex-start; gap: 6px; margin-top: 16px !important; font-size: 11px; line-height: 1.8; @apply text-muted; }
-.live-viewer-call-footnote svg { flex-shrink: 0; margin-top: 3px; }
 @media (max-width: 599px) {
-  .live-viewer-call { padding: 15px; }
   /* Reserve space for the host's camera action above the caller thumbnail. */
   .live-stage:has(.live-stage-media.has-call .is-main .live-button-stage) { min-height: 390px; }
   .live-camera-pane.is-small { right: 10px; bottom: 10px; width: 120px; }
   .live-stage-media.has-call .live-camera-pane.is-main .live-stage-empty { bottom: 96px; }
   .live-stage-media.has-call .live-camera-pane.is-main .live-stage-symbol { width: 48px; height: 48px; margin-bottom: 12px; flex-shrink: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .live-call-switch span { transition: none; }
 }
 .live-chat { display: flex; flex-direction: column; position: relative; height: 100%; }
 .live-chat-log { flex: 1; min-height: 0; height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px 16px; scrollbar-width: thin; scrollbar-color: var(--rf-line) transparent; }
@@ -357,7 +326,7 @@
   .live-room-heading > button { width: 38px; height: 38px; min-height: 38px; padding: 9px; font-size: 0; gap: 0; }
   .live-room-heading > button svg { width: 17px; height: 17px; }
   .live-stage { min-height: 390px; }
-  .live-stage-top, .live-stage-bottom { padding-inline: 14px; }
+  .live-stage-bottom { padding-inline: 14px; }
   .live-stage-empty h2 { font-size: 19px; }
   .live-stage-empty > p { font-size: 11px; max-width: 240px; }
   .live-stage-symbol { width: 65px; height: 65px; margin-bottom: 19px; }
@@ -381,7 +350,6 @@
 .live-input[aria-invalid=true] { @apply border-danger; }
 .live-page .live-input[aria-invalid=true]:focus { @apply border-danger; }
 .live-stage-symbol { border-radius: 24px; @apply bg-photo-ink/5; }
-.live-stage-top { @apply border-b border-b-photo-ink/5; }
 .live-chat-intro { @apply text-muted bg-surface-soft; }
 .live-chat-intro span { @apply text-muted; }
 .live-sidebar-tabs button[aria-pressed=true] { @apply text-action; }
@@ -446,11 +414,6 @@
   .live-studio { grid-template-columns: minmax(0, 1fr) 336px; gap: 16px; align-items: start; --studio-stage-height: clamp(280px, calc(100dvh - 252px), 900px); }
   .live-stage { @apply theme-graphite rounded-t-panel; aspect-ratio: auto; height: var(--studio-stage-height); min-height: 0; max-height: none; }
   .live-stage:fullscreen { height: 100%; border-radius: 0; }
-  .live-stage-top { @apply border-0 bg-panel px-5 text-xs; min-height: 52px; padding-block: 12px; }
-  .live-stage-top { display: none; }
-  .live-stage-top.has-call { @apply absolute right-3 top-20 flex bg-transparent p-0; min-height: 44px; }
-  .live-stage-top.has-call > span { display: none; }
-  .live-stage-top > span:first-child { @apply font-medium text-ink; }
   .live-stage-bottom { @apply absolute right-3 bottom-3 bg-transparent p-0; min-height: 44px; }
   .live-stage-symbol { @apply rounded-full border-0 bg-panel text-muted; width: 72px; height: 72px; margin-bottom: 20px; }
   .live-stage-empty h2 { @apply text-xl font-medium tracking-tight; }
@@ -458,7 +421,7 @@
   .live-stage-empty > .live-button { @apply rounded-full px-6 text-sm; margin-top: 24px; }
   .live-camera-label { @apply rounded-full bg-panel px-3 py-1.5 text-xs text-muted; left: 20px; bottom: 16px; }
   .live-camera-pane.is-small .live-camera-label { left: 6px; bottom: 6px; padding: 3px 6px; font-size: 11px; }
-  .live-control-bar { @apply rounded-b-panel border-0 border-t border-line/50 bg-panel px-5; height: 88px; min-height: 88px; }
+  .live-control-bar { @apply rounded-b-panel border-0 border-t border-line/50 bg-panel px-5; min-height: 88px; }
   .live-device-controls { @apply gap-3; }
   .live-device-button { @apply min-h-12 gap-3 rounded-control bg-surface-soft px-4 text-sm text-ink; }
   .live-device-button:hover { @apply bg-surface-hover; }
@@ -533,7 +496,6 @@
   .live-room-page .live-studio-footer { display: none; }
   .live-room-page .live-studio-footer[data-pending=true] { display: none; }
   .live-room-page .live-sidebar { height: max(320px, calc(100dvh - 380px)); min-height: 320px; @apply rounded-panel border-0 bg-panel; }
-  .live-room-page .live-stage-top { min-height: 44px; padding: 8px 12px; @apply bg-transparent; }
   .live-room-page .live-stage-bottom { position: absolute; bottom: 8px; right: 8px; padding: 0; @apply bg-transparent; }
   .live-room-page .live-control-bar { min-height: 64px; padding: 8px 0; @apply bg-transparent; }
   .live-room-page .live-chat-form { margin: 0; padding: 12px; border: 0; border-radius: 0; @apply bg-transparent; }
@@ -548,19 +510,12 @@
   .live-room-page .live-dialog, .live-page .live-dialog { position: fixed; inset: auto 0 0; margin: 0 auto; width: 100%; max-width: 640px; border-radius: 24px 24px 0 0; padding: 24px 20px max(24px, env(safe-area-inset-bottom)); }
   .live-room-page .live-dialog-actions, .live-page .live-dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .live-room-page .live-dialog-actions button, .live-page .live-dialog-actions button { min-height: 48px; }
-  .mobile-live-device-sheet .live-viewer-call { border: 0; padding: 0; margin: 0; background: transparent; }
-  .mobile-live-device-sheet .live-viewer-call-intro, .mobile-live-device-sheet .live-viewer-call-footnote { display: none; }
-  .mobile-live-device-sheet .live-call-devices { display: grid; grid-template-columns: 1fr; gap: 12px; }
-  .mobile-live-device-sheet .live-call-device { min-height: 72px; }
 }
 
 @media (max-width: 767px) {
-  .live-room-page .live-stage-top:not(.has-call) { display: none; }
   .live-room-page .live-stage:has(.live-stage-media.has-call) { min-height: 340px; }
   .live-room-page:has(.live-stage-media.has-call) .live-sidebar { height: max(280px, calc(100dvh - 500px)); min-height: 280px; }
-  .mobile-live-device-sheet .live-call-switch { position: relative; }
   .live-room-page .live-dialog, .live-page .live-dialog { bottom: var(--dialog-keyboard-offset, 0px); max-height: calc(var(--dialog-viewport-height, 100dvh) - max(12px, env(safe-area-inset-top))); overflow-y: auto; overscroll-behavior: contain; }
-  .mobile-live-device-sheet .live-call-switch::before { content: ""; position: absolute; inset: -9px 0; }
   .live-room-page .live-voice-panel { padding: 0; }
   .live-room-page .live-voice-card { margin-top: 16px; padding: 24px 12px; background: transparent; }
   .live-room-page .live-voice-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

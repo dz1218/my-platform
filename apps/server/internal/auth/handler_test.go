@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -9,7 +10,7 @@ import (
 )
 
 func TestOptionalAuthenticationPreservesAccountScope(t *testing.T) {
-	h := Handler{Service: Service{Secret: strings.Repeat("test-secret", 4)}}
+	h := Handler{Service: Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: strings.Repeat("test-secret", 4)}}
 	token, err := h.Service.Token("catalog-user")
 	if err != nil {
 		t.Fatal(err)

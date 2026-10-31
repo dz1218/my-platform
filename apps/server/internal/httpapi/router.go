@@ -64,7 +64,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 		}
 		c.JSON(200, gin.H{"ok": true, "service": "companion"})
 	})
-	ah := auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: cfg.JWTSecret, SMS: cfg.SMS}, SecureCookie: cfg.SecureCookie}
+	ah := auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: cfg.JWTSecret, SMS: cfg.SMS, ResetSMS: cfg.ResetSMS}, SecureCookie: cfg.SecureCookie}
 	livekit.RegisterWebhook(r, cfg.LiveKit, ah, cache)
 	livekit.RegisterRealtime(r, cfg.LiveKit, ah, cache, cfg.WebOrigin)
 	livekit.Register(r, cfg.LiveKit, ah, cache)
@@ -76,6 +76,9 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 	livekit.Register(api, cfg.LiveKit, ah, cache)
 	api.POST("/auth/code", rateLimit(cache, "sms-send", 5, false), ah.SendCode)
 	api.POST("/auth/verify", rateLimit(cache, "sms-verify", 20, false), ah.VerifyCode)
+	api.POST("/auth/password/code", rateLimit(cache, "sms-send", 5, false), ah.SendPasswordCode)
+	api.POST("/auth/password/verify", rateLimit(cache, "sms-verify", 20, false), ah.VerifyPasswordCode)
+	api.POST("/auth/password/reset", rateLimit(cache, "password-reset", 20, false), ah.ResetPassword)
 	api.POST("/auth/register", rateLimit(cache, "auth", 60, false), ah.Register)
 	api.POST("/auth/login", rateLimit(cache, "auth", 60, false), ah.Login)
 	api.POST("/auth/logout", ah.Logout)
@@ -100,6 +103,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 	api.POST("/novels/:id/chapters/:chapterId/publish", nh.Write("chapter-publish"))
 	api.POST("/novels/:id/chapters/:chapterId/delete", nh.Write("chapter-delete"))
 	api.GET("/me", ah.Me)
+	api.POST("/me/password", rateLimit(cache, "password-change", 5, true), ah.ChangePassword)
 	api.GET("/matches", mh.List)
 	api.POST("/matches", mh.Create)
 	api.GET("/matches/:id", mh.Get)

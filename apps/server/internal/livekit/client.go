@@ -139,20 +139,22 @@ type room struct {
 	NumPublishersProto   int    `json:"num_publishers"`
 }
 type RoomItem struct {
-	SID       string `json:"-"`
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Status    string `json:"status"`
-	Viewers   int    `json:"viewers"`
-	OwnerID   string `json:"-"`
-	CanManage bool   `json:"canManage"`
+	SID            string `json:"-"`
+	ID             string `json:"id"`
+	Title          string `json:"title"`
+	Status         string `json:"status"`
+	Viewers        int    `json:"viewers"`
+	OwnerID        string `json:"-"`
+	SessionVersion int64  `json:"-"`
+	CanManage      bool   `json:"canManage"`
 }
 
 func (r room) item() RoomItem {
 	title := r.Name
 	var metadata struct {
-		Title   string `json:"title"`
-		OwnerID string `json:"ownerId"`
+		Title          string `json:"title"`
+		OwnerID        string `json:"ownerId"`
+		SessionVersion int64  `json:"sessionVersion"`
 	}
 	if json.Unmarshal([]byte(r.Metadata), &metadata) == nil && metadata.Title != "" {
 		title = metadata.Title
@@ -165,7 +167,7 @@ func (r room) item() RoomItem {
 	if r.NumPublishers > 0 || r.NumPublishersProto > 0 {
 		status = "直播中"
 	}
-	return RoomItem{SID: r.SID, ID: r.Name, Title: title, Status: status, Viewers: viewers, OwnerID: metadata.OwnerID}
+	return RoomItem{SID: r.SID, ID: r.Name, Title: title, Status: status, Viewers: viewers, OwnerID: metadata.OwnerID, SessionVersion: metadata.SessionVersion}
 }
 func (c *Client) ListRooms(ctx context.Context, names ...string) ([]RoomItem, error) {
 	var result struct {
@@ -181,8 +183,12 @@ func (c *Client) ListRooms(ctx context.Context, names ...string) ([]RoomItem, er
 	}
 	return items, err
 }
-func (c *Client) CreateRoom(ctx context.Context, id, title, ownerID string) (RoomItem, error) {
-	metadata, _ := json.Marshal(map[string]string{"title": title, "ownerId": ownerID})
+func (c *Client) CreateRoom(ctx context.Context, id, title, ownerID string, versions ...int64) (RoomItem, error) {
+	version := int64(0)
+	if len(versions) > 0 {
+		version = versions[0]
+	}
+	metadata, _ := json.Marshal(map[string]any{"title": title, "ownerId": ownerID, "sessionVersion": version})
 	var result room
 	err := c.call(ctx, "RoomService", "CreateRoom", map[string]any{"roomCreate": true}, map[string]any{"name": id, "metadata": string(metadata), "maxParticipants": 50, "emptyTimeout": 600, "departureTimeout": 120}, &result)
 	return result.item(), err

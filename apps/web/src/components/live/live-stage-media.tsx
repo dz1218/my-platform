@@ -11,7 +11,6 @@ import type { VoiceSlot } from './use-live-voice';
 type Camera = { track: Track | null; name: string; local: boolean };
 type Props = {
   room: Room | null;
-  pending?: boolean;
   isHost: boolean;
   hostRecovering?: boolean;
   slot: VoiceSlot | null;
@@ -44,7 +43,7 @@ function CameraVideo({ camera, label }: { camera: Camera; label: string }) {
   return <div ref={ref} className={`live-camera-video ${camera.local ? 'is-local' : ''}`} />;
 }
 
-export function LiveStageMedia({ room, pending = false, isHost, hostRecovering, slot, cameraDisabled, onEnableCamera }: Props) {
+export function LiveStageMedia({ room, isHost, hostRecovering, slot, cameraDisabled, onEnableCamera }: Props) {
   const [cameras, setCameras] = useState<{ host: Camera | null; caller: Camera | null }>({ host: null, caller: null });
   const ui = useStoreInstance(createLiveStageStore);
   const focusedCall = useStore(ui, s => s.focusedCall);
@@ -74,30 +73,22 @@ export function LiveStageMedia({ room, pending = false, isHost, hostRecovering, 
   }, [room, slot?.identity, slot?.participantSid]);
 
   const swap = () => { if (call) setFocusedCall(callerIsMain ? null : call.requestId); };
-  return <>
-    <div className={`live-stage-top ${call ? 'has-call' : ''} ${pending ? 'invisible' : ''}`} aria-hidden={pending || undefined}>
-      <span><LiveIcon name="video" size={15} />{call ? '连麦画面' : isHost ? '本地预览' : '直播画面'}</span>
-      {call ? <button type="button" className="live-stage-swap" onClick={swap}><LiveIcon name="swap" size={15} />切换大小画面</button>
-        : null}
+  return room ? <div className={`live-stage-media ${call ? 'has-call' : ''}`}>
+    <div className={`live-camera-pane ${callerIsMain ? 'is-small' : 'is-main'}`} role="group" aria-label="主播画面">
+      {!hostRecovering && cameras.host?.track ? <CameraVideo camera={cameras.host} label="主播画面" />
+        : <div className="live-stage-empty">
+          <div className="live-stage-symbol"><LiveIcon name={isHost ? 'videoOff' : 'screen'} size={36} /></div>
+          <h2>{isHost ? '摄像头尚未开启' : hostRecovering ? '主播连接暂时中断，正在等待恢复…' : '等主播开启画面'}</h2>
+          {isHost && !callerIsMain && <button type="button" className="live-button live-button-stage" disabled={cameraDisabled} onClick={onEnableCamera}><LiveIcon name="video" size={16} />打开画面</button>}
+        </div>}
+      <span className="live-camera-label">主播{cameras.host?.name ? ` · ${cameras.host.name}` : ''}{isHost ? '（我）' : ''}</span>
+      {callerIsMain && <button type="button" className="live-camera-swap" aria-label="将主播切换到大画面" title="点击切换到大画面" onClick={swap}><LiveIcon name="swap" size={16} /></button>}
     </div>
-    {room && <div className={`live-stage-media ${call ? 'has-call' : ''}`}>
-      <div className={`live-camera-pane ${callerIsMain ? 'is-small' : 'is-main'}`} role="group" aria-label="主播画面">
-        {!hostRecovering && cameras.host?.track ? <CameraVideo camera={cameras.host} label="主播画面" />
-          : <div className="live-stage-empty">
-            <div className="live-stage-symbol"><LiveIcon name={isHost ? 'videoOff' : 'screen'} size={36} /></div>
-            <h2>{isHost ? '摄像头尚未开启' : hostRecovering ? '主播连接暂时中断，正在等待恢复…' : '等主播开启画面'}</h2>
-            {!callerIsMain && <>
-              {isHost && <button type="button" className="live-button live-button-stage" disabled={cameraDisabled} onClick={onEnableCamera}><LiveIcon name="video" size={16} />打开画面</button>}</>}
-          </div>}
-        <span className="live-camera-label">主播{cameras.host?.name ? ` · ${cameras.host.name}` : ''}{isHost ? '（我）' : ''}</span>
-        {callerIsMain && <button type="button" className="live-camera-swap" aria-label="将主播切换到大画面" title="点击切换到大画面" onClick={swap}><LiveIcon name="swap" size={16} /></button>}
-      </div>
-      {call && <div className={`live-camera-pane ${callerIsMain ? 'is-main' : 'is-small'}`} role="group" aria-label="连麦者画面">
-        {cameras.caller?.track ? <CameraVideo camera={cameras.caller} label={ownCall ? '我的连麦画面' : '连麦者画面'} />
-          : <div className="live-stage-empty"><div className="live-stage-symbol"><LiveIcon name="videoOff" size={36} /></div><h2>摄像头未开启</h2>{callerIsMain && <p>{ownCall ? '可以在下方打开摄像头，分享你的画面。' : '对方开启摄像头后，画面会自动显示。'}</p>}</div>}
-        <span className="live-camera-label">{ownCall ? '我的画面' : `连麦 · ${call.name}`}</span>
-        {!callerIsMain && <button type="button" className="live-camera-swap" aria-label="将连麦者切换到大画面" title="点击切换到大画面" onClick={swap}><LiveIcon name="swap" size={16} /></button>}
-      </div>}
+    {call && <div className={`live-camera-pane ${callerIsMain ? 'is-main' : 'is-small'}`} role="group" aria-label="连麦者画面">
+      {cameras.caller?.track ? <CameraVideo camera={cameras.caller} label={ownCall ? '我的连麦画面' : '连麦者画面'} />
+        : <div className="live-stage-empty"><div className="live-stage-symbol"><LiveIcon name="videoOff" size={36} /></div><h2>摄像头未开启</h2>{callerIsMain && <p>{ownCall ? '可以在下方打开摄像头，分享你的画面。' : '对方开启摄像头后，画面会自动显示。'}</p>}</div>}
+      <span className="live-camera-label">{ownCall ? '我的画面' : `连麦 · ${call.name}`}</span>
+      {!callerIsMain && <button type="button" className="live-camera-swap" aria-label="将连麦者切换到大画面" title="点击切换到大画面" onClick={swap}><LiveIcon name="swap" size={16} /></button>}
     </div>}
-  </>;
+  </div> : null;
 }

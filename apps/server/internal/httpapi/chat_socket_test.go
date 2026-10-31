@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"companion/server/internal/auth"
 	"companion/server/internal/conversation"
 	"companion/server/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -46,7 +47,9 @@ func TestChatSocketDeliveryAndReconnect(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	backend := &fakeSocketBackend{messages: []conversation.Message{}}
 	router := gin.New()
-	router.Use(func(c *gin.Context) { c.Set("userID", "owner") })
+	router.Use(func(c *gin.Context) {
+		(auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }}).BindSession(c, auth.Session{UserID: "owner"})
+	})
 	router.GET("/:id", socketHandler(backend, "http://web", func(_ context.Context, _ string) error { return nil }))
 	server := httptest.NewServer(router)
 	defer server.Close()

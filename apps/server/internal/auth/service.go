@@ -8,22 +8,22 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/scrypt"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
 const CookieName = "companion_session"
 
 type Service struct {
-	Repo   Repository
-	Secret string
-	SMS    SMSSender
+	Repo          Repository
+	Secret        string
+	SMS           SMSSender
+	ResetSMS      SMSSender
+	VersionLookup func(context.Context, string) (int64, error)
 }
 
 func (s Service) Register(ctx context.Context, phone, name, password string, consent bool, gender, ticket string) (User, error) {
@@ -110,16 +110,4 @@ func verifyPassword(password, stored string) bool {
 	}
 	actual, err := scrypt.Key([]byte(password), []byte(parts[0]), 16384, 8, 1, 64)
 	return err == nil && subtle.ConstantTimeCompare(actual, expected) == 1
-}
-func (s Service) Token(userID string) (string, error) {
-	now := time.Now()
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{Subject: userID, Issuer: "companion", IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(7 * 24 * time.Hour))}).SignedString([]byte(s.Secret))
-}
-func (s Service) Verify(raw string) (string, error) {
-	claims := &jwt.RegisteredClaims{}
-	_, err := jwt.ParseWithClaims(raw, claims, func(t *jwt.Token) (interface{}, error) { return []byte(s.Secret), nil }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithIssuer("companion"), jwt.WithExpirationRequired())
-	if err != nil || claims.Subject == "" {
-		return "", errors.New("invalid session")
-	}
-	return claims.Subject, nil
 }

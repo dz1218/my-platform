@@ -49,7 +49,6 @@ export function LiveRoomLoading() {
       <div className="live-room-title"><LiveRoomTitle /><SkeletonBlock className="h-3 w-16" /></div>
       <div className="ml-auto flex shrink-0 items-center gap-2"><button type="button" disabled className="live-button live-button-secondary" aria-label="分享直播间"><LiveIcon name="link" size={16} />分享</button></div>
     </header>
-          <div className="live-stage-top invisible" aria-hidden="true"><span><LiveIcon name="video" size={15} />直播画面</span></div>
           <LiveConnectionPending label="正在准备直播间" />
           <div className="live-stage-bottom invisible" aria-hidden="true"><span>直播画面</span><span className="size-9" /></div>
         </div>

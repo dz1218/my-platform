@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -11,7 +12,8 @@ import (
 )
 
 func TestPrivateSocketTicketScope(t *testing.T) {
-	h := Handler{Service: Service{Secret: "test-private-socket-secret"}}
+	version := int64(0)
+	h := Handler{Service: Service{VersionLookup: func(context.Context, string) (int64, error) { return version, nil }, Secret: "test-private-socket-secret"}}
 	origin := "https://web.example"
 	session, _ := h.Service.Token("alice")
 	r := gin.New()
@@ -65,5 +67,13 @@ func TestPrivateSocketTicketScope(t *testing.T) {
 				t.Fatal("lost account scope")
 			}
 		})
+	}
+	version++
+	req = httptest.NewRequest("GET", "/api/v1/matches/socket?ticket="+url.QueryEscape(data.Ticket), nil)
+	req.Header.Set("Origin", origin)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != 401 {
+		t.Fatalf("revoked ticket accepted: %d", rec.Code)
 	}
 }

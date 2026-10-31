@@ -49,7 +49,7 @@ func (s *fakeMatchSource) List(_ context.Context, userID string) ([]matching.Mat
 
 func matchSocketServer(backend matchListBackend, updates matchSubscriptions) *httptest.Server {
 	router := gin.New()
-	router.Use(auth.Handler{Service: auth.Service{Secret: strings.Repeat("socket-secret", 4)}}.Require)
+	router.Use(auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: strings.Repeat("socket-secret", 4)}}.Require)
 	router.GET("/matches/socket", matchesSocket(backend, updates, "http://web"))
 	return httptest.NewServer(router)
 }
@@ -61,7 +61,7 @@ func dialMatchSocket(t *testing.T, server *httptest.Server, user, origin string)
 		t.Fatal(err)
 	}
 	if user != "" {
-		token, err := (auth.Service{Secret: strings.Repeat("socket-secret", 4)}).Token(user)
+		token, err := (auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: strings.Repeat("socket-secret", 4)}).Token(user)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -141,7 +141,7 @@ func TestMatchesSocketRouteRequiresAuthentication(t *testing.T) {
 }
 
 func TestMatchesSocketTicketWithoutCookie(t *testing.T) {
-	h := auth.Handler{Service: auth.Service{Secret: strings.Repeat("ticket-secret", 4)}}
+	h := auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: strings.Repeat("ticket-secret", 4)}}
 	router := gin.New()
 	backend := &fakeMatchSource{items: []matching.Match{{ID: "private-match"}}, changes: make(chan struct{}, 1), closed: make(chan struct{})}
 	router.POST("/api/v1/matches/socket-ticket", h.Require, h.SocketTicket("http://web"))

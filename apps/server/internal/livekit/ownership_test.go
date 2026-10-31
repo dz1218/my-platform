@@ -1,6 +1,7 @@
 package livekit
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -39,7 +40,7 @@ func TestRoomCreatorOwnsHostRoleAndManagement(t *testing.T) {
 		}
 	}))
 	defer upstream.Close()
-	service := auth.Service{Secret: "ownership-test-session"}
+	service := auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "ownership-test-session"}
 	cfg := Config{URL: upstream.URL, APIKey: "test-key", APISecret: "test-secret"}
 	router := gin.New()
 	Register(router, cfg, auth.Handler{Service: service})
@@ -140,7 +141,7 @@ func TestCreatorCanJoinBeforeGlobalRoomListCatchesUp(t *testing.T) {
 	}))
 	defer upstream.Close()
 	router := gin.New()
-	Register(router, Config{URL: upstream.URL, APIKey: "test-key", APISecret: "test-secret"}, auth.Handler{Service: auth.Service{Secret: "test-session-secret"}})
+	Register(router, Config{URL: upstream.URL, APIKey: "test-key", APISecret: "test-secret"}, auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "test-session-secret"}})
 	request(t, router, "POST", "/rooms", `{"id":"room-new","title":"刚创建的房间"}`, 201)
 	listed := request(t, router, "GET", "/rooms", "", 200)["items"].([]any)
 	if len(listed) != 1 || listed[0].(map[string]any)["id"] != "room-new" {

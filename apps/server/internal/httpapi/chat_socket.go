@@ -90,6 +90,13 @@ func socketHandler(chat socketBackend, origin string, allow func(context.Context
 					}
 				}()
 				write := func(value any) error {
+					if err := auth.CheckConnection(c, ctx); err != nil {
+						if errors.Is(err, auth.ErrInvalidSession) {
+							_ = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+							_ = websocket.JSON.Send(ws, gin.H{"type": "session.invalidated"})
+						}
+						return err
+					}
 					_ = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					return websocket.JSON.Send(ws, value)
 				}
@@ -108,6 +115,9 @@ func socketHandler(chat socketBackend, origin string, allow func(context.Context
 				previousSettings := ""
 				lastTyping := time.Time{}
 				syncHistory := func() error {
+					if err := auth.CheckConnection(c, ctx); err != nil {
+						return write(gin.H{"type": "ping"})
+					}
 					queryCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 					defer stop()
 					if _, err := chat.Accessible(queryCtx, userID, conv.ID); err != nil {
@@ -187,6 +197,10 @@ func socketHandler(chat socketBackend, origin string, allow func(context.Context
 							return
 						}
 					case command := <-commands:
+						if err := auth.CheckConnection(c, ctx); err != nil {
+							_ = write(gin.H{"type": "ping"})
+							return
+						}
 						if command.Type == "pong" {
 							continue
 						}

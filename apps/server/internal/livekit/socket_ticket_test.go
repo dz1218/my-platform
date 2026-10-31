@@ -1,6 +1,7 @@
 package livekit
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +17,7 @@ import (
 
 func socketTicketHandler() Handler {
 	return Handler{Client: NewClient(Config{URL: "ws://unused", APIKey: "key", APISecret: "secret"}),
-		Auth: auth.Handler{Service: auth.Service{Secret: "socket-test-secret"}}}
+		Auth: auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "socket-test-secret"}}}
 }
 
 func TestSocketTicketsAuthenticateDirectConnectionWithoutCookies(t *testing.T) {

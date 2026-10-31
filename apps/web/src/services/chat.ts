@@ -1,3 +1,4 @@
+import { requestSessionVerification } from './session-events';
 import { privateSocketURL } from './socket-url';
 import { api } from "./api/client";
 import type { AutoReply, Message, MessagePage } from "@/types/companion";
@@ -60,6 +61,7 @@ export class ChatConnection {
       if (this.stopped || this.socket !== socket) return;
       try {
         const data = JSON.parse(event.data);
+        if (data?.type === 'session.invalidated') { requestSessionVerification(); this.close(); return; }
         if (data.type === "ping") {
           socket.send(JSON.stringify({ type: "pong" }));
           return;

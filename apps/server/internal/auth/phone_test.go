@@ -44,7 +44,7 @@ func TestPhoneValidation(t *testing.T) {
 	if phone, err := normalizePhone(" +8613800138000 "); err != nil || phone != "13800138000" {
 		t.Fatal(phone, err)
 	}
-	s := Service{Secret: strings.Repeat("s", 32)}
+	s := Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: strings.Repeat("s", 32)}
 	if s.digest("code", "13800138000", "123456") == s.digest("code", "13900139000", "123456") {
 		t.Fatal("code is not bound to phone")
 	}

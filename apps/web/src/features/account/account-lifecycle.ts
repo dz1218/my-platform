@@ -2,7 +2,11 @@
 
 import { createContext, useContext } from 'react';
 
-type AccountLifecycle = { isLeavingAccount: () => boolean };
+type AccountLifecycle = {
+  isLeavingAccount: () => boolean;
+  leaveAccount: (destination?: string) => void;
+  deferSessionVerification: () => () => void;
+};
 
 /** Navigation coordination only; React Query owns the account data. */
 export const AccountLifecycleContext = createContext<AccountLifecycle | null>(null);

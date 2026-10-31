@@ -37,7 +37,7 @@ func TestPasswords(t *testing.T) {
 	}
 }
 func TestSessions(t *testing.T) {
-	s := Service{Secret: strings.Repeat("s", 32)}
+	s := Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: strings.Repeat("s", 32)}
 	token, err := s.Token("user-a")
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func TestSessions(t *testing.T) {
 			t.Fatal("accepted invalid claims")
 		}
 	}
-	wrong := Service{Secret: strings.Repeat("x", 32)}
+	wrong := Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: strings.Repeat("x", 32)}
 	if _, err := wrong.Verify(token); err == nil {
 		t.Fatal("accepted bad signature")
 	}

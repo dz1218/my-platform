@@ -27,7 +27,7 @@ const errors: Record<string, string> = {
   sms_unavailable: "短信发送暂不可用，请稍后再试。", sms_not_configured: "短信服务尚未配置完成，请稍后再试。",
 };
 
-export function AuthForm({ register = false }: { register?: boolean }) {
+export function AuthForm({ register = false, passwordUpdated = false }: { register?: boolean; passwordUpdated?: boolean }) {
   const [state, formAction, pending] = useActionState(register ? registerAction : loginAction, {});
   const ui = useStoreInstance(() => createAuthFormStore({ sendCode: sendCodeAction, verifyCode: verifyCodeAction }));
   const { name, gender, consent, phone, code, ticket, password, confirm, confirmTouched, localError, notice, verifying, sending, cooldown, showPassword, noticeOpen } = useStore(ui, useShallow(authFormSelectors.view));
@@ -86,6 +86,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
         <div className="auth-form-content">
           <h1 id="auth-heading" ref={stepHeading} tabIndex={-1}><span className="auth-desktop-heading">{register ? passwordStep ? "为相遇，设置一把钥匙。" : "从一句你好开始。" : "欢迎回到你的频率。"}</span><MobileAuthHeading register={register} passwordStep={passwordStep} /></h1>
           {!passwordStep && <p className="auth-intro">{register ? "留一点时间，听听彼此的日常。" : "登录 Radio Friday，接着上次没聊完的故事。"}</p>}
+          {passwordUpdated && <p role="status" className="mb-4 text-sm leading-6 text-ink">密码已更新，请重新登录。</p>}
           <form action={register && !passwordStep ? verify : formAction} onSubmit={submitCredentials} className="auth-form" key={passwordStep ? "password" : "phone"}>
             <fieldset disabled={pending || verifying}>
               {passwordStep ? <><input type="hidden" name="phone" value={phone} /><input type="hidden" name="ticket" value={ticket} /></> :
@@ -101,7 +102,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
                     <GenderSelect value={gender} onChange={setGender} />
                   </div>
                 </div>}
-                <div className="auth-label"><label htmlFor="auth-password">密码</label><div className="auth-password-field"><input id="auth-password" name="password" type={showPassword ? "text" : "password"} required minLength={register ? 8 : undefined} autoComplete={register ? "new-password" : "current-password"} placeholder={register ? "设置至少 8 位密码" : "请输入密码"} value={password} onChange={e => setPassword(e.target.value)} /><button type="button" aria-label={showPassword ? "隐藏密码" : "显示密码"} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeClosed size={19} strokeWidth={1.75} aria-hidden="true" /> : <Eye size={19} strokeWidth={1.75} aria-hidden="true" />}</button></div></div>
+                <div className="auth-label"><div className="flex items-center justify-between gap-3"><label htmlFor="auth-password">密码</label>{!register && <Link href="/forgot-password" scroll={false} aria-disabled={switchingBlocked} onNavigate={event => { if (switchingBlocked) event.preventDefault(); }} className="inline-flex min-h-11 items-center rounded-control px-2 text-xs text-muted hover:bg-surface-soft hover:text-ink aria-disabled:opacity-50">忘记密码</Link>}</div><div className="auth-password-field"><input id="auth-password" name="password" type={showPassword ? "text" : "password"} required minLength={register ? 8 : undefined} autoComplete={register ? "new-password" : "current-password"} placeholder={register ? "设置至少 8 位密码" : "请输入密码"} value={password} onChange={e => setPassword(e.target.value)} /><button type="button" aria-label={showPassword ? "隐藏密码" : "显示密码"} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeClosed size={19} strokeWidth={1.75} aria-hidden="true" /> : <Eye size={19} strokeWidth={1.75} aria-hidden="true" />}</button></div></div>
                 {passwordStep && <>
                   <div className="auth-label">
                     <label htmlFor="auth-confirm">确认密码</label>

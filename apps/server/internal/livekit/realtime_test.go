@@ -73,7 +73,7 @@ func roomSocketFixture(t *testing.T) (*snapshotFixture, *httptest.Server) {
 		items: []RoomItem{{ID: "room-owner", SID: "RM_private", OwnerID: "owner", Title: "房间", Status: "准备中"}},
 		subs:  make(map[chan string]bool), closed: make(chan struct{}, 10),
 	}
-	h := Handler{Client: NewClient(Config{URL: "ws://unused", APIKey: "key", APISecret: "secret"}), Auth: auth.Handler{Service: auth.Service{Secret: "socket-test-secret"}}}
+	h := Handler{Client: NewClient(Config{URL: "ws://unused", APIKey: "key", APISecret: "secret"}), Auth: auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "socket-test-secret"}}}
 	r := gin.New()
 	r.POST(RoomSocketTicketPath, h.roomSocketTicket("http://web"))
 	r.GET(RoomSocketPath, h.roomSocket(f, "http://web"))
@@ -89,7 +89,7 @@ func dialRoomSocket(t *testing.T, server *httptest.Server, user, query, origin s
 		t.Fatal(err)
 	}
 	if user != "" {
-		token, err := (auth.Service{Secret: "socket-test-secret"}).Token(user)
+		token, err := (auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "socket-test-secret"}).Token(user)
 		if err != nil {
 			t.Fatal(err)
 		}

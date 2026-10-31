@@ -102,7 +102,7 @@ func newLifecycleFixture(t *testing.T) *lifecycleFixture {
 	}))
 	t.Cleanup(server.Close)
 	cfg := Config{URL: server.URL, APIKey: "test-key", APISecret: "test-secret"}
-	f.h = Handler{Client: NewClient(cfg), Auth: auth.Handler{Service: auth.Service{Secret: "test-session-secret"}}}
+	f.h = Handler{Client: NewClient(cfg), Auth: auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "test-session-secret"}}}
 	f.router = gin.New()
 	Register(f.router, cfg, f.h.Auth)
 	if err := f.h.SyncRooms(context.Background()); err != nil {
@@ -471,7 +471,7 @@ func TestHostAdmissionAcrossRedisClientsAndDatabaseLocks(t *testing.T) {
 		}
 		cache := redis.NewClient(options)
 		t.Cleanup(func() { _ = cache.Close() })
-		h := Handler{Client: NewClient(f.h.Client.config), Auth: auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: "test-session-secret"}}, RoomCache: cache}
+		h := Handler{Client: NewClient(f.h.Client.config), Auth: auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Repo: auth.Repository{DB: db}, Secret: "test-session-secret"}}, RoomCache: cache}
 		handlers = append(handlers, h)
 		router := gin.New()
 		Register(router, f.h.Client.config, h.Auth, cache)

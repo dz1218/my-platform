@@ -63,7 +63,8 @@ func (h Handler) voiceActor(c *gin.Context) (*voiceClaims, bool) {
 		if v := c.GetHeader("Authorization"); strings.HasPrefix(v, "Bearer ") {
 			raw = strings.TrimPrefix(v, "Bearer ")
 		}
-		userID, err := h.Auth.Service.Verify(raw)
+		session, err := h.Auth.Service.Authenticate(c.Request.Context(), raw)
+		userID := session.UserID
 		if err != nil || userID != claims.UserID || userID == "" {
 			fail(c, http.StatusUnauthorized, "登录已失效，请重新登录")
 			return nil, false

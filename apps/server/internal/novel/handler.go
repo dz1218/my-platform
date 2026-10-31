@@ -13,11 +13,11 @@ type Handler struct {
 
 func (h Handler) viewer(c *gin.Context) string {
 	raw, _ := c.Cookie(auth.CookieName)
-	id, err := h.Auth.Verify(raw)
+	session, err := h.Auth.Authenticate(c.Request.Context(), raw)
 	if err != nil {
 		return ""
 	}
-	return id
+	return session.UserID
 }
 func (h Handler) List(c *gin.Context) {
 	items, err := h.Repo.List(c.Request.Context())

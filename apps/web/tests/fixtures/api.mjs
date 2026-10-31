@@ -1,3 +1,4 @@
+import { createPasswordFixture } from './passwords.mjs';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'next/dist/compiled/ws/index.js';
@@ -12,6 +13,12 @@ const failedRegistrations = new Set();
 let performanceConfig = { delays: {}, failures: {}, rooms: undefined, roomDetails: {}, user: undefined };
 let performanceRequests = [];
 const roomSockets = new Set();
+const privateSockets = new Set();
+const passwordFixture = createPasswordFixture(invalid => {
+  for (const socket of [...privateSockets, ...roomSockets]) {
+    if (invalid(socket.session)) { socket.send(JSON.stringify({ type: 'session.invalidated' })); socket.close(); }
+  }
+});
 let roomSocketConnections = 0;
 let roomSocketPongs = 0;
 const roomSocketTickets = new Map();
@@ -105,6 +112,7 @@ const server = createServer(async (request, response) => {
     }
   }
   const session = request.headers.cookie?.match(/(?:^|;\s*)companion_session=([^;]+)/)?.[1];
+  if (await passwordFixture.handle(request, response, session, url.pathname)) return;
   if (request.method === 'POST' && (url.pathname === '/api/v1/matches/socket-ticket' || /^\/api\/v1\/conversations\/[^/]+\/socket-ticket$/.test(url.pathname))) {
     if (!session) { response.statusCode = 401; return response.end('{}'); }
     const ticket = randomUUID();
@@ -140,6 +148,7 @@ const server = createServer(async (request, response) => {
     let body = '';
     for await (const part of request) body += part;
     const data = JSON.parse(body);
+    if (passwordFixture.login(data, response)) return;
     if (!['13800138000', '13800138004'].includes(data.phone) || data.password !== 'only-for-browser-test') {
       response.statusCode = 401;
       return response.end(JSON.stringify({ error: { code: 'invalid', message: '测试账户信息不正确' } }));
@@ -246,8 +255,10 @@ server.on('upgrade', (request, socket, head) => {
   const url = new URL(request.url, 'http://127.0.0.1:18181');
   if (url.pathname === '/api/v1/matches/socket' || /^\/api\/v1\/conversations\/[^/]+\/socket$/.test(url.pathname)) {
     const claims = roomSocketTickets.get(url.searchParams.get('ticket'));
-    if (!claims || claims.path !== url.pathname || claims.expires <= Date.now()) return socket.destroy();
+    if (!claims || claims.path !== url.pathname || claims.expires <= Date.now() || (passwordFixture.owns(claims.session) && !passwordFixture.valid(claims.session))) return socket.destroy();
     roomSocketServer.handleUpgrade(request, socket, head, client => {
+      client.session = claims.session; privateSockets.add(client);
+      client.on('close', () => privateSockets.delete(client));
       client.send(JSON.stringify(url.pathname === '/api/v1/matches/socket' ? { type: 'matches.updated', items: [] } : { type: 'history', page: { items: [] } }));
     });
     return;

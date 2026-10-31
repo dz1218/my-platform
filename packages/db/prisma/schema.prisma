@@ -16,6 +16,7 @@ model User {
   phone        String?  @unique
   name         String?
   passwordHash String   @map("password_hash")
+  sessionVersion BigInt @default(0) @map("session_version")
   gender       String?
   onboardingCompleted Boolean @default(false) @map("onboarding_completed")
   novels       Novel[]

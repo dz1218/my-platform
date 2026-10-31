@@ -85,7 +85,7 @@ func newOwnerRoomFixture(t *testing.T) *ownerRoomFixture {
 
 func (f *ownerRoomFixture) router() *gin.Engine {
 	r := gin.New()
-	a := auth.Handler{Service: auth.Service{Secret: "test-session-secret"}}
+	a := auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "test-session-secret"}}
 	Register(r, f.config, a)
 	Register(r.Group("/api/v1"), f.config, a)
 	return r
@@ -94,7 +94,7 @@ func (f *ownerRoomFixture) router() *gin.Engine {
 func TestOneRoomPerOwnerAcrossConcurrentRequestsAndRoutes(t *testing.T) {
 	f := newOwnerRoomFixture(t)
 	routers := []*gin.Engine{f.router(), f.router()}
-	token, _ := (auth.Service{Secret: "test-session-secret"}).Token("test-user")
+	token, _ := (auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "test-session-secret"}).Token("test-user")
 	results := make(chan *httptest.ResponseRecorder, 8)
 	for i := 0; i < 8; i++ {
 		go func(i int) {
@@ -228,7 +228,7 @@ func TestOwnerRoomAcrossRedisClientsAndDatabaseLocks(t *testing.T) {
 		caches = append(caches, cache)
 		t.Cleanup(func() { _ = cache.Close() })
 		r := gin.New()
-		Register(r, f.config, auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: "test-session-secret"}}, cache)
+		Register(r, f.config, auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Repo: auth.Repository{DB: db}, Secret: "test-session-secret"}}, cache)
 		routers = append(routers, r)
 	}
 	t.Cleanup(func() {
@@ -237,7 +237,7 @@ func TestOwnerRoomAcrossRedisClientsAndDatabaseLocks(t *testing.T) {
 		cleanupLifecycleKeys(t, Handler{Client: NewClient(f.config), RoomCache: caches[0]})
 	})
 	responses := make(chan *httptest.ResponseRecorder, 2)
-	token, _ := (auth.Service{Secret: "test-session-secret"}).Token("test-user")
+	token, _ := (auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "test-session-secret"}).Token("test-user")
 	for i := 0; i < 2; i++ {
 		go func(i int) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

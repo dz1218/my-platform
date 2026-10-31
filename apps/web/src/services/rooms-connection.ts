@@ -1,3 +1,4 @@
+import { requestSessionVerification } from './session-events';
 import { APIError, check } from './api/client';
 import type { ApiRoomItem, LiveRoomDetail, LiveRoomsUpdate, LiveUpdatesState } from '@my-platform/shared';
 
@@ -56,6 +57,7 @@ export class RoomsConnection {
       const response = await fetch(endpoint, {
         method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: pending.signal,
       });
+      if (response.status === 401) requestSessionVerification();
       await check(response);
       const data: unknown = await response.json();
       if (this.stopped || this.pending !== pending) return;
@@ -85,6 +87,7 @@ export class RoomsConnection {
       if (this.stopped || this.socket !== socket) return;
       try {
         const data = JSON.parse(event.data);
+        if (data?.type === 'session.invalidated') { requestSessionVerification(); this.close(); return; }
         if (!data || typeof data !== 'object') throw new Error('Invalid room update');
         let snapshot: LiveRoomsUpdate | undefined;
         if (data.type === 'rooms.updated' && !this.options.roomId) {

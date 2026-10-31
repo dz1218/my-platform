@@ -142,7 +142,7 @@ export function AppStartup() {
       /* Optional layout preference. */
     }
   }, []);
-  if (path === "/login" || path === "/register")
+  if (["/login", "/register", "/forgot-password"].includes(path))
     return (
       <div data-app-startup className="min-h-dvh bg-canvas text-ink">
         <LoadingPlaceholder label="正在加载账户…" className="min-h-dvh" />
@@ -231,7 +231,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     window.addEventListener("popstate", cancelNavigation);
     return () => window.removeEventListener("popstate", cancelNavigation);
   }, [cancelNavigation]);
-  const isAuth = path === "/login" || path === "/register";
+  const isAuth = ["/login", "/register", "/forgot-password"].includes(path);
   // Keep the public boundary mounted even while auth is visible, so returning
   // home retains the outgoing page until AppFrame is ready. Auth stays outside:
   // its server-rendered form must not be hidden behind the account fallback.

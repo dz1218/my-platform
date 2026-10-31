@@ -13,6 +13,7 @@ type User struct {
 	Phone               string             `json:"phone"`
 	Email               string             `json:"email"`
 	Name                string             `json:"name"`
+	SessionVersion      int64              `json:"-"`
 	PasswordHash        string             `json:"-"`
 	Gender              *string            `json:"gender"`
 	OnboardingCompleted bool               `json:"onboardingCompleted"`
@@ -22,7 +23,7 @@ type Repository struct{ DB *pgxpool.Pool }
 
 func (r Repository) ByEmail(ctx context.Context, email string) (User, error) {
 	var u User
-	err := r.DB.QueryRow(ctx, `SELECT id,COALESCE(email,''),COALESCE(phone,''),COALESCE(name,''),password_hash,gender,onboarding_completed FROM users WHERE email=$1`, email).Scan(&u.ID, &u.Email, &u.Phone, &u.Name, &u.PasswordHash, &u.Gender, &u.OnboardingCompleted)
+	err := r.DB.QueryRow(ctx, `SELECT id,COALESCE(email,''),COALESCE(phone,''),COALESCE(name,''),password_hash,gender,onboarding_completed,session_version FROM users WHERE email=$1`, email).Scan(&u.ID, &u.Email, &u.Phone, &u.Name, &u.PasswordHash, &u.Gender, &u.OnboardingCompleted, &u.SessionVersion)
 	if err == nil {
 		u.InheritedIdentity, err = (identity.Repository{DB: r.DB}).Inherited(ctx, u.ID)
 	}
@@ -30,7 +31,7 @@ func (r Repository) ByEmail(ctx context.Context, email string) (User, error) {
 }
 func (r Repository) ByID(ctx context.Context, id string) (User, error) {
 	var u User
-	err := r.DB.QueryRow(ctx, `SELECT id,COALESCE(email,''),COALESCE(phone,''),COALESCE(name,''),password_hash,gender,onboarding_completed FROM users WHERE id=$1`, id).Scan(&u.ID, &u.Email, &u.Phone, &u.Name, &u.PasswordHash, &u.Gender, &u.OnboardingCompleted)
+	err := r.DB.QueryRow(ctx, `SELECT id,COALESCE(email,''),COALESCE(phone,''),COALESCE(name,''),password_hash,gender,onboarding_completed,session_version FROM users WHERE id=$1`, id).Scan(&u.ID, &u.Email, &u.Phone, &u.Name, &u.PasswordHash, &u.Gender, &u.OnboardingCompleted, &u.SessionVersion)
 	if err == nil {
 		u.InheritedIdentity, err = (identity.Repository{DB: r.DB}).Inherited(ctx, u.ID)
 	}
@@ -44,7 +45,7 @@ func (r Repository) Create(ctx context.Context, email, name, hash, gender string
 
 func (r Repository) ByPhone(ctx context.Context, phone string) (User, error) {
 	var u User
-	err := r.DB.QueryRow(ctx, `SELECT id,COALESCE(email,''),COALESCE(phone,''),COALESCE(name,''),password_hash,gender,onboarding_completed FROM users WHERE phone=$1`, phone).Scan(&u.ID, &u.Email, &u.Phone, &u.Name, &u.PasswordHash, &u.Gender, &u.OnboardingCompleted)
+	err := r.DB.QueryRow(ctx, `SELECT id,COALESCE(email,''),COALESCE(phone,''),COALESCE(name,''),password_hash,gender,onboarding_completed,session_version FROM users WHERE phone=$1`, phone).Scan(&u.ID, &u.Email, &u.Phone, &u.Name, &u.PasswordHash, &u.Gender, &u.OnboardingCompleted, &u.SessionVersion)
 	if err == nil {
 		u.InheritedIdentity, err = (identity.Repository{DB: r.DB}).Inherited(ctx, u.ID)
 	}

@@ -7,6 +7,7 @@ import { sessionQueryOptions } from '@/services/query-options';
 import { currentAccountQueryKey, readCurrentAccount, useCurrentAccount } from '@/features/account/use-current-account';
 import { AccountLifecycleContext } from '@/features/account/account-lifecycle';
 import { useMatchesUpdates } from '@/features/companion/use-matches-updates';
+import { SESSION_INVALIDATED_EVENT } from '@/services/session-events';
 import type { User } from '@/types/companion';
 
 export { useCurrentAccount } from '@/features/account/use-current-account';
@@ -14,48 +15,21 @@ export { useCurrentAccount } from '@/features/account/use-current-account';
 export function Providers({ initialUser, children }: { initialUser: User | null; children: React.ReactNode }) {
   const authRefreshRequested = useRef(false);
   const leavingAccount = useRef(false);
-  const lifecycle = useRef({ isLeavingAccount: () => leavingAccount.current });
+  const verifyAccount = useRef<() => void>(() => {});
+  const verificationDeferrals = useRef(0);
+  const verificationQueued = useRef(false);
+  const lifecycle = useRef({
+    isLeavingAccount: () => leavingAccount.current,
+    leaveAccount: (destination = '/login') => { window.location.replace(destination); },
+    deferSessionVerification: (): (() => void) => () => {},
+  });
   const verification = useRef<AbortController | null>(null);
   const active = useRef(true);
   const [client] = useState(() => {
     const queryClient = new QueryClient({
       queryCache: new QueryCache({
         onError: error => {
-          if (!active.current || !initialUser || !(error instanceof APIError) || error.status !== 401 || authRefreshRequested.current) return;
-          // Verify outside QueryCache so an auth error cannot recursively refresh
-          // itself. Ordinary tab navigation never performs this extra account read.
-          authRefreshRequested.current = true;
-          const controller = new AbortController();
-          verification.current = controller;
-          const discardAccount = () => {
-            leavingAccount.current = true;
-            queryClient.setQueryData<User | null>(currentAccountQueryKey, null);
-            queryClient.removeQueries({ predicate: query => query.queryKey[0] !== currentAccountQueryKey[0] });
-            queryClient.getMutationCache().clear();
-          };
-          void readCurrentAccount(controller.signal).then(user => {
-            if (!active.current || controller.signal.aborted) return;
-            if (user.id !== initialUser.id) {
-              discardAccount();
-              window.location.reload();
-              return;
-            }
-            queryClient.setQueryData<User>(currentAccountQueryKey, user);
-          }).catch(error => {
-            if (!active.current || controller.signal.aborted) return;
-            if (error instanceof APIError && error.status === 401) {
-              discardAccount();
-              // Expiry destroys this account's entire document scope. It must not
-              // depend on a concurrent route refresh committing before redirect.
-              window.location.replace('/login');
-            }
-            // A forbidden or unavailable verification preserves the account and
-            // can be retried by the next explicit private-data refresh.
-          }).finally(() => {
-            if (verification.current !== controller) return;
-            verification.current = null;
-            if (!leavingAccount.current) authRefreshRequested.current = false;
-          });
+          if (error instanceof APIError && error.status === 401) verifyAccount.current();
         },
       }),
       defaultOptions: { queries: { staleTime: 15_000, retry: (count, error) => !(error instanceof APIError && error.status < 500) && count < 1 } },
@@ -65,6 +39,64 @@ export function Providers({ initialUser, children }: { initialUser: User | null;
     queryClient.setQueryData<User | null>(currentAccountQueryKey, initialUser);
     return queryClient;
   });
+  useLayoutEffect(() => {
+    const discardAccount = () => {
+      leavingAccount.current = true;
+      verification.current?.abort();
+      void client.cancelQueries();
+      client.setQueryData<User | null>(currentAccountQueryKey, null);
+      client.removeQueries({ predicate: query => query.queryKey[0] !== currentAccountQueryKey[0] });
+      client.getMutationCache().clear();
+    };
+    lifecycle.current.leaveAccount = (destination = '/login') => {
+      discardAccount();
+      window.location.replace(destination);
+    };
+    lifecycle.current.deferSessionVerification = () => {
+      verificationDeferrals.current += 1;
+      if (verification.current) {
+        verificationQueued.current = true;
+        verification.current.abort();
+        verification.current = null;
+        authRefreshRequested.current = false;
+      }
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        verificationDeferrals.current -= 1;
+        if (verificationDeferrals.current === 0 && verificationQueued.current) {
+          verificationQueued.current = false;
+          verifyAccount.current();
+        }
+      };
+    };
+    const verify = () => {
+      if (!active.current || !initialUser || leavingAccount.current || authRefreshRequested.current) return;
+      // A password submission owns its success destination. Other devices have
+      // no deferral and still leave as soon as their session is revoked.
+      if (verificationDeferrals.current > 0) { verificationQueued.current = true; return; }
+      authRefreshRequested.current = true;
+      const controller = new AbortController();
+      verification.current = controller;
+      // Socket revocation and HTTP 401 share one authoritative account read.
+      void readCurrentAccount(controller.signal).then(user => {
+        if (!active.current || controller.signal.aborted) return;
+        if (user.id !== initialUser.id) { discardAccount(); window.location.reload(); return; }
+        client.setQueryData<User>(currentAccountQueryKey, user);
+      }).catch(error => {
+        if (!active.current || controller.signal.aborted) return;
+        if (error instanceof APIError && error.status === 401) lifecycle.current.leaveAccount();
+      }).finally(() => {
+        if (verification.current !== controller) return;
+        verification.current = null;
+        if (!leavingAccount.current) authRefreshRequested.current = false;
+      });
+    };
+    verifyAccount.current = verify;
+    window.addEventListener(SESSION_INVALIDATED_EVENT, verify);
+    return () => { window.removeEventListener(SESSION_INVALIDATED_EVENT, verify); verifyAccount.current = () => {}; };
+  }, [client, initialUser]);
   // Identity actions refresh the server snapshot without changing the account ID.
   useLayoutEffect(() => {
     if (!leavingAccount.current) client.setQueryData<User | null>(currentAccountQueryKey, initialUser);

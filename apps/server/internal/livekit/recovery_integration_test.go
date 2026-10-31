@@ -44,7 +44,7 @@ func TestScopedReservationsAndRecoveryAcrossReplicas(t *testing.T) {
 		}
 		cache := redis.NewClient(options)
 		t.Cleanup(func() { _ = cache.Close() })
-		handlers = append(handlers, Handler{Client: NewClient(cfg), RoomCache: cache, Auth: auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: "test-session-secret"}}})
+		handlers = append(handlers, Handler{Client: NewClient(cfg), RoomCache: cache, Auth: auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Repo: auth.Repository{DB: db}, Secret: "test-session-secret"}}})
 	}
 	a, b := handlers[0], handlers[1]
 	t.Cleanup(func() { cleanupLifecycleKeys(t, a) })

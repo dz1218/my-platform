@@ -45,7 +45,7 @@ func TestSnapshotsAndPersistentRetriesAcrossRedisClients(t *testing.T) {
 		cache := redis.NewClient(options)
 		t.Cleanup(func() { _ = cache.Close() })
 		handlers = append(handlers, Handler{Client: NewClient(f.h.Client.config), RoomCache: cache,
-			Auth: auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: "test-session-secret"}}})
+			Auth: auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Repo: auth.Repository{DB: db}, Secret: "test-session-secret"}}})
 	}
 	h1, h2 := handlers[0], handlers[1]
 	t.Cleanup(func() {

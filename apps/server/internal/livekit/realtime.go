@@ -47,7 +47,12 @@ func (h Handler) roomSocket(source roomSnapshotSource, origin string) gin.Handle
 			if len(tickets) != 1 || c.GetHeader("Origin") != origin {
 				err = errors.New("invalid socket ticket")
 			} else {
-				userID, err = h.verifyRoomSocketTicket(tickets[0], id, origin)
+				var session auth.Session
+				session, err = h.verifyRoomSocketSession(c.Request.Context(), tickets[0], id, origin)
+				userID = session.UserID
+				if err == nil && userID != "" {
+					h.Auth.Service.BindSession(c, session)
+				}
 			}
 			if err != nil {
 				failRoom(c, http.StatusUnauthorized, "socket_ticket_invalid", "连接凭据已失效，请重新连接")
@@ -99,11 +104,21 @@ func (h Handler) roomSocket(source roomSnapshotSource, origin string) gin.Handle
 					}
 				}()
 				write := func(data []byte) error {
+					if err := auth.CheckConnection(c, ctx); err != nil {
+						if errors.Is(err, auth.ErrInvalidSession) {
+							_ = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+							_ = websocket.Message.Send(ws, `{"type":"session.invalidated"}`)
+						}
+						return err
+					}
 					_ = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					return websocket.Message.Send(ws, string(data))
 				}
 				var previous []byte
 				snapshot := func() error {
+					if err := auth.CheckConnection(c, ctx); err != nil {
+						return write([]byte(`{"type":"ping"}`))
+					}
 					readCtx, stop := context.WithTimeout(ctx, 5*time.Second)
 					defer stop()
 					var event any

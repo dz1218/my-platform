@@ -22,7 +22,7 @@ func request(t *testing.T, router http.Handler, method, path, body string, statu
 	if len(users) > 0 {
 		user = users[0]
 	}
-	token, err := (auth.Service{Secret: "test-session-secret"}).Token(user)
+	token, err := (auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "test-session-secret"}).Token(user)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 	defer upstream.Close()
 	router := gin.New()
 	cfg := Config{URL: "wss://public.example.com", InternalURL: upstream.URL, APIKey: "test-key", APISecret: "test-secret", AgentName: "test-agent"}
-	Register(router, cfg, auth.Handler{Service: auth.Service{Secret: "test-session-secret"}})
+	Register(router, cfg, auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "test-session-secret"}})
 	if err := (Handler{Client: NewClient(cfg)}).SyncRooms(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 }
 func TestRejectInvalidRequestsBeforeUpstream(t *testing.T) {
 	router := gin.New()
-	Register(router, Config{URL: "ws://127.0.0.1:1", APIKey: "test-key", APISecret: "test-secret"}, auth.Handler{Service: auth.Service{Secret: "test-session-secret"}})
+	Register(router, Config{URL: "ws://127.0.0.1:1", APIKey: "test-key", APISecret: "test-secret"}, auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "test-session-secret"}})
 	cases := []struct{ method, path, body string }{
 		{"POST", "/rooms", `null`}, {"POST", "/rooms", `[]`}, {"POST", "/rooms", `{`}, {"POST", "/rooms", `{} {}`}, {"POST", "/rooms", ``},
 		{"POST", "/rooms", `{"id":null}`}, {"POST", "/rooms", `{"id":"ab"}`}, {"POST", "/rooms", `{"id":"room/test"}`}, {"POST", "/rooms", `{"title":false}`}, {"POST", "/rooms", `{"title":""}`},
@@ -217,7 +217,7 @@ func TestUnavailableAndEmptyResponses(t *testing.T) {
 		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(reply.code); w.Write([]byte(reply.body)) }))
 		r := gin.New()
 		cfg := Config{URL: upstream.URL, APIKey: "test-key", APISecret: "test-secret"}
-		Register(r, cfg, auth.Handler{Service: auth.Service{Secret: "test-session-secret"}})
+		Register(r, cfg, auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "test-session-secret"}})
 		if err := (Handler{Client: NewClient(cfg)}).markSnapshotsReady(context.Background()); err != nil {
 			t.Fatal(err)
 		}
@@ -253,7 +253,7 @@ func TestGuestTokensAndManagementAuthorization(t *testing.T) {
 	}))
 	defer upstream.Close()
 	router := gin.New()
-	Register(router, Config{URL: upstream.URL, APIKey: "test-key", APISecret: "test-secret"}, auth.Handler{Service: auth.Service{Secret: "test-session-secret"}})
+	Register(router, Config{URL: upstream.URL, APIKey: "test-key", APISecret: "test-secret"}, auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "test-session-secret"}})
 	call := func(method, path, body, cookie string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -318,7 +318,7 @@ func TestConcurrentRoomNamesAndReuseAfterClose(t *testing.T) {
 	}))
 	defer upstream.Close()
 	router := gin.New()
-	service := auth.Service{Secret: "test-session-secret"}
+	service := auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "test-session-secret"}
 	Register(router, Config{URL: upstream.URL, APIKey: "key", APISecret: "secret"}, auth.Handler{Service: service})
 	token, _ := service.Token("test-user")
 	statuses := make(chan int, 2)

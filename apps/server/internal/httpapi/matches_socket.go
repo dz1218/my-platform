@@ -55,6 +55,13 @@ func matchesSocket(matches matchListBackend, updates matchSubscriptions, origin 
 					}
 				}()
 				write := func(value any) error {
+					if err := auth.CheckConnection(c, ctx); err != nil {
+						if errors.Is(err, auth.ErrInvalidSession) {
+							_ = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+							_ = websocket.JSON.Send(ws, gin.H{"type": "session.invalidated"})
+						}
+						return err
+					}
 					_ = ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 					return websocket.JSON.Send(ws, value)
 				}
@@ -66,6 +73,10 @@ func matchesSocket(matches matchListBackend, updates matchSubscriptions, origin 
 						return
 					case _, open := <-changes:
 						if !open {
+							return
+						}
+						if err := auth.CheckConnection(c, ctx); err != nil {
+							_ = write(gin.H{"type": "ping"})
 							return
 						}
 						queryCtx, stop := context.WithTimeout(ctx, 5*time.Second)

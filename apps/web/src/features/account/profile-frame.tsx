@@ -19,10 +19,12 @@ export const profileTabs: { id: ProfileTab; label: string }[] = [
 export function ProfileFrame({
   avatar,
   details,
+  actions,
   children,
 }: {
   avatar: ReactNode;
   details: ReactNode;
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   const viewport = useViewport();
@@ -37,6 +39,7 @@ export function ProfileFrame({
         <MobileAccountHeader
           avatar={avatar}
           details={details}
+          actions={actions}
           cover={
             <Image
               src="/images/radio-friday/profile-moonlit-sea.png"
@@ -76,6 +79,7 @@ export function ProfileFrame({
             >
               {details}
             </div>
+            {actions && <div className="shrink-0 self-end">{actions}</div>}
           </div>
         </header>
       )}

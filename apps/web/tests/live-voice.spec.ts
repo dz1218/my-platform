@@ -65,6 +65,11 @@ async function login(context: BrowserContext) {
   await context.addCookies([{ name: 'companion_session', value: 'live-test-host', domain: '127.0.0.1', path: '/' }]);
 }
 
+async function exitCall(page: Page) {
+  await page.getByRole('button', { name: '退出', exact: true }).click();
+  await page.getByRole('menuitem', { name: '退出连麦', exact: true }).click();
+}
+
 async function directVoice(page: Page, roomId: string, joined: Joined, suffix: string, requestId: string) {
   return page.evaluate(async ({ roomId, joined, suffix, requestId }) => {
     const response = await fetch(`/api/v1/rooms/${roomId}/voice${suffix}`, {
@@ -77,12 +82,12 @@ async function directVoice(page: Page, roomId: string, joined: Joined, suffix: s
 test.describe('single viewer voice with real Go API and LiveKit', () => {
   test.skip(process.env.LIVEKIT_INTEGRATION !== '1', 'Requires local LiveKit');
 
-  test('host and caller share the stage and swap sizes without restarting their cameras', async ({ page: host, context, browser }) => {
+  test('thumbnail swaps the stage and caller controls share the toolbar across viewports', async ({ page: host, context, browser }) => {
     test.setTimeout(90_000);
     const roomId = `voice-e2e-${randomUUID()}`;
     const caller = await guest(browser);
     const viewer = await guest(browser);
-    await rpc('CreateRoom', { name: roomId, emptyTimeout: 30, metadata: JSON.stringify({ title: '大小画面测试', ownerId: 'live-test-host' }) });
+    await rpc('CreateRoom', { name: roomId, emptyTimeout: 30, metadata: JSON.stringify({ title: '连麦操作测试', ownerId: 'live-test-host' }) });
     const pane = (page: Page, name: '主播画面' | '连麦者画面') => page.getByRole('group', { name, exact: true });
     async function expectMain(page: Page, name: '主播画面' | '连麦者画面') {
       await expect.poll(async () => {
@@ -106,16 +111,43 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       for (const page of [host, caller.page, viewer.page]) {
         await expect(pane(page, '连麦者画面')).toContainText('摄像头未开启');
         await expectMain(page, '主播画面');
+        await expect(page.getByRole('button', { name: '切换大小画面', exact: true })).toHaveCount(0);
+        await pane(page, '连麦者画面').getByRole('button', { name: '将连麦者切换到大画面', exact: true }).click();
+        await expectMain(page, '连麦者画面');
+        await pane(page, '主播画面').getByRole('button', { name: '将主播切换到大画面', exact: true }).click();
       }
+      const controls = caller.page.locator('.live-control-bar');
+      await expect(controls.getByRole('region', { name: '我的连麦', exact: true })).toBeVisible();
+      await expect(controls.getByRole('switch', { name: '麦克风', exact: true })).not.toBeChecked();
+      await expect(controls.getByRole('switch', { name: '摄像头', exact: true })).not.toBeChecked();
+      await expect(controls.getByRole('switch').nth(0)).toHaveAccessibleName('摄像头');
+      await expect(controls.getByRole('switch').nth(1)).toHaveAccessibleName('麦克风');
+      const leave = controls.getByRole('button', { name: '退出', exact: true });
+      const leaveMenu = caller.page.getByRole('menu', { name: '离开选项', exact: true });
+      await expect(leaveMenu).toBeHidden();
+      await leave.focus();
+      await caller.page.keyboard.press('ArrowDown');
+      await expect(leaveMenu.getByRole('menuitem', { name: '退出连麦', exact: true })).toBeFocused();
+      await caller.page.keyboard.press('ArrowDown');
+      await expect(leaveMenu.getByRole('menuitem', { name: '退出房间', exact: true })).toBeFocused();
+      await caller.page.keyboard.press('Home');
+      await expect(leaveMenu.getByRole('menuitem', { name: '退出连麦', exact: true })).toBeFocused();
+      await caller.page.keyboard.press('Escape');
+      await expect(leaveMenu).toBeHidden();
+      await expect(leave).toBeFocused();
+      await leave.click();
+      await caller.page.getByRole('heading', { name: '连麦操作测试', exact: true }).click();
+      await expect(leaveMenu).toBeHidden();
+      expect(await caller.page.evaluate(() => (window as unknown as MediaWindow).voiceMedia.cameraCalls)).toBe(0);
+      expect(await caller.page.evaluate(() => (window as unknown as MediaWindow).voiceMedia.calls)).toBe(0);
       await caller.page.getByRole('switch', { name: '摄像头', exact: true }).click();
       for (const page of [host, caller.page, viewer.page]) {
         await expect(page.locator('.live-stage video')).toHaveCount(2);
         await expect.poll(() => pane(page, '连麦者画面').locator('video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(2);
-        // Keep the original elements: swapping should only change presentation.
         const videos = await page.locator('.live-stage video').elementHandles();
-        await page.getByRole('button', { name: '将连麦者切换到大画面', exact: true }).click();
+        await pane(page, '连麦者画面').getByRole('button', { name: '将连麦者切换到大画面', exact: true }).click();
         await expectMain(page, '连麦者画面');
-        await page.getByRole('button', { name: '切换大小画面', exact: true }).focus();
+        await pane(page, '主播画面').getByRole('button', { name: '将主播切换到大画面', exact: true }).focus();
         await page.keyboard.press('Enter');
         await expectMain(page, '主播画面');
         for (const video of videos) expect(await video.evaluate((element: HTMLVideoElement) => element.isConnected && element.readyState >= 2)).toBe(true);
@@ -124,26 +156,74 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       await expect(caller.page.getByRole('region', { name: '我的连麦', exact: true }).locator('video')).toHaveCount(0);
       await caller.page.getByRole('button', { name: '全屏观看', exact: true }).click();
       await expect.poll(() => caller.page.evaluate(() => !!document.fullscreenElement?.querySelector('[aria-label="连麦者画面"]'))).toBe(true);
-      await caller.page.getByRole('button', { name: '切换大小画面', exact: true }).click();
+      await caller.page.getByRole('button', { name: '将连麦者切换到大画面', exact: true }).click();
       await expectMain(caller.page, '连麦者画面');
+      await caller.page.getByRole('button', { name: '将主播切换到大画面', exact: true }).click();
+      await expectMain(caller.page, '主播画面');
       await caller.page.getByRole('button', { name: '退出全屏', exact: true }).click();
       await caller.page.getByRole('switch', { name: '摄像头', exact: true }).click();
       await expect(pane(caller.page, '连麦者画面')).toContainText('摄像头未开启');
-      await expectMain(caller.page, '连麦者画面');
+      await expectMain(caller.page, '主播画面');
       await caller.page.getByRole('switch', { name: '摄像头', exact: true }).click();
-      for (const width of [390, 1440]) {
+      await expect(caller.page.locator('.live-stage video')).toHaveCount(2);
+      const videos = await caller.page.locator('.live-stage video').elementHandles();
+      for (const width of [1440, 1100, 1024, 768, 390, 320, 1440]) {
         await caller.page.setViewportSize({ width, height: 980 });
+        await caller.page.getByRole('button', { name: '将连麦者切换到大画面', exact: true }).click();
         await expectMain(caller.page, '连麦者画面');
         await caller.page.getByRole('button', { name: '将主播切换到大画面', exact: true }).click();
         await expectMain(caller.page, '主播画面');
+        if (width < 768) {
+          await caller.page.getByRole('button', { name: '连麦与设备', exact: true }).click();
+          const sheet = caller.page.getByRole('dialog', { name: '连麦与设备', exact: true });
+          await expect(sheet.getByRole('switch').nth(0)).toHaveAccessibleName('摄像头');
+          await expect(sheet.getByRole('switch').nth(1)).toHaveAccessibleName('麦克风');
+          await expect(sheet.getByRole('switch', { name: '摄像头', exact: true })).toBeChecked();
+          await sheet.getByRole('switch', { name: '麦克风', exact: true }).click();
+          await expect(sheet.getByRole('switch', { name: '麦克风', exact: true })).toBeChecked();
+          await caller.page.screenshot({ path: test.info().outputPath(`call-controls-${width}.png`), fullPage: true });
+          await sheet.getByRole('switch', { name: '麦克风', exact: true }).click();
+          await sheet.getByRole('button', { name: '关闭连麦与设备', exact: true }).click();
+          await caller.page.getByRole('button', { name: '退出', exact: true }).click();
+          const exitSheet = caller.page.getByRole('dialog', { name: '离开选项', exact: true });
+          await expect(exitSheet.getByRole('button', { name: '退出连麦', exact: true })).toBeVisible();
+          await expect(exitSheet.getByRole('button', { name: '退出房间', exact: true })).toBeVisible();
+          await caller.page.screenshot({ path: test.info().outputPath(`leave-options-${width}.png`) });
+          await exitSheet.getByRole('button', { name: '关闭离开选项', exact: true }).click();
+        } else {
+          await expect(controls.getByRole('switch', { name: '摄像头', exact: true })).toBeChecked();
+          const bar = await controls.boundingBox();
+          expect(bar!.height).toBe(88);
+          for (const button of await controls.locator('button:visible').all()) {
+            const box = await button.boundingBox();
+            expect(box!.x).toBeGreaterThanOrEqual(bar!.x);
+            expect(box!.x + box!.width).toBeLessThanOrEqual(bar!.x + bar!.width);
+            expect(box!.y + box!.height).toBeLessThanOrEqual(bar!.y + bar!.height);
+          }
+          await leave.click();
+          await expect(leave).toHaveAttribute('aria-expanded', 'true');
+          const menuBox = (await leaveMenu.boundingBox())!;
+          const triggerBox = (await leave.boundingBox())!;
+          expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(triggerBox.y);
+          expect(Math.abs(menuBox.x + menuBox.width - triggerBox.x - triggerBox.width)).toBeLessThanOrEqual(1);
+          // Full-page screenshots resize tall viewports, which intentionally dismisses the menu.
+          await caller.page.screenshot({ path: test.info().outputPath(`leave-options-${width}.png`) });
+          await expect(leaveMenu).toBeVisible();
+          await caller.page.keyboard.press('Escape');
+          await expect(leaveMenu).toBeHidden();
+          await expect(leave).toBeFocused();
+        }
         expect(await caller.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        for (const video of videos) expect(await video.evaluate((element: HTMLVideoElement) => element.isConnected && element.readyState >= 2)).toBe(true);
         await caller.page.evaluate(() => window.scrollTo(0, 0));
         await caller.page.screenshot({ path: test.info().outputPath(`stage-caller-${width}.png`), fullPage: true });
-        await caller.page.getByRole('button', { name: '切换大小画面', exact: true }).click();
       }
+      expect(await caller.page.evaluate(() => (window as unknown as MediaWindow).voiceMedia.cameraCalls)).toBe(2);
       await host.setViewportSize({ width: 390, height: 980 });
       await host.getByRole('button', { name: '关闭连麦管理', exact: true }).click();
+      await host.getByRole('button', { name: '设备与助手', exact: true }).click();
       await host.getByRole('button', { name: '关闭摄像头', exact: true }).click();
+      await host.getByRole('button', { name: '关闭设备与助手', exact: true }).click();
       const openCamera = host.getByRole('button', { name: '打开画面', exact: true });
       await expect(openCamera).toBeVisible();
       const openButtonBounds = await openCamera.boundingBox();
@@ -153,9 +233,13 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       await host.screenshot({ path: test.info().outputPath('stage-host-camera-off-390.png'), fullPage: true });
       await openCamera.click();
       await expect(pane(viewer.page, '主播画面').locator('video')).toBeVisible();
-      await caller.page.getByRole('button', { name: '退出连麦', exact: true }).click();
+      await caller.page.getByRole('button', { name: '将连麦者切换到大画面', exact: true }).click();
+      await exitCall(caller.page);
+      await expect(caller.page.getByText('已连接', { exact: true })).toBeVisible();
+      await expect.poll(() => caller.page.evaluate(() => (window as unknown as MediaWindow).voiceMedia.tracks.every(track => track.readyState === 'ended'))).toBe(true);
       for (const page of [host, caller.page, viewer.page]) {
         await expect(pane(page, '连麦者画面')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: /将.*切换到大画面/ })).toHaveCount(0);
         await expect(page.getByRole('button', { name: '切换大小画面', exact: true })).toHaveCount(0);
         await expect(pane(page, '主播画面').locator('video')).toBeVisible();
       }
@@ -163,6 +247,10 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       await host.getByRole('button', { name: /^连麦/ }).click();
       await host.getByRole('button', { name: '同意连麦', exact: true }).click();
       await expectMain(caller.page, '主播画面');
+      await leave.click();
+      await host.getByRole('button', { name: '结束连麦', exact: true }).click();
+      await expect(leaveMenu).toBeHidden();
+      await expect(controls.getByRole('button', { name: '退出房间', exact: true })).toBeFocused();
     } finally {
       await caller.context.close();
       await viewer.context.close();
@@ -269,7 +357,7 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       await expect(one.page.getByRole('button', { name: '申请连麦' })).toBeEnabled();
       await two.page.getByRole('button', { name: '申请连麦' }).click();
       await host.getByRole('button', { name: '同意连麦', exact: true }).click();
-      await two.page.getByRole('button', { name: '退出连麦', exact: true }).click();
+      await exitCall(two.page);
       await expect(one.page.getByRole('button', { name: '申请连麦' })).toBeEnabled();
 
       // Exercise the actual LiveKit publish checks from a browser SDK participant,
@@ -338,7 +426,7 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       await viewer.page.getByRole('switch', { name: '麦克风', exact: true }).click();
       await expect(host.locator('audio')).toHaveCount(1);
       await host.getByRole('button', { name: '返回大厅', exact: true }).click();
-      await host.getByRole('button', { name: '结束直播', exact: true }).click();
+      await host.getByRole('dialog', { name: '结束直播？', exact: true }).getByRole('button', { name: '结束直播', exact: true }).click();
       await expect(viewer.page.getByRole('heading', { name: '直播间已结束' })).toBeVisible({ timeout: 20_000 });
       await expect(viewer.page.getByRole('button', { name: '重新加入' })).toHaveCount(0);
       await expect.poll(() => viewer.page.evaluate(() => (window as unknown as MediaWindow).voiceMedia.tracks.every((track) => track.readyState === 'ended'))).toBe(true);
@@ -377,7 +465,7 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       await viewer.page.evaluate(() => { (window as unknown as MediaWindow).voiceMedia.holdCamera = true; });
       await viewer.page.getByRole('switch', { name: '摄像头', exact: true }).click();
       await expect.poll(() => viewer.page.evaluate(() => !!(window as unknown as MediaWindow).voiceMedia.releaseCamera)).toBe(true);
-      await viewer.page.getByRole('button', { name: '退出连麦', exact: true }).click();
+      await exitCall(viewer.page);
       await expect(viewer.page.getByRole('button', { name: '申请连麦' })).toBeEnabled();
       await viewer.page.evaluate(() => { (window as unknown as MediaWindow).voiceMedia.holdCamera = false; (window as unknown as MediaWindow).voiceMedia.releaseCamera?.(); });
       await expect.poll(() => viewer.page.evaluate(() => (window as unknown as MediaWindow).voiceMedia.tracks.every((track) => track.readyState === 'ended'))).toBe(true);
@@ -388,7 +476,8 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       await host.getByRole('button', { name: '同意连麦', exact: true }).click();
       await viewer.page.getByRole('switch', { name: '摄像头', exact: true }).click();
       await expect(host.locator('video')).toHaveCount(1);
-      await viewer.page.getByRole('button', { name: '离开房间', exact: true }).click();
+      await viewer.page.getByRole('button', { name: '退出', exact: true }).click();
+      await viewer.page.getByRole('menuitem', { name: '退出房间', exact: true }).click();
       await expect(host.locator('video')).toHaveCount(0);
       await expect.poll(() => viewer.page.evaluate(() => (window as unknown as MediaWindow).voiceMedia.tracks.every((track) => track.readyState === 'ended'))).toBe(true);
     } finally {
@@ -426,7 +515,7 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       expect(await directVoice(host, roomId, hostJoined, `/requests/${oldRequestId}/approve`, oldRequestId)).toBe(409);
       await viewer.page.getByRole('button', { name: '申请连麦' }).click();
       await expect(other.page.getByRole('button', { name: '已有观众申请中' })).toBeDisabled();
-      await viewer.page.getByRole('button', { name: '离开房间', exact: true }).click();
+      await viewer.page.getByRole('button', { name: '退出房间', exact: true }).click();
       await expect(other.page.getByRole('button', { name: '申请连麦' })).toBeEnabled();
     } finally {
       await viewer.context.close();

@@ -1,6 +1,8 @@
 package livekit
 
 import (
+	"companion/server/internal/auth"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"errors"
@@ -21,8 +23,9 @@ const (
 
 type roomSocketTicketClaims struct {
 	jwt.RegisteredClaims
-	RoomID string `json:"roomId"`
-	Origin string `json:"origin"`
+	RoomID  string `json:"roomId"`
+	Origin  string `json:"origin"`
+	Version int64  `json:"sv"`
 }
 
 // Derive a separate signing key: even an authenticated user's read-only socket
@@ -33,9 +36,13 @@ func (h Handler) roomSocketTicketKey() []byte {
 	return mac.Sum(nil)
 }
 
-func (h Handler) signRoomSocketTicket(userID, room, origin string) (string, error) {
+func (h Handler) signRoomSocketTicket(userID, room, origin string, versions ...int64) (string, error) {
 	if h.Auth.Service.Secret == "" {
 		return "", errors.New("socket ticket signing unavailable")
+	}
+	version := int64(0)
+	if len(versions) > 0 {
+		version = versions[0]
 	}
 	now := h.clock()
 	claims := roomSocketTicketClaims{
@@ -45,14 +52,21 @@ func (h Handler) signRoomSocketTicket(userID, room, origin string) (string, erro
 			IssuedAt: jwt.NewNumericDate(now), NotBefore: jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(roomSocketTicketLifetime)),
 		},
-		RoomID: room, Origin: origin,
+		RoomID: room, Origin: origin, Version: version,
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(h.roomSocketTicketKey())
 }
 
 func (h Handler) verifyRoomSocketTicket(raw, room, origin string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	session, err := h.verifyRoomSocketSession(ctx, raw, room, origin)
+	return session.UserID, err
+}
+
+func (h Handler) verifyRoomSocketSession(ctx context.Context, raw, room, origin string) (auth.Session, error) {
 	if h.Auth.Service.Secret == "" || len(raw) == 0 || len(raw) > roomSocketTicketLimit {
-		return "", errors.New("invalid socket ticket")
+		return auth.Session{}, errors.New("invalid socket ticket")
 	}
 	claims := &roomSocketTicketClaims{}
 	_, err := jwt.ParseWithClaims(raw, claims, func(_ *jwt.Token) (any, error) { return h.roomSocketTicketKey(), nil },
@@ -60,9 +74,13 @@ func (h Handler) verifyRoomSocketTicket(raw, room, origin string) (string, error
 		jwt.WithAudience(RoomSocketPath), jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithTimeFunc(h.clock))
 	if err != nil || claims.RoomID != room || claims.Origin != origin ||
 		claims.IssuedAt == nil || claims.ExpiresAt == nil || claims.ExpiresAt.Sub(claims.IssuedAt.Time) > roomSocketTicketLifetime {
-		return "", errors.New("invalid socket ticket")
+		return auth.Session{}, errors.New("invalid socket ticket")
 	}
-	return claims.Subject, nil // Empty subject is an explicitly signed guest.
+	session := auth.Session{UserID: claims.Subject, Version: claims.Version}
+	if session.UserID != "" {
+		return session, h.Auth.Service.CheckSession(ctx, session)
+	}
+	return session, nil // Empty subject is an explicitly signed guest.
 }
 
 func (h Handler) roomSocketTicket(origin string) gin.HandlerFunc {
@@ -98,7 +116,7 @@ func (h Handler) roomSocketTicket(origin string) gin.HandlerFunc {
 			return
 		}
 		lease.release()
-		ticket, err := h.signRoomSocketTicket(userID, id, origin)
+		ticket, err := h.signRoomSocketTicket(userID, id, origin, auth.SessionVersion(c))
 		if err != nil {
 			fail(c, http.StatusServiceUnavailable, "Live room connections are unavailable")
 			return

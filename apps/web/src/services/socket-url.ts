@@ -1,3 +1,4 @@
+import { requestSessionVerification } from './session-events';
 /** Fetch a fresh scoped ticket on every connection attempt; never persist it. */
 export async function privateSocketURL(
   kind: "matches" | "conversation",
@@ -14,6 +15,7 @@ export async function privateSocketURL(
     cache: "no-store",
     signal,
   });
+  if (response.status === 401) requestSessionVerification();
   if (!response.ok) throw new Error("实时连接暂时不可用");
   const data: unknown = await response.json();
   if (

@@ -42,6 +42,7 @@ type hostAdmission struct {
 type roomLifecycle struct {
 	ID                string         `json:"id"`
 	SID               string         `json:"sid"`
+	SessionVersion    int64          `json:"sessionVersion"`
 	OwnerID           string         `json:"ownerId"`
 	Title             string         `json:"title"`
 	Status            string         `json:"status"`
@@ -207,7 +208,7 @@ func (h Handler) lifecycleRoomIDs(ctx context.Context) ([]string, error) {
 }
 
 func lifecycleForRoom(item RoomItem) *roomLifecycle {
-	return &roomLifecycle{ID: item.ID, SID: item.SID, OwnerID: item.OwnerID, Title: item.Title, Status: item.Status, Viewers: item.Viewers, State: "open", HostConnection: "waiting"}
+	return &roomLifecycle{ID: item.ID, SID: item.SID, OwnerID: item.OwnerID, SessionVersion: item.SessionVersion, Title: item.Title, Status: item.Status, Viewers: item.Viewers, State: "open", HostConnection: "waiting"}
 }
 
 func (h Handler) hostRestored(r *roomLifecycle) {

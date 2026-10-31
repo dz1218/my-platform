@@ -45,7 +45,7 @@ func (h Handler) session(c *gin.Context, u User, err error, status int) {
 		response.Fail(c, err)
 		return
 	}
-	token, err := h.Service.Token(u.ID)
+	token, err := h.Service.Token(u.ID, u.SessionVersion)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -67,8 +67,8 @@ func (h Handler) Optional(c *gin.Context) {
 	if v := c.GetHeader("Authorization"); strings.HasPrefix(v, "Bearer ") {
 		raw = strings.TrimPrefix(v, "Bearer ")
 	}
-	if id, err := h.Service.Verify(raw); err == nil {
-		c.Set("userID", id)
+	if session, err := h.Service.Authenticate(c.Request.Context(), raw); err == nil {
+		h.Service.BindSession(c, session)
 	}
 	c.Next()
 }
@@ -77,12 +77,13 @@ func (h Handler) Require(c *gin.Context) {
 	if v := c.GetHeader("Authorization"); strings.HasPrefix(v, "Bearer ") {
 		raw = strings.TrimPrefix(v, "Bearer ")
 	}
-	id, err := h.Service.Verify(raw)
+	session, err := h.Service.Authenticate(c.Request.Context(), raw)
 	if err != nil {
-		c.AbortWithStatusJSON(401, gin.H{"error": gin.H{"code": "unauthorized", "message": "请先登录"}})
+		response.Fail(c, err)
+		c.Abort()
 		return
 	}
-	c.Set("userID", id)
+	h.Service.BindSession(c, session)
 	c.Next()
 }
 func UserID(c *gin.Context) string { return c.GetString("userID") }

@@ -73,14 +73,14 @@ test('phone host and viewer complete devices, chat, members, voice, leave and en
     await viewer.getByRole('button', { name: '房间选项', exact: true }).click();
     await expect(viewer.getByRole('button', { name: '分享直播间', exact: true })).toBeVisible();
     await viewer.getByRole('button', { name: '关闭房间选项', exact: true }).click();
-    await viewer.getByRole('button', { name: '离开', exact: true }).click();
-    await viewer.getByRole('button', { name: '继续观看', exact: true }).click();
+    await viewer.getByRole('button', { name: '退出', exact: true }).click();
+    await viewer.getByRole('button', { name: '关闭离开选项', exact: true }).click();
     await expect(viewer.locator('.live-stage video')).toHaveCount(2);
     await viewer.screenshot({ path: info.outputPath('viewer-room.png'), fullPage: true });
-    await viewer.getByRole('button', { name: '连麦与设备', exact: true }).click();
+    await viewer.getByRole('button', { name: '退出', exact: true }).click();
     await viewer.getByRole('button', { name: '退出连麦', exact: true }).click();
     await expect(host.locator('.live-stage video')).toHaveCount(1);
-    await viewer.getByRole('button', { name: '关闭连麦与设备', exact: true }).click();
+    await expect(viewer.getByRole('dialog', { name: '离开选项', exact: true })).toBeHidden();
     await viewer.getByRole('button', { name: '离开', exact: true }).click();
     await viewer.getByRole('button', { name: '确认离开', exact: true }).click();
     await expect(viewer.getByRole('heading', { name: '你已离开直播间', exact: true })).toBeVisible();

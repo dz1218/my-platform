@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"companion/server/pkg/response"
 	"crypto/hmac"
 	"crypto/sha256"
 	"net/http"
@@ -12,7 +13,8 @@ import (
 
 type socketClaims struct {
 	jwt.RegisteredClaims
-	Origin string `json:"origin"`
+	Origin  string `json:"origin"`
+	Version int64  `json:"sv"`
 }
 
 func (h Handler) socketKey() []byte {
@@ -42,7 +44,7 @@ func (h Handler) SocketTicket(origin string) gin.HandlerFunc {
 		claims := socketClaims{RegisteredClaims: jwt.RegisteredClaims{
 			Issuer: "companion-private-socket", Subject: UserID(c), Audience: jwt.ClaimStrings{path},
 			IssuedAt: jwt.NewNumericDate(now), NotBefore: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(now.Add(time.Minute)),
-		}, Origin: origin}
+		}, Origin: origin, Version: SessionVersion(c)}
 		ticket, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(h.socketKey())
 		if err != nil {
 			c.AbortWithStatus(http.StatusServiceUnavailable)
@@ -73,7 +75,13 @@ func (h Handler) RequireSocket(origin string) gin.HandlerFunc {
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
-		c.Set("userID", claims.Subject)
+		session := Session{UserID: claims.Subject, Version: claims.Version}
+		if err := h.Service.CheckSession(c.Request.Context(), session); err != nil {
+			response.Fail(c, err)
+			c.Abort()
+			return
+		}
+		h.Service.BindSession(c, session)
 		c.Next()
 	}
 }
