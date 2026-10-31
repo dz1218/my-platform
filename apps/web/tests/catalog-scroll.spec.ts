@@ -257,10 +257,12 @@ test('inheritance selection survives card unmount and light polling refreshes av
 test('single and empty results handle age filters and keyboard chat returns focus to the same role', async ({ page }) => {
   await setup(page);
   await page.goto('/companion');
-  await page.getByRole('searchbox', { name: '姓名' }).fill('朋友0000');
+  await page.getByRole('searchbox', { name: '搜索名字' }).fill('朋友0000');
+  await page.getByRole('button', { name: '搜索朋友', exact: true }).click();
+  await page.getByRole('button', { name: '筛选朋友', exact: true }).click();
   await page.getByRole('spinbutton', { name: '最小年龄' }).fill('18');
   await page.getByRole('spinbutton', { name: '最大年龄' }).fill('18');
-  await page.getByRole('button', { name: '筛选', exact: true }).click();
+  await page.getByRole('button', { name: '应用筛选', exact: true }).click();
   await expect(page.getByTestId('identity-catalog')).toHaveAttribute('data-loaded-count', '1');
   const card = page.locator('[data-identity-id="catalog-0"]');
   await card.getByRole('button').focus();
@@ -268,9 +270,9 @@ test('single and empty results handle age filters and keyboard chat returns focu
   await expect(page.getByTestId('chat-overlay')).toBeVisible();
   await page.goBack();
   await expect(card.getByRole('link')).toBeFocused();
-  await page.getByRole('searchbox', { name: '姓名' }).fill('不存在的名字');
-  await page.getByRole('button', { name: '筛选', exact: true }).click();
-  await expect(page.getByText('没有找到符合条件的朋友，试试其他筛选条件。')).toBeVisible();
+  await page.getByRole('searchbox', { name: '搜索名字' }).fill('不存在的名字');
+  await page.getByRole('button', { name: '搜索朋友', exact: true }).click();
+  await expect(page.getByText('没有找到符合条件的朋友')).toBeVisible();
   await expect(page.locator('[data-identity-id]')).toHaveCount(0);
 });
 
@@ -301,7 +303,7 @@ test('the intercepted self-identity guard never opens a conversation, and reload
   const conversationRequests: string[] = [];
   page.on('request', request => { if (request.url().includes('/conversations/')) conversationRequests.push(request.url()); });
   await page.goto('/companion');
-  await page.getByRole('heading', { name: '这里的朋友' }).evaluate(element => element.scrollIntoView({ block: 'start' }));
+  await page.getByRole('heading', { name: '认识新朋友' }).evaluate(element => element.scrollIntoView({ block: 'start' }));
   await page.getByRole('button', { name: '和朋友0000打个招呼', exact: true }).click();
   await expect(page.getByTestId('chat-overlay')).toBeVisible();
   await expect(page.getByRole('heading', { name: '这是你继承的 AI 身份' })).toBeVisible();

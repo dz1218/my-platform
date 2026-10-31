@@ -41,8 +41,7 @@
     ".next-progress-e2e/types/**/*.ts",
     ".next-toolbar-e2e/types/**/*.ts",
     ".next/types/**/*.ts",
-    "next-env.d.ts",
-    ".next-chat-entry-production/types/**/*.ts"
+    "next-env.d.ts"
   ],
   "exclude": [
     "node_modules"

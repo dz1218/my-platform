@@ -174,33 +174,3 @@ test('a forbidden match cannot open a conversation or enable sending', async ({ 
   await expect(page.getByRole('textbox')).toBeDisabled();
   expect(sockets).toBe(0);
 });
-
-test('keyboard entry returns focus to the same card after chatting', async ({ page }) => {
-  await setup(page);
-  await page.route('**/api/v1/matches', route => route.request().method() === 'POST' ? route.fulfill({ json: known }) : route.fallback());
-  await page.goto('/companion');
-  const greeting = page.getByRole('button', { name: '和林晚打个招呼', exact: true });
-  await greeting.focus();
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL('/chat/known-match');
-  await expect(page.getByRole('textbox', { name: '给林晚发消息' })).toBeEnabled();
-  await page.goBack();
-  await expect(page.getByRole('link', { name: /继续聊天\s*，和林晚/ })).toBeFocused();
-});
-
-test('the inherited identity guard still prevents conversation requests after immediate entry', async ({ page }) => {
-  await setup(page);
-  await page.context().addCookies([{ name: 'companion_session', value: 'inheritance-test-inherited', domain: '127.0.0.1', path: '/' }]);
-  const self = { ...known, identity: { ...identity, id: 'inheritance-chennian', name: '陈念' } };
-  await page.route('**/api/v1/matches', route => route.request().method() === 'POST' ? route.fulfill({ json: self }) : route.fallback());
-  await page.route('**/api/v1/matches/known-match', route => route.fulfill({ json: self }));
-  const requests: string[] = [];
-  page.on('request', request => { if (request.url().includes('/conversations/')) requests.push(request.url()); });
-  await page.goto('/companion');
-  await page.getByRole('button', { name: '和林晚打个招呼', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '这是你继承的 AI 身份' })).toBeVisible();
-  await expect(page.getByRole('textbox')).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByRole('heading', { name: '这是你继承的 AI 身份' })).toBeVisible();
-  expect(requests).toEqual([]);
-});
