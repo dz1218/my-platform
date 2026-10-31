@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"companion/server/internal/auth"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/net/websocket"
 )
@@ -42,6 +44,7 @@ func (h Handler) roomSocket(source roomSnapshotSource, origin string) gin.Handle
 			return
 		}
 		var userID string
+		var memberClaims *liveRoomClaims
 		var err error
 		if tickets, supplied := c.Request.URL.Query()["ticket"]; supplied {
 			if len(tickets) != 1 || c.GetHeader("Origin") != origin {
@@ -52,6 +55,11 @@ func (h Handler) roomSocket(source roomSnapshotSource, origin string) gin.Handle
 				userID = session.UserID
 				if err == nil && userID != "" {
 					h.Auth.Service.BindSession(c, session)
+				}
+				if err == nil {
+					claims := &roomSocketTicketClaims{}
+					_, err = jwt.ParseWithClaims(tickets[0], claims, func(*jwt.Token) (any, error) { return h.roomSocketTicketKey(), nil }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithTimeFunc(h.clock))
+					memberClaims = claims.Member
 				}
 			}
 			if err != nil {
@@ -115,6 +123,41 @@ func (h Handler) roomSocket(source roomSnapshotSource, origin string) gin.Handle
 					return websocket.Message.Send(ws, string(data))
 				}
 				var previous []byte
+				after, _ := strconv.ParseInt(c.Query("after"), 10, 64)
+				var previousActivity []byte
+				activity := func() error {
+					if memberClaims == nil {
+						return nil
+					}
+					r, err := h.loadLifecycle(ctx, id)
+					if err != nil {
+						return err
+					}
+					if r == nil {
+						return errors.New("room missing")
+					}
+					g, err := h.loadGovernance(ctx, r)
+					if err != nil {
+						return err
+					}
+					view, err := h.activityView(ctx, r, g, memberClaims, after)
+					if err != nil {
+						return err
+					}
+					data, err := json.Marshal(view)
+					if err != nil {
+						return err
+					}
+					if bytes.Equal(data, previousActivity) {
+						return nil
+					}
+					if err = write(data); err != nil {
+						return err
+					}
+					after = view.Sequence
+					previousActivity = data
+					return nil
+				}
 				snapshot := func() error {
 					if err := auth.CheckConnection(c, ctx); err != nil {
 						return write([]byte(`{"type":"ping"}`))
@@ -159,6 +202,9 @@ func (h Handler) roomSocket(source roomSnapshotSource, origin string) gin.Handle
 				if snapshot() != nil {
 					return
 				}
+				if activity() != nil {
+					return
+				}
 				heartbeat := time.NewTicker(20 * time.Second)
 				defer heartbeat.Stop()
 				for {
@@ -173,8 +219,14 @@ func (h Handler) roomSocket(source roomSnapshotSource, origin string) gin.Handle
 							if snapshot() != nil {
 								return
 							}
+							if activity() != nil {
+								return
+							}
 						}
 					case <-heartbeat.C:
+						if activity() != nil {
+							return
+						}
 						leaseCtx, stop := context.WithTimeout(ctx, 2*time.Second)
 						valid := lease.renew(leaseCtx)
 						stop()

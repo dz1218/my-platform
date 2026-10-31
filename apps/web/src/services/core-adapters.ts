@@ -2,7 +2,7 @@ import { history, configureAutoReply, takeover } from './chat';
 import { meet } from './companion';
 import { inheritIdentity, setInheritanceGender, skipInheritance } from './inheritance';
 import { api } from './api/client';
-import type { AutoReplyService, CompanionService, IdentityService, LiveChatCodec, MediaErrorMessage, PreferencesService } from '@my-platform/client-core';
+import type { AutoReplyService, CompanionService, IdentityService, MediaErrorMessage, PreferencesService } from '@my-platform/client-core';
 
 // Browser/Next service wiring stays at the application boundary. The shared
 // factories only receive these capabilities and never own browser resources.
@@ -13,10 +13,6 @@ export const browserIdentityService: IdentityService = { inheritIdentity, setInh
 export const browserAutoReplyService: AutoReplyService = { configureAutoReply, takeover };
 export const browserPreferencesService: PreferencesService = {
   write: (id, path, body, method) => api(`/conversations/${encodeURIComponent(id)}${path}`, { method, body: JSON.stringify(body) }),
-};
-export const browserLiveChatCodec: LiveChatCodec = {
-  encode: value => new TextEncoder().encode(value),
-  decode: value => new TextDecoder().decode(value),
 };
 export const browserMediaError: MediaErrorMessage = (error, device) => {
   const name = device === 'camera' ? '摄像头' : '麦克风';

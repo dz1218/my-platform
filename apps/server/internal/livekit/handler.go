@@ -66,6 +66,7 @@ func Register(r gin.IRouter, cfg Config, authentication auth.Handler, cache ...*
 	rooms.POST("/:roomId/voice/requests/:requestId/approve", h.voice("approve"))
 	rooms.POST("/:roomId/voice/requests/:requestId/reject", h.voice("reject"))
 	rooms.POST("/:roomId/voice/end", h.voice("end"))
+	h.registerGovernance(rooms)
 	rooms.Use(authentication.Require)
 	rooms.POST("", h.create)
 	rooms.DELETE("/:roomId", h.close)
@@ -340,7 +341,7 @@ func (h Handler) join(c *gin.Context) {
 	if !ok {
 		return
 	}
-	name, hasName, validName := field(b, "name", 1, 80, true)
+	name, _, validName := field(b, "name", 1, 80, true)
 	attempt, hasAttempt, validAttempt := field(b, "attemptId", 16, 80, false)
 	if !validName || !validAttempt || (hasAttempt && !voiceRequestID.MatchString(attempt)) {
 		fail(c, http.StatusBadRequest, "Invalid request body")
@@ -400,7 +401,7 @@ func (h Handler) join(c *gin.Context) {
 		failRoom(c, http.StatusConflict, "room_full", "直播间人数已满（50 人），请稍后再试")
 		return
 	}
-	identity, role, hostUserID, notice := "viewer_"+database.ID(), "viewer", "", ""
+	identity, role, hostUserID := "viewer_"+database.ID(), "viewer", ""
 	var token string
 	if userID != "" && item.OwnerID == userID {
 		if item.SessionVersion != auth.SessionVersion(c) {
@@ -426,27 +427,36 @@ func (h Handler) join(c *gin.Context) {
 			return
 		}
 		identity, role, hostUserID = admission.Identity, "host", userID
-		token, err = h.Client.hostJoinToken(id, admission)
-		if upstreamFailed(c, err) {
-			return
-		}
-	} else {
-		if item.OwnerID == "" && userID != "" {
-			notice = "此旧直播间未记录主播身份，请重新创建直播间后开播。"
-		}
-		if !hasName {
-			name = identity
-		}
-		token, err = h.Client.JoinToken(id, identity, name, false)
-		if upstreamFailed(c, err) {
-			return
-		}
 	}
 	voiceToken, err := h.Client.VoiceToken(id, identity, hostUserID)
 	if upstreamFailed(c, err) {
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"token": token, "voiceToken": voiceToken, "role": role, "notice": notice, "livekitUrl": h.Client.config.URL, "roomId": id, "identity": identity})
+	// Host admission saved a fresh lifecycle while holding this same lock.
+	record, err = h.loadLifecycle(ctx, id)
+	if upstreamFailed(c, err) {
+		return
+	}
+	if record == nil {
+		record = lifecycleForRoom(*item)
+	}
+	member, roomToken, admissionErr := h.admitLiveMember(c, record, identity, userID, name)
+	if errors.Is(admissionErr, errLiveBanned) {
+		failRoom(c, 403, "room_banned", "你已被移出，本场直播内不可重新进入")
+		return
+	}
+	if upstreamFailed(c, admissionErr) {
+		return
+	}
+	claims := map[string]any{"roomJoin": true, "room": id, "canPublish": role == "host", "canSubscribe": true, "canPublishData": false, "canUpdateOwnMetadata": false}
+	token, err = h.Client.token(identity, memberLabel(member), claims, time.Minute)
+	if role == "host" && record.Host != nil {
+		token, err = h.Client.tokenAt(identity, memberLabel(member), claims, time.Unix(record.Host.IssuedAt, 0), time.Unix(record.Host.ExpiresAt, 0))
+	}
+	if upstreamFailed(c, err) {
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"token": token, "voiceToken": voiceToken, "role": role, "livekitUrl": h.Client.config.URL, "roomId": id, "identity": identity, "roomToken": roomToken, "member": member})
 }
 
 func (h Handler) close(c *gin.Context) {

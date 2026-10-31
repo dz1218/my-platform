@@ -7,7 +7,6 @@ import type { Message } from '../src/types/companion';
 import { createAuthFormStore } from '../src/stores/auth';
 import { createConversationStore } from '../src/stores/chat/conversation';
 import { createCatalogFormStore } from '../src/stores/catalog';
-import { createLiveChatStore, type LiveMessage } from '../src/stores/live/chat';
 import { createLiveRoomStore } from '../src/stores/live/room';
 import { createLiveVoiceStore } from '../src/stores/live/voice';
 
@@ -77,19 +76,6 @@ test('unapplied filter edits do not mutate applied filters or another editor', (
   expect(editor.getState().draft.q).toBe('林');
 });
 
-test('live chat deduplicates unread messages, bounds history and clears data on a new session', () => {
-  const chat = createLiveChatStore();
-  const message: LiveMessage = { id: 'viewer:1', identity: 'viewer', name: '观众', host: false, text: '你好', time: 1, own: false };
-  chat.getState().receive(message, true);
-  chat.getState().receive(message, true);
-  expect(chat.getState().unread).toBe(1);
-  expect(chat.getState().messages).toHaveLength(1);
-  for (let i = 2; i <= 205; i++) chat.getState().receive({ ...message, id: `viewer:${i}` }, false);
-  expect(chat.getState().messages).toHaveLength(200);
-  chat.getState().setDraft('房间一草稿');
-  chat.getState().resetSession();
-  expect(chat.getState()).toMatchObject({ messages: [], draft: '', unread: 0, sending: false, error: '' });
-});
 
 test('leaving a room clears its role, permissions and media state while retaining the rejoin nickname', () => {
   const room = createLiveRoomStore('观众昵称', { dispatch: async () => {} });
@@ -212,25 +198,6 @@ test('room operations enforce role and ignore late dispatch/media results after 
   expect(room.getState()).toMatchObject({ isDispatchingAgent: false, cameraEnabled: false, microphoneEnabled: false, mediaBusy: null });
 });
 
-test('live chat validates payloads and old publish completion cannot overwrite a new session', async () => {
-  const chat = createLiveChatStore();
-  const author = { identity: 'viewer', name: '观众' };
-  for (const text of ['invalid JSON', '{"v":1,"id":"1","text":""}', '{"v":2,"id":"1","text":"你好"}']) {
-    chat.getState().receivePayload(new TextEncoder().encode(text), author, true);
-  }
-  expect(chat.getState().messages).toHaveLength(0);
-  const publish = deferred<void>();
-  let calls = 0;
-  chat.getState().setDraft('发送前的草稿');
-  const pending = chat.getState().sendMessage(author, async () => { calls++; return publish.promise; });
-  expect(await chat.getState().sendMessage(author, async () => { calls++; })).toBe(false);
-  expect(calls).toBe(1);
-  chat.getState().resetSession();
-  chat.getState().setDraft('新会话的草稿');
-  publish.resolve();
-  expect(await pending).toBe(false);
-  expect(chat.getState()).toMatchObject({ messages: [], draft: '新会话的草稿', sending: false, error: '' });
-});
 
 test('voice actions enforce host controls, serialize requests and discard stale session errors', async () => {
   const voice = createLiveVoiceStore();

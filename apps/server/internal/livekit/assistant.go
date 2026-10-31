@@ -16,6 +16,7 @@ import (
 // AssistantState is public room state. Only Go can create a session; LiveKit
 // membership confirms it. Neither a browser flag nor a model response is proof.
 type AssistantState struct {
+	StartedAt  int64  `json:"startedAt,omitempty"`
 	Status     string `json:"status"`
 	SessionID  string `json:"sessionId,omitempty"`
 	DispatchID string `json:"dispatchId,omitempty"`
@@ -122,7 +123,7 @@ func (h Handler) dispatch(c *gin.Context) {
 		}
 	}
 	session := database.ID()
-	r.Assistant = AssistantState{Status: "starting", SessionID: session, Identity: "assistant_" + session, Deadline: h.clock().Add(30 * time.Second).UnixMilli()}
+	r.Assistant = AssistantState{StartedAt: h.clock().UnixMilli(), Status: "starting", SessionID: session, Identity: "assistant_" + session, Deadline: h.clock().Add(30 * time.Second).UnixMilli()}
 	// Persist before the RPC: a lost response never permits a second dispatch.
 	if upstreamFailed(c, h.saveLifecycle(ctx, r)) {
 		return

@@ -6,6 +6,7 @@ import { createLiveRoomStore, liveRoomSelectors } from '../src/live/room';
 
 const joined: LiveRoomJoin = {
   role: 'host', identity: 'host-session', roomId: 'room', token: 'join-token',
+  roomToken: 'room-token', member: { id: 'member-host', name: '主播', code: 'HOST', role: 'host', online: true },
   voiceToken: 'voice-token', livekitUrl: 'platform-injected',
 };
 const defaults = { dispatch: async () => {}, mediaError: () => '媒体不可用' };

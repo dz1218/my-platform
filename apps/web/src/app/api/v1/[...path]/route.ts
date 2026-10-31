@@ -32,6 +32,12 @@ async function proxy(
   const headers = new Headers();
   const cookie = request.cookies.get(sessionCookie)?.value;
   if (cookie) headers.set("Cookie", `${sessionCookie}=${cookie}`);
+	if (path[0] === 'rooms') {
+		const guest = request.cookies.get('live_guest')?.value;
+		if (guest) headers.set('Cookie', [headers.get('Cookie'), `live_guest=${guest}`].filter(Boolean).join('; '));
+		const roomToken = request.headers.get('x-live-room-token');
+		if (roomToken) headers.set('X-Live-Room-Token', roomToken);
+	}
   headers.set("Content-Type", "application/json");
   if (path[0] === 'rooms') forwardLiveClientIP(request.headers, headers);
   const isPresenceRequest = request.method === "POST" && path.length === 3 && path[2] === "presence";
@@ -55,10 +61,11 @@ async function proxy(
       },
     );
     const output = new Headers({ "Cache-Control": "no-store" });
-    for (const key of ["content-type", "set-cookie", "retry-after"]) {
+    for (const key of ["content-type", "retry-after"]) {
       const value = upstream.headers.get(key);
       if (value) output.set(key, value);
     }
+	for (const cookie of upstream.headers.getSetCookie()) output.append('set-cookie', cookie);
     return new Response(upstream.body, {
       status: upstream.status,
       headers: output,

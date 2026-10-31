@@ -37,7 +37,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 			c.Header("Access-Control-Allow-Origin", cfg.WebOrigin)
 			c.Header("Vary", "Origin")
 			c.Header("Access-Control-Allow-Credentials", "true")
-			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Live-Voice-Token")
+			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Live-Voice-Token, X-Live-Room-Token")
 			c.Header("Access-Control-Expose-Headers", "Retry-After")
 			c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		}
@@ -70,6 +70,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 	ah := auth.Handler{Service: auth.Service{Repo: auth.Repository{DB: db}, Secret: cfg.JWTSecret, SMS: cfg.SMS, ResetSMS: cfg.ResetSMS}, SecureCookie: cfg.SecureCookie}
 	livekit.RegisterWebhook(r, cfg.LiveKit, ah, cache)
 	livekit.RegisterRealtime(r, cfg.LiveKit, ah, cache, cfg.WebOrigin)
+	livekit.RegisterRoomAgent(r, cfg.LiveKit, ah, cache)
 	livekit.Register(r, cfg.LiveKit, ah, cache)
 	ids := identity.Repository{DB: db}
 	messages := conversation.Repository{DB: db}

@@ -12,6 +12,11 @@ const createPanel = () => createDomainStore<{ open: boolean; show: () => void; c
   open: false, show: () => set({ open: true }), close: () => set({ open: false }),
 }));
 
+/** The mounted room owns moderation state; the phone owns its modal presentation. */
+export function MobileLiveManagementSheet({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode }) {
+  return <Sheet open={open} onClose={onClose} title={title} footer={footer}>{children}</Sheet>;
+}
+
 export function MobileLiveRoomHeader({ back, title, pendingTitle = false, role, status, count, onShare, onRefresh, refreshing = false }: {
   back: ReactNode; title: string; pendingTitle?: boolean; role: string | null; status: string;
   count: number | null; onShare?: () => void; onRefresh?: () => void; refreshing?: boolean;

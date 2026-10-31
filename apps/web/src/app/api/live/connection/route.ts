@@ -29,6 +29,10 @@ export async function POST(request: NextRequest) {
       ticketURL.searchParams.set('roomId', roomId);
     }
     const upstreamHeaders = new Headers();
+	const roomToken = request.headers.get('x-live-room-token');
+	if (roomToken) upstreamHeaders.set('X-Live-Room-Token',roomToken);
+	const after = request.nextUrl.searchParams.get('after');
+	if (after && /^\d{1,18}$/.test(after)) url.searchParams.set('after', after);
     forwardLiveClientIP(request.headers, upstreamHeaders);
     const session = request.cookies.get(sessionCookie)?.value;
     if (session) upstreamHeaders.set('Cookie', `${sessionCookie}=${session}`);

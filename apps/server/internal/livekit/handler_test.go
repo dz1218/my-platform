@@ -68,7 +68,7 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 		case "CreateRoom", "DeleteRoom":
 			permission = "roomCreate"
 			service = "RoomService"
-		case "ListParticipants":
+		case "ListParticipants", "RemoveParticipant":
 			service = "RoomService"
 		}
 		if r.URL.Path != "/twirp/livekit."+service+"/"+method {
@@ -102,6 +102,8 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 				t.Error("room defaults changed")
 			}
 			result = input
+		case "RemoveParticipant":
+			result = map[string]any{}
 		case "DeleteRoom":
 			if input["room"] != "room-test" {
 				t.Error("wrong room")
@@ -162,14 +164,14 @@ func TestRoomLifecycleAndDispatchContract(t *testing.T) {
 			t.Fatal(joined)
 		}
 		token := claims(t, joined["token"].(string))
-		if token["sub"] != joined["identity"] || (token["name"] != "测试" && token["name"] != joined["identity"]) {
+		if token["sub"] != joined["identity"] || !strings.HasPrefix(token["name"].(string), "测试·") {
 			t.Fatal(token)
 		}
 		if token["exp"].(float64)-token["iat"].(float64) != 60 {
 			t.Fatal("token TTL changed")
 		}
 		grant := token["video"].(map[string]any)
-		if len(grant) != 5 || grant["room"] != "room-test" || grant["roomJoin"] != true || grant["canPublish"] != true || grant["canSubscribe"] != true || grant["canPublishData"] != true {
+		if len(grant) != 6 || grant["room"] != "room-test" || grant["roomJoin"] != true || grant["canPublish"] != true || grant["canSubscribe"] != true || grant["canPublishData"] != false {
 			t.Fatal(grant)
 		}
 	}
@@ -271,8 +273,8 @@ func TestGuestTokensAndManagementAuthorization(t *testing.T) {
 	}
 	token := claims(t, result.Token)
 	grant := token["video"].(map[string]any)
-	if !strings.HasPrefix(result.Identity, "viewer_") || token["sub"] != result.Identity || grant["canPublish"] != false || grant["canPublishData"] != true || grant["canSubscribe"] != true {
-		t.Fatal("guest must only subscribe and send chat data, without publishing media or impersonating a host", token)
+	if !strings.HasPrefix(result.Identity, "viewer_") || token["sub"] != result.Identity || grant["canPublish"] != false || grant["canPublishData"] != false || grant["canSubscribe"] != true {
+		t.Fatal("guest token must only subscribe; all chat requires the Go room credential", token)
 	}
 	for _, tc := range []struct{ method, path string }{
 		{"POST", "/rooms"}, {"DELETE", "/rooms/room-test"}, {"POST", "/rooms/room-test/agent/dispatch"}, {"GET", "/rooms/room-test/agent/dispatch"}, {"DELETE", "/rooms/room-test/agent/dispatch/AD_test"},

@@ -22,4 +22,3 @@ export type LiveLobbyService = {
 };
 export type MediaDevice = 'camera' | 'microphone';
 export type MediaErrorMessage = (error: unknown, device: MediaDevice) => string;
-export type LiveChatCodec = { encode: (value: string) => Uint8Array; decode: (value: Uint8Array) => string };

@@ -6,8 +6,8 @@ import { createLiveRoomStore, liveRoomSelectors } from '@/stores/live/room';
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { LiveRoomDetail } from '@my-platform/shared';
-import { ConnectionState, ParticipantKind, Room, RoomEvent, Track } from 'livekit-client';
+import type { LiveRoomDetail, LiveActivity } from '@my-platform/shared';
+import { ConnectionState, DisconnectReason, ParticipantKind, Room, RoomEvent, Track } from 'livekit-client';
 import { APIError, check } from '@/services/api/client';
 import { liveRoomService } from '@/services/live';
 import { RoomsConnection } from '@/services/rooms-connection';
@@ -15,6 +15,7 @@ import { sessionQueryOptions } from '@/services/query-options';
 import { createLiveRoomUpdates } from '@my-platform/client-core';
 import { subscribeRoomNotice } from '@/stores/live/room/subscriptions';
 import { useLiveVoice } from './use-live-voice';
+import { useLiveGovernance } from './use-live-governance';
 
 import type { Role, ParticipantItem } from '@/stores/live/room';
 export type { Role } from '@/stores/live/room';
@@ -70,6 +71,7 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
   const remoteAudioRef = useRef<HTMLDivElement>(null);
   const closeDialogRef = useRef<HTMLDialogElement>(null);
   const queryClient = useQueryClient();
+  const governance = useLiveGovernance(apiBaseUrl,roomId);
   const service = useStoreInstance(() => liveRoomService(apiBaseUrl));
   const detailKey = ['live-room', apiBaseUrl, roomId];
   const roomQuery = useQuery<LiveRoomDetail | null>({
@@ -97,7 +99,7 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
     },
     query: { client: queryClient, apiBaseUrl, roomId },
   }));
-  const { role, roomNotice, nickname, connectionState, participants, error, isJoining, connectionPending, joinFailure, recovering, returnToLobby, closeConfirmOpen, isClosing, closeError, isRefreshing, refreshError, updatesState, isDispatchingAgent, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, voiceToken, notice, isFullscreen } = useStore(ui, useShallow(liveRoomSelectors.view));
+  const { role, nickname, connectionState, participants, error, isJoining, connectionPending, joinFailure, recovering, returnToLobby, closeConfirmOpen, isClosing, closeError, isRefreshing, refreshError, updatesState, isDispatchingAgent, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, voiceToken, notice, isFullscreen } = useStore(ui, useShallow(liveRoomSelectors.view));
   const { dispatchAgent, removeAgent, setNickname, setConnectionState, setParticipants, setError, setIsJoining, setCameraEnabled, setMicrophoneEnabled, setAudioBlocked, setSideTab, setNotice, setIsFullscreen, setCloseConfirmOpen, refreshRoom } = ui.getState();
   const isHost = role === '主播';
   const roomMissing = roomQuery.data === null || (roomQuery.error instanceof APIError && roomQuery.error.status === 404);
@@ -110,12 +112,14 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
 
   useEffect(() => {
     const updates = createLiveRoomUpdates(queryClient, apiBaseUrl, roomId);
-    const connection = new RoomsConnection({ roomId,
+    const connection = new RoomsConnection({ roomId, roomToken: governance.state.token || undefined,
+      after: () => queryClient.getQueryData<LiveActivity>(governance.queryKey)?.sequence ?? 0,
+      onActivity: event => { if (governance.store.getState().token === governance.state.token) governance.store.getState().receive(event); },
       onUpdate: event => { void updates.receive(event); },
       onState: ui.getState().setUpdatesState,
     });
     return () => { updates.close(); connection.close(); refreshRequestRef.current?.abort(); };
-  }, [queryClient, apiBaseUrl, roomId, ui]);
+  }, [queryClient, apiBaseUrl, roomId, ui, governance.state.token]);
 
   const isConnected = connectionState === ConnectionState.Connected;
   const isReconnecting = connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting;
@@ -160,6 +164,7 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
     joinRequestRef.current = controller;
     const attempt = { room: null as Room | null };
     const joined = await ui.getState().joinSession(async data => {
+      governance.store.getState().bind(data);
       localIdentityRef.current = data.identity;
       const activeRoom = new Room();
       attempt.room = activeRoom;
@@ -207,12 +212,13 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
           void refreshRoom();
         })
         .on(RoomEvent.AudioPlaybackStatusChanged, () => setAudioBlocked(!activeRoom.canPlaybackAudio))
-        .on(RoomEvent.Disconnected, () => {
+        .on(RoomEvent.Disconnected, (reason) => {
           if (roomRef.current !== activeRoom) return;
           activeRoom.removeAllListeners();
           roomRef.current = null;
           resetSession();
-          if (hasConnected) ui.getState().handleHostDisconnected();
+          if (reason===DisconnectReason.PARTICIPANT_REMOVED) { governance.store.getState().markRemoved(); ui.getState().handleRoomRemoved(); }
+          else if (hasConnected) ui.getState().handleHostDisconnected();
           else setError('连接已断开，请重新加入或返回直播大厅。');
           void refreshRoom();
           void queryClient.invalidateQueries({ queryKey: ['live-rooms', apiBaseUrl] });
@@ -228,6 +234,7 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
       refreshParticipants(activeRoom);
       attachExistingRemoteTracks(activeRoom);
       setAudioBlocked(!activeRoom.canPlaybackAudio);
+      void governance.store.getState().refresh().catch(()=>{});
     }, () => controller.signal.aborted);
     if (!joined && !controller.signal.aborted) {
       const room = attempt.room;
@@ -271,6 +278,7 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
 
   async function leaveRoom() {
     ui.getState().cancelJoinRecovery();
+    governance.store.getState().clear();
     const room = roomRef.current;
     joinRequestRef.current?.abort();
     joinRequestRef.current = null;
@@ -314,6 +322,7 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
     const autoJoin = window.setTimeout(() => void joinRoom(), 0);
     return () => {
       disposedRef.current = true;
+      governance.store.getState().clear();
       window.clearTimeout(autoJoin);
       joinRequestRef.current?.abort();
       joinRequestRef.current = null;
@@ -339,6 +348,14 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
   }, [isConnected, participants.length]);
 
   useEffect(() => subscribeRoomNotice(ui), [ui]);
+
+  useEffect(() => governance.store.subscribe(s=>s.removed, removed=>{
+    if (!removed) return;
+    ui.getState().cancelJoinRecovery();
+    ui.getState().handleRoomRemoved();
+    const room=roomRef.current; roomRef.current=null; room?.removeAllListeners(); void room?.disconnect();
+    setConnectionState(ConnectionState.Disconnected); clearContainer(remoteAudioRef);
+  }), [governance.store,ui]);
 
   useEffect(() => ui.subscribe(state => state.closeConfirmOpen, open => {
     if (open) closeDialogRef.current?.showModal();
@@ -373,5 +390,5 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
     } catch { setNotice('当前浏览器暂不支持全屏观看。'); }
   }
 
-  return { roomTitle, roomTitlePending: roomQuery.isPending, roomEnded, roomInUse, hostRecovering, recovering, returnToLobby, returnToHall, roomReason: roomQuery.data?.reason, closeConfirmOpen, setCloseConfirmOpen, isClosing, closeError, closeDialogRef, endRoom, refreshRoom, isRefreshing, refreshError, updatesLabel, role, isHost, roomNotice, nickname, setNickname, participants, error, setError, isJoining, connectionPending, isDispatchingAgent, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, assistant, voice, joinRoom, toggleLocalMedia, dispatchAgent, removeAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen };
+  return { governance, roomBanned: joinFailure === 'banned' || governance.state.removed, roomTitle, roomTitlePending: roomQuery.isPending, roomEnded, roomInUse, hostRecovering, recovering, returnToLobby, returnToHall, roomReason: roomQuery.data?.reason, closeConfirmOpen, setCloseConfirmOpen, isClosing, closeError, closeDialogRef, endRoom, refreshRoom, isRefreshing, refreshError, updatesLabel, role, isHost, nickname, setNickname, participants, error, setError, isJoining, connectionPending, isDispatchingAgent, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, assistant, voice, joinRoom, toggleLocalMedia, dispatchAgent, removeAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen };
 }

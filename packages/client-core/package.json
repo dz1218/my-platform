@@ -20,7 +20,7 @@
     "./live/room": "./src/live/room/index.ts",
     "./chat/conversation": "./src/chat/conversation.ts",
     "./chat/auto-reply": "./src/chat/auto-reply.ts",
-    "./live/chat": "./src/live/chat.ts",
+    "./live/governance": "./src/live/governance.ts",
     "./live/voice": "./src/live/voice.ts"
   },
   "scripts": {

@@ -1,12 +1,11 @@
 import { RoomConnectionState as ConnectionState, type LiveUpdatesState } from '@my-platform/shared';
 export type Role = '主播' | '观众';
 export type ParticipantItem = { identity: string; displayName: string; role: Role | 'AI助手'; isLocal: boolean };
-export type RoomJoinFailure = 'retryable' | 'in-use' | 'closed' | 'missing' | 'auth' | null;
+export type RoomJoinFailure = 'retryable' | 'in-use' | 'closed' | 'missing' | 'auth' | 'banned' | null;
 
 export type LiveRoomState = {
   sessionVersion: number;
   role: Role | null;
-  roomNotice: string;
   nickname: string;
   connectionState: ConnectionState;
   participants: ParticipantItem[];
@@ -36,7 +35,6 @@ export type LiveRoomState = {
 export const initialLiveRoomState = (nickname = ''): LiveRoomState => ({
   sessionVersion: 0,
   role: null,
-  roomNotice: '',
   nickname: nickname,
   connectionState: ConnectionState.Disconnected,
   participants: [],

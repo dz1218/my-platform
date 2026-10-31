@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"companion/server/internal/auth"
@@ -17,6 +18,10 @@ import (
 const voiceAttribute = "live.voice"
 
 var voiceRequestID = regexp.MustCompile(`^[a-zA-Z0-9_-]{16,80}$`)
+
+// A lock holder also needs connections for durable governance and auth reads.
+// Bound lock waiters so a burst cannot consume the entire business DB pool.
+var voiceDatabaseGates sync.Map
 
 // Striped, context-aware locks are shared by routes and webhook reconciliation.
 // Production uses a database advisory lock shared by all API replicas.
@@ -174,7 +179,7 @@ func (c *Client) updateVoice(ctx context.Context, room string, p voiceParticipan
 		"attributes": map[string]string{voiceAttribute: string(encoded)},
 		"permission": map[string]any{
 			"canPublish": request.Status == "approved", "canPublishSources": []int{1, 2},
-			"canSubscribe": true, "canPublishData": true, "canUpdateOwnMetadata": false,
+			"canSubscribe": true, "canPublishData": false, "canUpdateOwnMetadata": false,
 		},
 	}, &result)
 	return result, err
@@ -189,14 +194,23 @@ func voiceLockKey(room string) uint64 {
 func (h Handler) lockVoice(ctx context.Context, room string) (func(), error) {
 	key := voiceLockKey(room)
 	if db := h.Auth.Service.Repo.DB; db != nil {
+		gateValue, _ := voiceDatabaseGates.LoadOrStore(db, make(chan struct{}, max(1, min(4, int(db.Config().MaxConns/3)))))
+		gate := gateValue.(chan struct{})
+		select {
+		case gate <- struct{}{}:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 		tx, err := db.Begin(ctx)
 		if err != nil {
+			<-gate
 			return nil, err
 		}
 		unlock := func() {
 			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			_ = tx.Rollback(cleanup)
+			<-gate
 		}
 		if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", int64(key)); err != nil {
 			unlock()
@@ -313,6 +327,12 @@ func (h Handler) voice(action string) gin.HandlerFunc {
 			fail(c, http.StatusForbidden, "请先进入直播间")
 			return
 		}
+		if action == "request" {
+			if err := h.liveVoiceBlocked(ctx, lifecycle, actor.Subject); err != nil {
+				fail(c, 403, err.Error())
+				return
+			}
+		}
 		participants, err = h.reconcileVoice(ctx, room, participants)
 		if upstreamFailed(c, err) {
 			return
@@ -367,6 +387,10 @@ func (h Handler) voice(action string) gin.HandlerFunc {
 			}
 			switch action {
 			case "approve":
+				if err := h.liveVoiceBlocked(ctx, lifecycle, target.Identity); err != nil {
+					fail(c, 403, err.Error())
+					return
+				}
 				if request.Status == "approved" {
 					c.JSON(200, state)
 					return

@@ -19,6 +19,7 @@ import (
 
 type Config struct {
 	URL, InternalURL, APIKey, APISecret, AgentName string
+	RoomAgentToken                                 string
 	Limits                                         map[string]int
 	ScopedLocks                                    bool
 }
@@ -26,6 +27,9 @@ type Config struct {
 func (c Config) Enabled() bool { return c.URL != "" && c.APIKey != "" && c.APISecret != "" }
 
 func (c Config) Validate() error {
+	if c.RoomAgentToken != "" && len(c.RoomAgentToken) < 32 {
+		return fmt.Errorf("ROOM_AGENT_TOKEN must contain at least 32 characters")
+	}
 	for name, limit := range c.Limits {
 		if _, ok := defaultRoomLimits[name]; !ok || limit < 1 || limit > 100000 {
 			return fmt.Errorf("invalid LIVE_ROOM_LIMITS entry %s", name)
@@ -75,11 +79,6 @@ func (c *Client) tokenAt(identity, name string, grant map[string]any, now, expir
 		claims["name"] = name
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(c.config.APISecret))
-}
-
-// Viewers start without publishing rights; approval grants camera and microphone.
-func (c *Client) JoinToken(room, identity, name string, canPublish bool) (string, error) {
-	return c.token(identity, name, map[string]any{"roomJoin": true, "room": room, "canPublish": canPublish, "canSubscribe": true, "canPublishData": true}, 2*time.Hour)
 }
 
 func (c *Client) call(ctx context.Context, service, method string, grant map[string]any, input, output any) error {

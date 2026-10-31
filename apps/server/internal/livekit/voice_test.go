@@ -74,6 +74,9 @@ func newVoiceFixture(t *testing.T) *voiceFixture {
 				return
 			}
 			json.NewEncoder(w).Encode(p)
+		case strings.HasSuffix(r.URL.Path, "/RemoveParticipant"):
+			delete(f.people, input.Identity)
+			w.Write([]byte(`{}`))
 		default:
 			t.Errorf("unexpected RPC %s", r.URL.Path)
 			w.WriteHeader(500)
@@ -93,6 +96,26 @@ func newVoiceFixture(t *testing.T) *voiceFixture {
 			userID = "test-user"
 		}
 		f.tokens[id], _ = f.handler.Client.VoiceToken("room-voice", id, userID)
+	}
+	// Participants in these tests have completed the mandatory member admission.
+	r := &roomLifecycle{ID: "room-voice", SID: "RM_voice", OwnerID: "test-user", State: "open", Host: &hostAdmission{Identity: "host_test-user"}, HadHost: true, HostConnection: "connected"}
+	if err := f.handler.saveLifecycle(context.Background(), r); err != nil {
+		t.Fatal(err)
+	}
+	g, err := f.handler.loadGovernance(context.Background(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id := range f.people {
+		role := "viewer"
+		if strings.HasPrefix(id, "host_") {
+			role = "host"
+		}
+		g.Members[id] = &LiveMember{ID: id, Name: id, Role: role, Online: true}
+		g.Admissions[id] = liveAdmission{MemberID: id, Online: true, JoinedAt: time.Now().UnixMilli(), ExpiresAt: time.Now().Add(time.Hour).UnixMilli()}
+	}
+	if err = f.handler.saveGovernance(context.Background(), r, g); err != nil {
+		t.Fatal(err)
 	}
 	return f
 }
@@ -150,7 +173,7 @@ func TestVoiceSingleSlotLifecycle(t *testing.T) {
 	permission := f.permissions["viewer_one"]
 	f.mu.Unlock()
 	sources := permission["canPublishSources"].([]any)
-	if permission["canPublish"] != true || permission["canSubscribe"] != true || permission["canPublishData"] != true || permission["canUpdateOwnMetadata"] != false || len(sources) != 2 || sources[0] != float64(1) || sources[1] != float64(2) {
+	if permission["canPublish"] != true || permission["canSubscribe"] != true || permission["canPublishData"] != false || permission["canUpdateOwnMetadata"] != false || len(sources) != 2 || sources[0] != float64(1) || sources[1] != float64(2) {
 		t.Fatal(permission)
 	}
 	voiceResult(t, f.call("viewer_two", "POST", voiceBase+"/end", firstRequest), 403)
@@ -200,7 +223,7 @@ func TestVoiceAuthenticationAndStaleSessions(t *testing.T) {
 	voiceResult(t, f.call("viewer_one", "POST", voiceBase+"/request", "short"), 400)
 	f.tokens["viewer_one"] += "tampered"
 	voiceResult(t, f.call("viewer_one", "GET", voiceBase, ""), 401)
-	f.tokens["viewer_one"], _ = f.handler.Client.JoinToken("room-voice", "viewer_one", "name", false)
+	f.tokens["viewer_one"], _ = f.handler.Client.token("viewer_one", "name", map[string]any{"roomJoin": true, "room": "room-voice", "canSubscribe": true, "canPublish": false, "canPublishData": false}, time.Minute)
 	voiceResult(t, f.call("viewer_one", "GET", voiceBase, ""), 401)
 	f.tokens["viewer_one"], _ = f.handler.Client.VoiceToken("room-voice", "viewer_one", "")
 	var claims voiceClaims

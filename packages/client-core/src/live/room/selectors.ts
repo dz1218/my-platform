@@ -3,7 +3,6 @@ import type { LiveRoomStore } from './store';
 export const liveRoomSelectors = {
   view: (s: LiveRoomStore) => ({
     role: s.role,
-    roomNotice: s.roomNotice,
     nickname: s.nickname,
     connectionState: s.connectionState,
     participants: s.participants,

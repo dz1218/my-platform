@@ -64,7 +64,10 @@ func TestAssistantConcurrentDispatchAndTrustedPresence(t *testing.T) {
 		t.Fatal("trusted a human as AI")
 	}
 	f.Lock()
-	f.people[r.ID][1].Kind = json.RawMessage(`"AGENT"`)
+	if len(f.people[r.ID]) != 1 {
+		t.Fatal("unregistered human impersonating assistant retained")
+	}
+	f.people[r.ID] = append(f.people[r.ID], voiceParticipant{SID: "PA_agent", Identity: r.Assistant.Identity, Kind: json.RawMessage(`"AGENT"`)})
 	f.Unlock()
 	if err := f.h.ReconcileRoom(context.Background(), r.ID); err != nil {
 		t.Fatal(err)

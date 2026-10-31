@@ -30,6 +30,7 @@ func Load() (Config, error) {
 	c.ResetSMS.TemplateCode = value("SMS_RESET_TEMPLATE_CODE", "100003")
 	c.LiveKit = livekit.Config{URL: os.Getenv("LIVEKIT_URL"), InternalURL: os.Getenv("LIVEKIT_INTERNAL_URL"), APIKey: os.Getenv("LIVEKIT_API_KEY"), APISecret: os.Getenv("LIVEKIT_API_SECRET"), AgentName: value("LIVEKIT_AGENT_NAME", "room-assistant")}
 	c.LiveKit.ScopedLocks = os.Getenv("LIVE_ROOM_SCOPED_LOCKS") == "true"
+	c.LiveKit.RoomAgentToken = value("ROOM_AGENT_TOKEN", livekit.DeriveRoomAgentToken(c.AgentToken))
 	if raw := os.Getenv("LIVE_ROOM_LIMITS"); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &c.LiveKit.Limits); err != nil {
 			return c, fmt.Errorf("invalid LIVE_ROOM_LIMITS JSON")

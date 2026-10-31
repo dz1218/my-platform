@@ -1,6 +1,6 @@
 import { requestSessionVerification } from './session-events';
 import { APIError, check } from './api/client';
-import type { ApiRoomItem, LiveRoomDetail, LiveRoomsUpdate, LiveUpdatesState } from '@my-platform/shared';
+import type { ApiRoomItem, LiveRoomDetail, LiveRoomsUpdate, LiveUpdatesState, LiveActivity } from '@my-platform/shared';
 
 const CONNECT_TIMEOUT = 10_000;
 const HEARTBEAT_TIMEOUT = 45_000;
@@ -31,6 +31,9 @@ export class RoomsConnection {
 
   constructor(private options: {
     roomId?: string;
+	roomToken?: string;
+	after?: () => number;
+	onActivity?: (event: LiveActivity) => void;
     onUpdate: (event: LiveRoomsUpdate) => void;
     onState?: (state: LiveUpdatesState) => void;
   }) {
@@ -54,8 +57,10 @@ export class RoomsConnection {
     try {
       const endpoint = new URL('/api/live/connection', window.location.href);
       if (this.options.roomId) endpoint.searchParams.set('roomId', this.options.roomId);
+	  if (this.options.after) endpoint.searchParams.set('after',String(this.options.after()));
       const response = await fetch(endpoint, {
         method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: pending.signal,
+		headers: this.options.roomToken ? { 'X-Live-Room-Token':this.options.roomToken } : undefined,
       });
       if (response.status === 401) requestSessionVerification();
       await check(response);
@@ -90,6 +95,11 @@ export class RoomsConnection {
         if (data?.type === 'session.invalidated') { requestSessionVerification(); this.close(); return; }
         if (!data || typeof data !== 'object') throw new Error('Invalid room update');
         let snapshot: LiveRoomsUpdate | undefined;
+		if (data.type === 'room.activity' && this.options.roomToken && data.roomId === this.options.roomId) {
+		  if (!Array.isArray(data.messages) || !Array.isArray(data.members) || typeof data.sequence !== 'number' || typeof data.roomSid !== 'string') throw new Error('Invalid room activity');
+		  this.lastReceived=Date.now(); clearTimeout(this.watchdog); this.watchdog=setTimeout(()=>this.reconnect(),HEARTBEAT_TIMEOUT);
+		  this.options.onActivity?.(data); if (data.removed) this.close(); return;
+		}
         if (data.type === 'rooms.updated' && !this.options.roomId) {
           if (!Array.isArray(data.items) || !data.items.every(isRoom)) throw new Error('Invalid rooms snapshot');
           snapshot = data;

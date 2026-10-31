@@ -9,6 +9,7 @@ type MediaSnapshot = { cameraEnabled: boolean; microphoneEnabled: boolean };
 export type RoomOperations = {
   joinSession: (connect: (joined: LiveRoomJoin) => Promise<void>, isCancelled?: () => boolean) => Promise<boolean>;
   handleHostDisconnected: () => void;
+  handleRoomRemoved: () => void;
   cancelJoinRecovery: () => void;
   requestLobbyReturn: () => boolean;
   setCloseConfirmOpen: (open: boolean) => void;
@@ -83,7 +84,7 @@ export const createRoomOperations = (services: RoomServices): StateCreator<LiveR
       const joined = await services.session.join(name, attemptId);
       if (!current()) return false;
       if (joined.role !== 'host' && joined.role !== 'viewer') throw new Error('暂时无法确认房间身份，请稍后重新加入。');
-      set({ role: joined.role === 'host' ? '主播' : '观众', nickname: name, roomNotice: joined.notice || '', voiceToken: joined.voiceToken || '' });
+      set({ role: joined.role === 'host' ? '主播' : '观众', nickname: joined.member.name, voiceToken: joined.voiceToken });
       await connect(joined);
       if (!current()) return false;
       set({ joinAttemptId: null, joinRetryAt: 0, joinRetries: 0, recovering: false });
@@ -92,7 +93,7 @@ export const createRoomOperations = (services: RoomServices): StateCreator<LiveR
       if (!current()) return false;
       const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
       const status = error && typeof error === 'object' && 'status' in error ? error.status : undefined;
-      const joinFailure = code === 'host_session_in_use' ? 'in-use' : code === 'room_closed' || status === 410 ? 'closed' : code === 'room_not_found' || status === 404 ? 'missing' : status === 401 || status === 403 || status === 400 ? 'auth' : 'retryable';
+      const joinFailure = code === 'room_banned' ? 'banned' : code === 'host_session_in_use' ? 'in-use' : code === 'room_closed' || status === 410 ? 'closed' : code === 'room_not_found' || status === 404 ? 'missing' : status === 401 || status === 403 || status === 400 ? 'auth' : 'retryable';
       const message = joinFailure === 'in-use' ? '你已在另一个页面或设备进入此直播间，请使用原页面继续直播。'
         : joinFailure === 'closed' ? '直播间已结束，请返回直播大厅。'
           : joinFailure === 'missing' ? '直播间已关闭或不存在。'
@@ -111,6 +112,7 @@ export const createRoomOperations = (services: RoomServices): StateCreator<LiveR
     if (get().isClosing || get().joinFailure === 'closed') return;
     set({ recovering: true, joinFailure: 'retryable', joinRetryAt: Date.now() + 1000, joinAttemptId: null, isJoining: false, error: '连接暂时中断，正在自动恢复，设备将保持关闭。' });
   },
+  handleRoomRemoved: () => set({ joinFailure: 'banned', joinRetryAt: 0, recovering: false, isJoining: false, error: '你已被移出，本场直播内不可重新进入。' }),
   cancelJoinRecovery: () => set({ joinRetryAt: 0, joinRetries: 0, recovering: false }),
   requestLobbyReturn: () => {
     const s = get();

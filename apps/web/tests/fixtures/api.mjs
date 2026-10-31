@@ -108,10 +108,11 @@ const server = createServer(async (request, response) => {
     try {
       const upstream = await fetch(`http://127.0.0.1:18182${request.url}`, {
         method: request.method,
-        headers: { 'Content-Type': 'application/json', Cookie: request.headers.cookie || '', 'X-Live-Voice-Token': request.headers['x-live-voice-token'] || '' },
+        headers: { 'Content-Type': 'application/json', Cookie: request.headers.cookie || '', 'X-Live-Voice-Token': request.headers['x-live-voice-token'] || '', 'X-Live-Room-Token':request.headers['x-live-room-token']||'' },
         body: request.method === 'GET' ? undefined : body,
       });
       response.statusCode = upstream.status;
+      if (upstream.headers.getSetCookie().length) response.setHeader('Set-Cookie',upstream.headers.getSetCookie());
       if (upstream.headers.has('retry-after')) response.setHeader('Retry-After', upstream.headers.get('retry-after'));
       return response.end(await upstream.text());
     } catch {

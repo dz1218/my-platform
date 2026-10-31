@@ -4,7 +4,6 @@ import type { LiveRoomState } from '../initial-state';
 
 export type SessionActions = {
   setRole: (value: LiveRoomState['role']) => void;
-  setRoomNotice: (value: LiveRoomState['roomNotice']) => void;
   setNickname: (value: LiveRoomState['nickname']) => void;
   setConnectionState: (value: LiveRoomState['connectionState']) => void;
   setParticipants: (value: LiveRoomState['participants']) => void;
@@ -16,7 +15,6 @@ export type SessionActions = {
 };
 export const createSessionSlice: StateCreator<LiveRoomStore, [], [], SessionActions> = (set) => ({
   setRole: (role) => set({ role }),
-  setRoomNotice: (roomNotice) => set({ roomNotice }),
   setNickname: (nickname) => set({ nickname }),
   setConnectionState: (connectionState) => set({ connectionState }),
   setParticipants: (participants) => set({ participants }),

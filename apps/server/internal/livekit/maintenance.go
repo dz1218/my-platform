@@ -204,7 +204,8 @@ func RunRoomMaintenance(ctx context.Context, cfg Config, authentication auth.Han
 		workers.Add(1)
 		go func() { defer workers.Done(); h.Auth.Service.RunRevocations(ctx, h.CloseRevokedRooms) }()
 	}
-	workers.Add(3)
+	workers.Add(4)
+	go func() { defer workers.Done(); h.runGovernanceRetention(ctx) }()
 	go func() { defer workers.Done(); h.RunRoomRetries(ctx) }()
 	for i := 0; i < 2; i++ {
 		go func() { defer workers.Done(); h.runRoomChecks(ctx) }()

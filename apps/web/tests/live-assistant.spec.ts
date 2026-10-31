@@ -54,21 +54,27 @@ test.describe('room assistant with real LiveKit, Go and fake model', () => {
       await expect(viewer.getByRole('textbox', { name: '发送消息', exact: true })).toHaveValue('@AI 你好');
       await viewer.getByRole('button', { name: '发送', exact: true }).click();
       for (const page of [host, viewer]) {
-        await expect(page.getByText('测试回答（第1轮）：你好', { exact: true })).toBeVisible();
-        await expect(page.locator('.live-message').filter({ hasText: '测试回答（第1轮）' }).locator('.live-message-role')).toHaveText('AI 助手');
+        await expect(page.getByText('测试回答：你好', { exact: true })).toBeVisible();
+        await expect(page.locator('.live-message').filter({ hasText: '测试回答：你好' }).locator('.live-message-role')).toHaveText('AI 助手');
       }
       await send(host, '@AI 继续');
-      await expect(viewer.getByText('测试回答（第2轮）：继续', { exact: true })).toBeVisible();
+      await expect(viewer.getByText('测试回答：继续', { exact: true })).toBeVisible();
       await host.screenshot({ path: test.info().outputPath('assistant-online.png'), fullPage: true });
       const previousCalls = (await (await fetch('http://127.0.0.1:18183/calls')).json()).length;
       await send(viewer, '@AI 慢回答');
       await expect.poll(async () => (await (await fetch('http://127.0.0.1:18183/calls')).json()).length).toBeGreaterThan(previousCalls);
       await open(); await host.getByRole('button', { name: '移除助手', exact: true }).click();
-      await expect(host.getByRole('button', { name: '呼叫 AI 助手', exact: true })).toBeVisible(); await close();
+      // LiveKit can take its full removal timeout before the durable retry
+      // confirms cleanup; the UI intentionally stays in "退出中" meanwhile.
+      await expect(host.getByRole('button', { name: '呼叫 AI 助手', exact: true })).toBeVisible({ timeout: 20_000 }); await close();
       await expect(viewer.getByRole('button', { name: '向 AI 助手提问' })).toHaveCount(0);
       await call(); await send(viewer, '@AI 新会话');
-      await expect(viewer.getByText('测试回答（第1轮）：新会话', { exact: true })).toBeVisible();
-      await expect(viewer.getByText('测试回答（第3轮）：慢回答', { exact: true })).toHaveCount(0);
+      await expect(viewer.getByText('测试回答：新会话', { exact: true })).toBeVisible();
+      const calls = await (await fetch('http://127.0.0.1:18183/calls')).json();
+      const latest = JSON.parse(calls.at(-1).findLast((m: {role:string}) => m.role === 'user').content);
+      expect(JSON.stringify(latest)).not.toContain('慢回答');
+      expect(JSON.stringify(latest)).not.toContain('你好');
+      await expect(viewer.getByText('测试回答：慢回答', { exact: true })).toHaveCount(0);
       const forbidden = await viewer.request.post(`/api/v1/rooms/${room}/agent/dispatch`, { data: {} });
       expect(forbidden.status()).toBe(401);
     } finally {

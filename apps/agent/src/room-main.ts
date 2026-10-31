@@ -6,17 +6,13 @@ import {
   WorkerPermissions,
   type JobContext,
 } from "@livekit/agents";
-import {
-  ParticipantKind,
-  RoomEvent,
-  type RemoteParticipant,
-} from "@livekit/rtc-node";
+import { RoomEvent } from "@livekit/rtc-node";
 import { fileURLToPath } from "node:url";
 import { createModel } from "./model.js";
-import { createRoomAssistant } from "./agents/room-assistant.js";
-import { createRoomChat, roomChatTopic } from "./room-chat.js";
 import { roomEnvSchema, roomMetadata, sessionIsActive } from "./room-config.js";
-import { createRoomDelivery, roomReadyTopic } from "./room-delivery.js";
+import { createRoomAPI } from "./room-events.js";
+import { createGovernedRoomChat } from "./room-governance.js";
+import { createRoomModerator } from "./agents/room-moderator.js";
 
 export default defineAgent({
   entry: async (ctx: JobContext) => {
@@ -32,78 +28,35 @@ export default defineAgent({
       return;
     }
     const lifetime = new AbortController();
-    const delivery = createRoomDelivery(async (payload, destination) => {
-      // Check the Go-owned generation before publishing, including late model results.
-      const active =
-        !lifetime.signal.aborted &&
-        (await sessionIsActive(env.ROOM_API_URL, metadata, lifetime.signal));
-      if (!active) throw new Error("inactive_session");
-      if (lifetime.signal.aborted || !ctx.room.localParticipant) return;
-      await ctx.room.localParticipant.publishData(payload, {
-        reliable: true,
-        topic: roomChatTopic,
-        destination_identities: destination ? [destination] : undefined,
-      });
+    const api = createRoomAPI(
+      env.ROOM_API_URL,
+      env.ROOM_AGENT_TOKEN,
+      metadata,
+      lifetime.signal,
+    );
+    const chat = createGovernedRoomChat({
+      decide: createRoomModerator(
+        createModel(env, 30000),
+        api.output,
+        api.history,
+        env.LLM_STRUCTURED_OUTPUT,
+      ),
+      output: api.output,
     });
-    const chat = createRoomChat({
-      ask: createRoomAssistant(createModel(env, 30_000)),
-      publish: (payload, destination) =>
-        delivery.publish(
-          payload,
-          [...ctx.room.remoteParticipants.values()]
-            .filter((p) => p.kind === ParticipantKind.STANDARD)
-            .map((p) => p.identity),
-          destination,
-        ),
-    });
-    const receive = (
-      payload: Uint8Array,
-      participant?: RemoteParticipant,
-      _kind?: unknown,
-      topic?: string,
-    ) => {
-      if (!participant || participant.kind !== ParticipantKind.STANDARD) return;
-      if (topic === roomReadyTopic && payload.byteLength <= 32) {
-        void delivery.acknowledge(participant.identity).catch(() => {});
-        return;
-      }
-      if (topic !== roomChatTopic) return;
-      chat.receive(payload, {
-        identity: participant.identity,
-        name: participant.name || "观众",
-      });
-    };
-    const left = (participant: RemoteParticipant) =>
-      delivery.forget(participant.identity);
     const stop = () => {
       lifetime.abort();
       chat.close();
-      delivery.close();
-      ctx.room.off(RoomEvent.DataReceived, receive);
-      ctx.room.off(RoomEvent.ParticipantDisconnected, left);
-    };
-    const disconnect = () => {
-      stop();
-      ctx.shutdown("room disconnected");
     };
     ctx.addShutdownCallback(async () => {
       stop();
-      ctx.room.off(RoomEvent.Disconnected, disconnect);
+      ctx.room.off(RoomEvent.Disconnected, stop);
     });
-    ctx.room.on(RoomEvent.DataReceived, receive);
-    ctx.room.on(RoomEvent.ParticipantDisconnected, left);
-    ctx.room.on(RoomEvent.Disconnected, disconnect);
+    ctx.room.on(RoomEvent.Disconnected, stop);
     await ctx.connect(undefined, AutoSubscribe.SUBSCRIBE_NONE);
-    console.info(
-      JSON.stringify({
-        event: "room_assistant_connected",
-        sessionId: metadata.sessionId,
-      }),
-    );
-    if (!(await sessionIsActive(env.ROOM_API_URL, metadata, lifetime.signal))) {
+    void api.listen(chat.receive).finally(() => {
       stop();
-      ctx.shutdown("session removed");
-    }
+      ctx.shutdown("assistant room session ended");
+    });
   },
 });
 
@@ -127,7 +80,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       apiKey: env.LIVEKIT_API_KEY,
       apiSecret: env.LIVEKIT_API_SECRET,
       port: env.ROOM_AGENT_PORT,
-      permissions: new WorkerPermissions(false, false, true, false),
+      permissions: new WorkerPermissions(false, false, false, false),
       numIdleProcesses: 1,
       drainTimeout: 5_000,
       shutdownProcessTimeout: 5_000,

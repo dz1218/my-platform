@@ -7,7 +7,7 @@
   width: 100%; max-width: 1440px; margin-inline: auto;
   padding-inline: clamp(16px, 3vw, 48px);
 }
-@media (min-width: 768px) { .live-page h1, .live-page h2, .live-page h3, .live-page p { margin: 0; } }
+@media (min-width: 768px) { .live-page :is(h1, h2, h3, p):not(.sheet *) { margin: 0; } }
 .live-page a { text-decoration: none; }
 .live-page button, .live-page a, .live-page input, .live-page textarea { transition: background-color .15s, border-color .15s, color .15s; }
 .live-page button:disabled { cursor: not-allowed; opacity: .48; }

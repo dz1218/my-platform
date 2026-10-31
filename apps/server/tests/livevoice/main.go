@@ -86,7 +86,8 @@ func main() {
 	}))
 	defer rpcProxy.Close()
 	cfg := livekit.Config{URL: strings.Replace(livekitURL, "http", "ws", 1), InternalURL: rpcProxy.URL,
-		AgentName: value("LIVEKIT_TEST_AGENT_NAME", "room-assistant-e2e"), APIKey: value("LIVEKIT_TEST_API_KEY", "devkey"), APISecret: value("LIVEKIT_TEST_API_SECRET", "devsecretdevsecretdevsecretdevsec")}
+		RoomAgentToken: "room-agent-fixture-only-secret-1234567890",
+		AgentName:      value("LIVEKIT_TEST_AGENT_NAME", "room-assistant-e2e"), APIKey: value("LIVEKIT_TEST_API_KEY", "devkey"), APISecret: value("LIVEKIT_TEST_API_SECRET", "devsecretdevsecretdevsecretdevsec")}
 	authentication := auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "voice-browser-fixture-only"}}
 	hostToken, err := authentication.Service.Token("live-test-host")
 	if err != nil {
@@ -158,6 +159,7 @@ func main() {
 	livekit.Register(router.Group("/api/v1"), cfg, authentication)
 	livekit.RegisterWebhook(router, cfg, authentication, nil)
 	livekit.RegisterRealtime(router, cfg, authentication, nil, "http://127.0.0.1:3012")
+	livekit.RegisterRoomAgent(router, cfg, authentication, nil)
 	// The proxy makes startup synchronization and targeted closing retries safe
 	// even when the developer's LiveKit contains unrelated non-test rooms.
 	go livekit.RunRoomMaintenance(context.Background(), cfg, authentication)

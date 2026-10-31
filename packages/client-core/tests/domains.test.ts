@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { QueryClient } from '@tanstack/query-core';
 import { RoomConnectionState, emptyCatalogFilters, type ApiRoomItem, type Message } from '@my-platform/shared';
-import { createAuthFormStore, createChatStore, createConversationStore, createCatalogFormStore, createCompanionStore, createIdentityStore, createLiveLobbyStore, createLiveRoomStore, createLiveChatStore, createLiveVoiceStore, createAutoReplyStore, subscribeCompanionFilters, validateCatalogFilters } from '../src/index';
+import { createAuthFormStore, createChatStore, createConversationStore, createCatalogFormStore, createCompanionStore, createIdentityStore, createLiveLobbyStore, createLiveRoomStore, createLiveVoiceStore, createAutoReplyStore, subscribeCompanionFilters, validateCatalogFilters } from '../src/index';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -156,25 +156,6 @@ test('room reset invalidates late media operations and platform error descriptio
   assert.equal('sideTab' in store.getState(), false);
 });
 
-test('live messaging accepts platform codecs and ignores acknowledgements after reset', async () => {
-  const codec = { encode: (value: string) => new TextEncoder().encode(value), decode: (value: Uint8Array) => new TextDecoder().decode(value) };
-  const store = createLiveChatStore({ createRequestId: makeIds(), codec, now: () => 100 });
-  const author = { identity: 'viewer', name: '观众' };
-  const payload = codec.encode(JSON.stringify({ v: 1, id: 'received', text: '你好' }));
-  store.getState().receivePayload(payload, author, true);
-  store.getState().receivePayload(payload, author, true);
-  assert.equal(store.getState().unread, 1);
-  assert.equal(store.getState().messages[0].time, 100);
-  store.getState().setDraft('发送中');
-  const response = deferred<void>();
-  const pending = store.getState().sendMessage(author, () => response.promise);
-  store.getState().resetSession();
-  store.getState().setDraft('新房间');
-  response.resolve();
-  assert.equal(await pending, false);
-  assert.equal(store.getState().draft, '新房间');
-  assert.equal(store.getState().messages.length, 0);
-});
 
 test('voice request IDs come from the platform and role guards survive the extraction', async () => {
   const store = createLiveVoiceStore({ createRequestId: () => 'miniapp-id' });
@@ -233,21 +214,4 @@ test('catalog validation is shared by web and mobile and matches API integer bou
     assert.equal(validateCatalogFilters({ ...emptyCatalogFilters, ageMin }), '年龄请输入 18–50 之间的整数。');
   }
   assert.equal(validateCatalogFilters({ ...emptyCatalogFilters, ageMin: '40', ageMax: '20' }), '最大年龄不能小于最小年龄。');
-});
-
-
-test('live receive throttling is per sender, expires, and resets with the room', () => {
-  let now = 100;
-  const codec = { encode: (value: string) => new TextEncoder().encode(value), decode: (value: Uint8Array) => new TextDecoder().decode(value) };
-  const store = createLiveChatStore({ createRequestId: makeIds(), codec, now: () => now });
-  const receive = (identity: string, id: number) => store.getState().receivePayload(codec.encode(JSON.stringify({ v: 1, id: String(id), text: '消息' })), { identity, name: identity }, false);
-  for (let i = 0; i < 100; i++) receive('sender-a', i);
-  receive('sender-b', 101);
-  assert.equal(store.getState().messages.length, 21);
-  now += 10_001;
-  receive('sender-a', 102);
-  assert.equal(store.getState().messages.length, 22);
-  store.getState().resetSession();
-  receive('sender-a', 103);
-  assert.equal(store.getState().messages.length, 1);
 });

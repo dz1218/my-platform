@@ -23,9 +23,10 @@ const (
 
 type roomSocketTicketClaims struct {
 	jwt.RegisteredClaims
-	RoomID  string `json:"roomId"`
-	Origin  string `json:"origin"`
-	Version int64  `json:"sv"`
+	Member  *liveRoomClaims `json:"member,omitempty"`
+	RoomID  string          `json:"roomId"`
+	Origin  string          `json:"origin"`
+	Version int64           `json:"sv"`
 }
 
 // Derive a separate signing key: even an authenticated user's read-only socket
@@ -117,6 +118,35 @@ func (h Handler) roomSocketTicket(origin string) gin.HandlerFunc {
 		}
 		lease.release()
 		ticket, err := h.signRoomSocketTicket(userID, id, origin, auth.SessionVersion(c))
+		if raw := c.GetHeader("X-Live-Room-Token"); raw != "" && err == nil {
+			member, parseErr := h.parseLiveClaims(raw, "room")
+			if parseErr != nil || member.RoomID != id {
+				fail(c, 401, "房间凭证已失效")
+				return
+			}
+			r, loadErr := h.loadLifecycle(c.Request.Context(), id)
+			if upstreamFailed(c, loadErr) {
+				return
+			}
+			if r == nil {
+				missingRoom(c)
+				return
+			}
+			g, loadErr := h.loadGovernance(c.Request.Context(), r)
+			if upstreamFailed(c, loadErr) {
+				return
+			}
+			if _, loadErr = h.validateLiveActor(c.Request.Context(), r, g, member); loadErr != nil {
+				fail(c, 401, "房间凭证已失效")
+				return
+			}
+			claims := &roomSocketTicketClaims{}
+			_, err = jwt.ParseWithClaims(ticket, claims, func(*jwt.Token) (any, error) { return h.roomSocketTicketKey(), nil }, jwt.WithValidMethods([]string{"HS256"}), jwt.WithTimeFunc(h.clock))
+			if err == nil {
+				claims.Member = member
+				ticket, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(h.roomSocketTicketKey())
+			}
+		}
 		if err != nil {
 			fail(c, http.StatusServiceUnavailable, "Live room connections are unavailable")
 			return

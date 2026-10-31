@@ -355,11 +355,6 @@ type hostPendingError struct{ Until int64 }
 
 func (e *hostPendingError) Error() string { return "host admission pending" }
 
-func (c *Client) hostJoinToken(room string, host *hostAdmission) (string, error) {
-	return c.tokenAt(host.Identity, host.Name, map[string]any{"roomJoin": true, "room": room, "canPublish": true, "canSubscribe": true, "canPublishData": true},
-		time.Unix(host.IssuedAt, 0), time.Unix(host.ExpiresAt, 0))
-}
-
 // ReconcileRoom uses server observations, never browser visibility/heartbeats.
 func (h Handler) ReconcileRoom(ctx context.Context, roomID string) error {
 	return h.ReconcileRoomEvent(ctx, RoomLifecycleEvent{RoomID: roomID})
@@ -437,6 +432,9 @@ func (h Handler) reconcileRoomLocked(ctx context.Context, event RoomLifecycleEve
 	}
 	people, err := h.Client.ListParticipants(ctx, event.RoomID)
 	if err != nil {
+		return err
+	}
+	if err := h.reconcileGovernance(ctx, record, people); err != nil {
 		return err
 	}
 	if err := h.reconcileAssistant(ctx, record, people); err != nil {
@@ -527,6 +525,9 @@ func (h Handler) reconcileRoomLocked(ctx context.Context, event RoomLifecycleEve
 	}
 	if !record.HadHost && record.CheckAt > 0 && record.CheckAt <= h.clock().UnixMilli() {
 		record.CheckAt = h.clock().Add(time.Minute).UnixMilli()
+	}
+	if due := h.governanceCheckAt(ctx, record); due > 0 && (record.CheckAt == 0 || due < record.CheckAt) {
+		record.CheckAt = due
 	}
 	if err := h.saveLifecycle(ctx, record); err != nil {
 		return err
