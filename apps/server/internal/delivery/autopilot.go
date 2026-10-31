@@ -18,6 +18,7 @@ type AutoReply struct {
 	TurnVersion       int64  `json:"-"`
 	AutomationEnabled bool   `json:"-"`
 	CanManage         bool   `json:"canManage"`
+	CanManageMemory   bool   `json:"canManageMemory"`
 }
 
 func lockConversation(ctx context.Context, tx pgx.Tx, id string) (AutoReply, error) {
@@ -36,8 +37,8 @@ func forbidden() error {
 func (r Repository) Settings(ctx context.Context, id, actor string) (AutoReply, error) {
 	var s AutoReply
 	err := r.DB.QueryRow(ctx, `SELECT owner_type,auto_reply_mode,reply_delay_seconds,settings_version,
- `+conversation.ManageSQL+`
- FROM conversations c WHERE id=$1 AND `+conversation.AccessSQL, id, actor).Scan(&s.OwnerType, &s.Mode, &s.DelaySeconds, &s.Version, &s.CanManage)
+ `+conversation.ManageSQL+`,c.user_id=$2
+ FROM conversations c WHERE id=$1 AND `+conversation.AccessSQL, id, actor).Scan(&s.OwnerType, &s.Mode, &s.DelaySeconds, &s.Version, &s.CanManage, &s.CanManageMemory)
 	return s, err
 }
 func validSettings(mode string, delay int) bool {

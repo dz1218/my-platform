@@ -24,7 +24,7 @@ func (w Worker) Run(ctx context.Context) {
 	group.Add(1)
 	go func() {
 		defer group.Done()
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
@@ -33,6 +33,22 @@ func (w Worker) Run(ctx context.Context) {
 			case <-ticker.C:
 				if err := w.enrich(ctx); err != nil && ctx.Err() == nil {
 					slog.Error("enrichment queue failed", "error", err)
+				}
+			}
+		}
+	}()
+	group.Add(1)
+	go func() {
+		defer group.Done()
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := w.index(ctx); err != nil && ctx.Err() == nil {
+					slog.Warn("agent index maintenance failed")
 				}
 			}
 		}
@@ -56,6 +72,9 @@ func (w Worker) Run(ctx context.Context) {
 				// DB eligibility and an 8-hour attempt budget prevent model polling.
 				if time.Now().After(nextProactiveScan) {
 					nextProactiveScan = time.Now().Add(time.Minute)
+					if err := w.Repo.ObserveAgent(ctx); err != nil && ctx.Err() == nil {
+						slog.Warn("companion metrics unavailable")
+					}
 					if err := w.Repo.RefreshDailyStates(ctx); err != nil && ctx.Err() == nil {
 						slog.Error("virtual state refresh failed", "error", err)
 					}
@@ -156,6 +175,10 @@ func (w Worker) generate(parent context.Context, j Job) {
 			request.PendingSeconds = 0
 		}
 		if err == nil {
+			request, err = w.Repo.BindRun(ctx, request, j.Conversation.ID, request.Kind, j.ClaimToken, j.TriggerID, j.Version)
+			j.Run = request.Run
+		}
+		if err == nil {
 			request, err = aicontext.BoundRequest(request)
 		}
 		if err == nil {
@@ -181,6 +204,10 @@ func (w Worker) generate(parent context.Context, j Job) {
 		slog.Error("reply generation failed", "conversation", j.Conversation.ID, "attempt", j.Attempts, "error", err)
 		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+		if errors.Is(err, provider.ErrBusy) {
+			_ = w.Repo.deferBusy(cleanup, j)
+			return
+		}
 		if e := w.Repo.Failed(cleanup, j); e != nil {
 			slog.Error("reply retry scheduling failed", "error", e)
 		}

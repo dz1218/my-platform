@@ -4,6 +4,7 @@ import (
 	"companion/server/internal/ai/provider"
 	"companion/server/pkg/database"
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/jackc/pgx/v5"
 	"log/slog"
@@ -37,6 +38,9 @@ func (r Repository) SchedulePlan(ctx context.Context, j Job, plan provider.Reply
 	}
 	if !s.AutomationEnabled || s.Version != version || s.TurnVersion != turnVersion || (s.OwnerType == "HUMAN" && s.Mode == "NEVER") {
 		return cancelAndCommit(ctx, tx, j.Conversation.ID)
+	}
+	if err = validateExecution(ctx, tx, j.Run, plan.Execution); err != nil {
+		return err
 	}
 	if j.Kind == "PROACTIVE" {
 		if j.OpportunityID == nil {
@@ -84,6 +88,12 @@ func (r Repository) SchedulePlan(ctx context.Context, j Job, plan provider.Reply
 	if err != nil {
 		return err
 	}
+	if plan.Execution != nil {
+		metadata, _ := json.Marshal(plan.Execution)
+		if _, err = tx.Exec(ctx, `UPDATE reply_batches SET agent_execution=$2::jsonb WHERE id=$1`, batch, metadata); err != nil {
+			return err
+		}
+	}
 	for n, m := range plan.Messages {
 		due = due.Add(time.Duration(m.DelayMs) * time.Millisecond)
 		_, err = tx.Exec(ctx, `INSERT INTO reply_items(id,batch_id,item_index,client_item_key,content,due_at) VALUES($1,$2,$3,$4,$5,$6)`, database.ID(), batch, n, m.ClientItemKey, m.Content, due)
@@ -103,7 +113,11 @@ func (r Repository) SchedulePlan(ctx context.Context, j Job, plan provider.Reply
 		chars += utf8.RuneCountInString(m.Content)
 		delay += m.DelayMs
 	}
-	slog.Info("reply planned", "promptVersion", plan.PromptVersion, "policyVersion", j.Policy.Version,
+	runID := ""
+	if plan.Execution != nil {
+		runID = plan.Execution.RunID
+	}
+	slog.Info("reply planned", "runId", runID, "batchId", batch, "promptVersion", plan.PromptVersion, "policyVersion", j.Policy.Version,
 		"bubbleCount", len(plan.Messages), "characterCount", chars, "pacingDelayMs", delay)
 	return nil
 }
@@ -149,13 +163,36 @@ func (r Repository) Deliver(ctx context.Context) (bool, error) {
 	var itemDue time.Time
 	var opportunity *string
 	var index int
-	err = tx.QueryRow(ctx, `SELECT b.id,i.id,i.content,i.item_index,b.kind,b.opportunity_id,b.prompt_version,i.due_at FROM reply_batches b JOIN reply_items i ON i.batch_id=b.id AND i.item_index=b.next_item_index
- WHERE b.conversation_id=$1 AND b.job_version=$2 AND b.status='PENDING' AND i.status='PENDING' FOR UPDATE OF b,i`, id, version).Scan(&batch, &item, &content, &index, &kind, &opportunity, &promptVersion, &itemDue)
+	var metadata []byte
+	var execution provider.Execution
+	err = tx.QueryRow(ctx, `SELECT b.id,i.id,i.content,i.item_index,b.kind,b.opportunity_id,b.prompt_version,i.due_at,b.agent_execution FROM reply_batches b JOIN reply_items i ON i.batch_id=b.id AND i.item_index=b.next_item_index
+ WHERE b.conversation_id=$1 AND b.job_version=$2 AND b.status='PENDING' AND i.status='PENDING' FOR UPDATE OF b,i`, id, version).Scan(&batch, &item, &content, &index, &kind, &opportunity, &promptVersion, &itemDue, &metadata)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
+	}
+	if len(metadata) > 0 {
+		if json.Unmarshal(metadata, &execution) != nil {
+			return false, errors.New("invalid persisted execution")
+		}
+		var revision int64
+		if err = tx.QueryRow(ctx, `SELECT memory_revision FROM conversations WHERE id=$1`, id).Scan(&revision); err != nil {
+			return false, err
+		}
+		if revision != execution.MemoryRevision {
+			return false, cancelAndCommit(ctx, tx, id)
+		}
+		for _, ref := range execution.Evidence {
+			var valid bool
+			if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM agent_documents d JOIN conversations c ON c.id=d.conversation_id WHERE c.id=$1 AND d.id=$2 AND d.source_version=$3 AND d.content_hash=$4 AND `+validDocumentSQL+`)`, id, ref.ID, ref.Version, ref.Hash).Scan(&valid); err != nil {
+				return false, err
+			}
+			if !valid {
+				return false, cancelAndCommit(ctx, tx, id)
+			}
+		}
 	}
 	if kind == "PROACTIVE" {
 		if opportunity == nil {
@@ -217,7 +254,7 @@ func (r Repository) Deliver(ctx context.Context) (bool, error) {
 	if err = tx.Commit(ctx); err != nil {
 		return false, err
 	}
-	slog.Info("reply item delivered", "promptVersion", promptVersion, "itemIndex", index,
+	slog.Info("reply item delivered", "runId", execution.RunID, "batchId", batch, "promptVersion", promptVersion, "itemIndex", index,
 		"characterCount", utf8.RuneCountInString(content), "deliveryLagMs", max(int64(0), time.Since(itemDue).Milliseconds()))
 	return true, nil
 }

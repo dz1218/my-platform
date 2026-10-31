@@ -46,6 +46,9 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 			return
 		}
 		limit := int64(32 * 1024)
+		if strings.HasPrefix(c.Request.URL.Path, "/internal/companion/") {
+			limit = 64 * 1024
+		}
 		if c.Request.URL.Path == livekit.WebhookPath {
 			limit = 1024 * 1024
 		}
@@ -72,6 +75,7 @@ func New(cfg config.Config, db *pgxpool.Pool, cache *redis.Client, policies beha
 	messages := conversation.Repository{DB: db}
 	mh := matching.Handler{Service: matching.Service{Repo: matching.Repository{DB: db}, Identities: ids}}
 	chat := delivery.Service{Repo: delivery.Repository{DB: db}, Messages: messages, Policies: policies}
+	agentRoutes(r, cfg.AgentToken, chat.Repo)
 	api := r.Group("/api/v1")
 	livekit.Register(api, cfg.LiveKit, ah, cache)
 	api.POST("/auth/code", rateLimit(cache, "sms-send", 5, false), ah.SendCode)

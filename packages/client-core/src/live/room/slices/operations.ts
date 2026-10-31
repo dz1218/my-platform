@@ -1,4 +1,4 @@
-import { RoomConnectionState as ConnectionState, type ApiRoomItem, type LiveRoomDetail, type LiveRoomJoin, type LiveRoomClose, type LiveUpdatesState } from '@my-platform/shared';
+import { RoomConnectionState as ConnectionState, type ApiRoomItem, type LiveRoomDetail, type LiveRoomJoin, type LiveRoomClose, type LiveUpdatesState, type LiveAssistantState } from '@my-platform/shared';
 import type { QueryClient } from '@tanstack/query-core';
 import type { StateCreator } from 'zustand/vanilla';
 import type { LiveRoomStore } from '../store';
@@ -16,10 +16,12 @@ export type RoomOperations = {
   refreshRoom: () => Promise<void>;
   setUpdatesState: (state: LiveUpdatesState) => void;
   dispatchAgent: () => Promise<void>;
+  removeAgent: () => Promise<void>;
   toggleMedia: (device: Device, control: () => Promise<MediaSnapshot | null>) => Promise<void>;
 };
 export type RoomServices = {
-  dispatch: () => Promise<void>;
+  dispatch: () => Promise<LiveAssistantState | void>;
+  removeAssistant?: (id: string) => Promise<LiveAssistantState>;
   mediaError: MediaErrorMessage;
   session?: { join: (name: string, attemptId: string) => Promise<LiveRoomJoin>; createAttemptId: () => string; canRetryBusy?: () => boolean };
   close?: () => Promise<LiveRoomClose | void>;
@@ -27,7 +29,33 @@ export type RoomServices = {
   refresh?: () => Promise<LiveRoomDetail>;
   query?: { client: QueryClient; apiBaseUrl: string; roomId: string };
 };
-export const createRoomOperations = (services: RoomServices): StateCreator<LiveRoomStore, [['zustand/subscribeWithSelector', never]], [], RoomOperations> => (set, get) => ({
+export const createRoomOperations = (services: RoomServices): StateCreator<LiveRoomStore, [['zustand/subscribeWithSelector', never]], [], RoomOperations> => (set, get) => {
+  const manageAssistant = async (remove: boolean) => {
+    const s = get();
+    if (s.role !== '主播' || s.connectionState !== ConnectionState.Connected || s.isDispatchingAgent || s.isClosing) return;
+    const query = services.query;
+    const key = query ? ['live-room', query.apiBaseUrl, query.roomId] : [];
+    const assistant = query?.client.getQueryData<LiveRoomDetail>(key)?.assistant;
+    const id = assistant?.dispatchId || assistant?.sessionId;
+    if (remove ? !id || !services.removeAssistant || !['starting', 'online', 'stopping'].includes(assistant?.status || '') : ['starting', 'online', 'stopping'].includes(assistant?.status || '')) return;
+    const version = s.sessionVersion;
+    set({ isDispatchingAgent: true, error: null });
+    await query?.client.cancelQueries({ queryKey: key, exact: true });
+    const revision = query?.client.getQueryState(key)?.dataUpdateCount;
+    try {
+      const result = remove ? await services.removeAssistant!(id!) : await services.dispatch();
+      if (get().sessionVersion === version && result && query && query.client.getQueryState(key)?.dataUpdateCount === revision) {
+        query.client.setQueryData<LiveRoomDetail>(key, current => current ? { ...current, assistant: result } : current);
+      }
+    } catch (error) {
+      if (get().sessionVersion === version) set({ error: error instanceof Error ? error.message : 'AI 助手操作失败，请重试' });
+      // A create can succeed upstream even when its HTTP response is lost.
+      if (query) void query.client.invalidateQueries({ queryKey: key, exact: true });
+    } finally {
+      if (get().sessionVersion === version) set({ isDispatchingAgent: false });
+    }
+  };
+  return ({
   refreshRoom: async () => {
     if (!services.refresh || !services.query || get().isRefreshing || get().isClosing) return;
     const { client, apiBaseUrl, roomId } = services.query;
@@ -139,20 +167,8 @@ export const createRoomOperations = (services: RoomServices): StateCreator<LiveR
       if (!awaitingLobby) set({ isClosing: false });
     }
   },
-  dispatchAgent: async () => {
-    const s = get();
-    if (s.role !== '主播' || s.connectionState !== ConnectionState.Connected || s.isDispatchingAgent || s.agentRequested || s.participants.some(p => p.role === 'AI助手')) return;
-    const version = s.sessionVersion;
-    set({ isDispatchingAgent: true, error: null });
-    try {
-      await services.dispatch();
-      if (get().sessionVersion === version) set({ agentRequested: true });
-    } catch (error) {
-      if (get().sessionVersion === version) set({ error: error instanceof Error ? error.message : '派发 AI 助手失败' });
-    } finally {
-      if (get().sessionVersion === version) set({ isDispatchingAgent: false });
-    }
-  },
+  dispatchAgent: () => manageAssistant(false),
+  removeAgent: () => manageAssistant(true),
   toggleMedia: async (device, control) => {
     const s = get();
     if (s.role !== '主播' || s.connectionState !== ConnectionState.Connected || s.mediaBusy) return;
@@ -168,3 +184,4 @@ export const createRoomOperations = (services: RoomServices): StateCreator<LiveR
     }
   },
 });
+};

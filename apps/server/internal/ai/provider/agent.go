@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +19,8 @@ type Agent struct {
 	URL, Token string
 	Client     *http.Client
 }
+
+var ErrBusy = errors.New("agent_busy")
 
 func NewAgent(url, token string) *Agent {
 	return &Agent{URL: strings.TrimRight(url, "/"), Token: token, Client: &http.Client{Timeout: 95 * time.Second}}
@@ -40,6 +43,14 @@ func (a *Agent) Generate(ctx context.Context, input ChatRequest) (Reply, error) 
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
+		if res.StatusCode == 503 {
+			var failure struct {
+				Error string `json:"error"`
+			}
+			if json.NewDecoder(io.LimitReader(res.Body, 1024)).Decode(&failure) == nil && failure.Error == "busy" {
+				return Reply{}, ErrBusy
+			}
+		}
 		return Reply{}, fmt.Errorf("agent returned HTTP %d", res.StatusCode)
 	}
 	if !strings.HasPrefix(res.Header.Get("Content-Type"), "text/event-stream") {
@@ -56,6 +67,12 @@ func readReply(body io.Reader) (Reply, error) {
 		line := scanner.Text()
 		if line == "" {
 			if event == "error" {
+				var failure struct {
+					Error string `json:"error"`
+				}
+				if json.Unmarshal([]byte(data), &failure) == nil && failure.Error == "run_busy" {
+					return Reply{}, ErrBusy
+				}
 				return Reply{}, fmt.Errorf("agent generation failed")
 			}
 			if event == "reply" {

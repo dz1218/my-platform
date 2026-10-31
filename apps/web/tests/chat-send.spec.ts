@@ -34,6 +34,8 @@ for (const width of [1440, 390]) {
     expect(commands[2].requestId).toBe(commands[1].requestId);
     socket!.send(JSON.stringify({ type: 'accepted', requestId: commands[2].requestId, message: message(1) }));
     await expect(page.getByText('发送中', { exact: true })).toHaveCount(0);
+    // Accepting a user message does not expose generation/queue state or fake typing.
+    await expect(page.getByText(/正在回复|正在输入|正在思考|生成中/)).toHaveCount(0);
     await expect(page.getByRole('log').getByText('一般', { exact: true })).toHaveCount(1);
     await expect(page.getByRole('log').getByText('你呢', { exact: true })).toHaveCount(1);
   });

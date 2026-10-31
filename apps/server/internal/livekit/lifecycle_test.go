@@ -20,22 +20,26 @@ import (
 
 type lifecycleFixture struct {
 	sync.Mutex
-	rooms              map[string]room
-	people             map[string][]voiceParticipant
-	deletes            int
-	failParticipants   bool
-	failDelete         bool
-	deleteResponseLost bool
-	globalStale        bool
-	failList           bool
-	rpcCount           int
-	h                  Handler
-	router             *gin.Engine
+	dispatches           map[string]Dispatch
+	dispatchCreates      int
+	failDispatchDelete   bool
+	lostDispatchResponse bool
+	rooms                map[string]room
+	people               map[string][]voiceParticipant
+	deletes              int
+	failParticipants     bool
+	failDelete           bool
+	deleteResponseLost   bool
+	globalStale          bool
+	failList             bool
+	rpcCount             int
+	h                    Handler
+	router               *gin.Engine
 }
 
 func newLifecycleFixture(t *testing.T) *lifecycleFixture {
 	t.Helper()
-	f := &lifecycleFixture{rooms: map[string]room{}, people: map[string][]voiceParticipant{}}
+	f := &lifecycleFixture{dispatches: map[string]Dispatch{}, rooms: map[string]room{}, people: map[string][]voiceParticipant{}}
 	f.rooms["room-host"] = room{SID: "RM_host", Name: "room-host", Metadata: `{"ownerId":"test-user","title":"主播房间"}`}
 	f.rooms["room-other"] = room{SID: "RM_other", Name: "room-other", Metadata: `{"ownerId":"other-user","title":"别人的房间"}`}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -44,8 +48,8 @@ func newLifecycleFixture(t *testing.T) *lifecycleFixture {
 		f.rpcCount++
 		w.Header().Set("Content-Type", "application/json")
 		var in struct {
-			Names                          []string
-			Room, Identity, Name, Metadata string
+			Names                                                 []string
+			Room, Identity, Name, Metadata, AgentName, DispatchID string
 		}
 		_ = json.NewDecoder(r.Body).Decode(&in)
 		switch {
@@ -76,6 +80,11 @@ func newLifecycleFixture(t *testing.T) *lifecycleFixture {
 			if !f.failDelete {
 				delete(f.rooms, in.Room)
 				delete(f.people, in.Room)
+				for id, dispatch := range f.dispatches {
+					if dispatch.Room == in.Room {
+						delete(f.dispatches, id)
+					}
+				}
 			}
 			if f.failDelete || f.deleteResponseLost {
 				w.WriteHeader(503)
@@ -90,6 +99,30 @@ func newLifecycleFixture(t *testing.T) *lifecycleFixture {
 				}
 			}
 			f.people[in.Room] = remaining
+			_, _ = w.Write([]byte(`{}`))
+		case strings.HasSuffix(r.URL.Path, "/CreateDispatch"):
+			f.dispatchCreates++
+			d := Dispatch{ID: fmt.Sprintf("AD_%d", f.dispatchCreates), Room: in.Room, AgentName: in.AgentName, Metadata: in.Metadata}
+			f.dispatches[d.ID] = d
+			if f.lostDispatchResponse {
+				w.WriteHeader(503)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(d)
+		case strings.HasSuffix(r.URL.Path, "/ListDispatch"):
+			items := []Dispatch{}
+			for _, d := range f.dispatches {
+				if d.Room == in.Room {
+					items = append(items, d)
+				}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"agentDispatches": items})
+		case strings.HasSuffix(r.URL.Path, "/DeleteDispatch"):
+			if f.failDispatchDelete {
+				w.WriteHeader(503)
+				return
+			}
+			delete(f.dispatches, in.DispatchID)
 			_, _ = w.Write([]byte(`{}`))
 		case strings.HasSuffix(r.URL.Path, "/CreateRoom"):
 			item := room{SID: "RM_" + in.Name, Name: in.Name, Metadata: in.Metadata}

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Usage, type Model } from "@openai/agents";
 import { createCompanion } from "../agents/companion.js";
+import { promptVersion } from "../prompts/companion-v7.js";
 import { recentReplyShape } from "../agents/reply-shape.js";
 import { replyInput, type ReplyInput } from "../schemas/plan.js";
 
@@ -55,7 +56,7 @@ for (const structured of [true, false]) {
         { role: "assistant", source: "HUMAN", content: "真人上下文" }, user("新消息"),
       ] }), new AbortController().signal);
       assert.equal(calls, 1);
-      assert.equal(result.promptVersion, "companion-v5");
+      assert.equal(result.promptVersion, promptVersion);
       assert.equal(result.messages.length, count);
       assert.deepEqual(result.messages.map(m => m.content), contents);
     }
@@ -82,4 +83,42 @@ test("context updates use separate instructions and no reply shape while retaini
   const result = await createCompanion(model)(replyInput.parse({ kind: "CONTEXT_UPDATE", messages: [{ ...user("喜欢安静"), id: "12" }] }), new AbortController().signal);
   assert.deepEqual(result.memoryProposals, [proposal]);
   assert.deepEqual(result.messages, []);
+});
+
+test("JSON-mode blank and malformed candidates get one repair without entering chat history", async () => {
+  for (const bad of ["  \n ", '{"action":"REPLY","messages":["invalid-unsent-candidate"]}']) {
+    let calls = 0;
+    const model: Model = {
+      async getResponse(request) {
+        const input = JSON.stringify(request.input);
+        calls++;
+        assert.doesNotMatch(input, /invalid-unsent-candidate/);
+        if (calls === 2) assert.match(input, /repair/);
+        return { usage: new Usage(), output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: calls === 1 ? bad : JSON.stringify({ action: "REPLY", intent: "chat", messages: [{ clientItemKey: "1", content: "今天是万圣夜", delayMs: 0 }], summary: null, memoryProposals: [] }) }] }] };
+      },
+      async *getStreamedResponse() { throw new Error("unused"); },
+    };
+    const result = await createCompanion(model, false)(replyInput.parse({ messages: [user("今天是什么节日")] }), new AbortController().signal);
+    assert.equal(calls, 2);
+    assert.equal(result.modelCalls, 2);
+    assert.equal(result.messages[0].content, "今天是万圣夜");
+  }
+});
+
+test("repair is bounded and cancellation or provider failures never start another call", async () => {
+  for (const mode of ["invalid", "cancel", "provider"] as const) {
+    const controller = new AbortController();
+    let calls = 0;
+    const model: Model = {
+      async getResponse() {
+        calls++;
+        if (mode === "provider") throw new Error("provider unavailable");
+        if (mode === "cancel") controller.abort();
+        return { usage: new Usage(), output: [{ type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: " " }] }] };
+      },
+      async *getStreamedResponse() { throw new Error("unused"); },
+    };
+    await assert.rejects(createCompanion(model, false)(replyInput.parse({ messages: [user("你好")] }), controller.signal));
+    assert.equal(calls, mode === "invalid" ? 2 : 1);
+  }
 });

@@ -5,20 +5,30 @@ import (
 	"companion/server/pkg/database"
 	"companion/server/pkg/response"
 	"context"
+	"errors"
+	"github.com/jackc/pgx/v5"
 	"strings"
 	"time"
 )
 
 type Memory struct {
-	ID              string `json:"id"`
-	Kind            string `json:"kind"`
-	Content         string `json:"content"`
-	SourceMessageID string `json:"sourceMessageId"`
-	Provenance      string `json:"provenance"`
-	Version         int64  `json:"version"`
+	ID              string     `json:"id"`
+	Kind            string     `json:"kind"`
+	Content         string     `json:"content"`
+	SourceMessageID string     `json:"sourceMessageId"`
+	Provenance      string     `json:"provenance"`
+	Version         int64      `json:"version"`
+	Manual          bool       `json:"manual"`
+	FactKey         string     `json:"factKey,omitempty"`
+	Reason          string     `json:"reason,omitempty"`
+	Assertion       string     `json:"assertion"`
+	ValidUntil      *time.Time `json:"validUntil,omitempty"`
 }
 
 func (r Repository) Memories(ctx context.Context, id, actor string) ([]Memory, error) {
+	return r.memoryPage(ctx, id, actor, 0, 500)
+}
+func (r Repository) memoryPage(ctx context.Context, id, actor string, offset, limit int) ([]Memory, error) {
 	var ok bool
 	if err := r.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM conversations WHERE id=$1 AND user_id=$2)`, id, actor).Scan(&ok); err != nil {
 		return nil, err
@@ -26,7 +36,7 @@ func (r Repository) Memories(ctx context.Context, id, actor string) ([]Memory, e
 	if !ok {
 		return nil, forbidden()
 	}
-	rows, err := r.DB.Query(ctx, `SELECT id,kind,content,source_message_id::text,provenance,version FROM conversation_memories WHERE conversation_id=$1 AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 100`, id)
+	rows, err := r.DB.Query(ctx, `SELECT id,kind,content,source_message_id::text,provenance,version,manual,fact_key,valid_until,assertion FROM conversation_memories WHERE conversation_id=$1 AND deleted_at IS NULL ORDER BY updated_at DESC,id LIMIT $3 OFFSET $2`, id, offset, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +44,7 @@ func (r Repository) Memories(ctx context.Context, id, actor string) ([]Memory, e
 	items := []Memory{}
 	for rows.Next() {
 		var m Memory
-		if err = rows.Scan(&m.ID, &m.Kind, &m.Content, &m.SourceMessageID, &m.Provenance, &m.Version); err != nil {
+		if err = rows.Scan(&m.ID, &m.Kind, &m.Content, &m.SourceMessageID, &m.Provenance, &m.Version, &m.Manual, &m.FactKey, &m.ValidUntil, &m.Assertion); err != nil {
 			return nil, err
 		}
 		items = append(items, m)
@@ -54,35 +64,53 @@ func (r Repository) SaveMemory(ctx context.Context, id, actor string, m Memory, 
 		return err
 	}
 	var allowed bool
-	if err = tx.QueryRow(ctx, `SELECT user_id=$2 AND (memory_opt_in OR $3) FROM conversations WHERE id=$1`, id, actor, remove).Scan(&allowed); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT user_id=$2 AND ((memory_opt_in AND memory_consent_version=2) OR $3) FROM conversations c WHERE id=$1 AND `+conversation.AccessSQL, id, actor, remove).Scan(&allowed); err != nil {
 		return err
 	}
 	if !allowed {
 		return forbidden()
 	}
 	if remove {
-		// Rejecting a pending proposal creates a tombstone as well.
-		if _, err = tx.Exec(ctx, `INSERT INTO conversation_memories(id,conversation_id,source_message_id,kind,content,provenance,deleted_at) SELECT id,conversation_id,source_message_id,kind,'[deleted]',provenance,now() FROM memory_proposals WHERE id=$1 AND conversation_id=$2 ON CONFLICT DO NOTHING`, m.ID, id); err != nil {
+		var current int64
+		if err = tx.QueryRow(ctx, `SELECT version FROM conversation_memories WHERE id=$1 AND conversation_id=$2 AND deleted_at IS NULL`, m.ID, id).Scan(&current); err != nil {
 			return err
 		}
-		if _, err = tx.Exec(ctx, `DELETE FROM memory_proposals WHERE id=$1 AND conversation_id=$2`, m.ID, id); err != nil {
+		if m.Version != current {
+			return memoryConflict()
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO agent_forgotten_sources SELECT conversation_id,source_message_id FROM conversation_memories WHERE id=$1 AND conversation_id=$2 ON CONFLICT DO NOTHING`, m.ID, id); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `UPDATE conversation_memories SET deleted_at=now(),content='[deleted]',version=version+1 WHERE id=$1 AND conversation_id=$2 AND deleted_at IS NULL`, m.ID, id)
 	} else if m.ID != "" {
-		tag, e := tx.Exec(ctx, `UPDATE conversation_memories SET content=$3,kind=$4,version=version+1,updated_at=now() WHERE id=$1 AND conversation_id=$2 AND version=$5 AND deleted_at IS NULL`, m.ID, id, m.Content, m.Kind, m.Version)
+		if containsCredential(m.Content) {
+			return response.BadRequest("不能将密码、验证码或访问凭据保存为记忆")
+		}
+		tag, e := tx.Exec(ctx, `UPDATE conversation_memories SET content=$3,kind=$4,manual=true,version=version+1,updated_at=now() WHERE id=$1 AND conversation_id=$2 AND version=$5 AND deleted_at IS NULL`, m.ID, id, m.Content, m.Kind, m.Version)
 		err = e
 		if err == nil && tag.RowsAffected() != 1 {
 			return &response.Error{Status: 409, Code: "version_conflict", Message: "记忆已更新或删除"}
 		}
+		if err == nil {
+			_, err = tx.Exec(ctx, `INSERT INTO agent_forgotten_sources SELECT conversation_id,source_message_id FROM conversation_memories WHERE id=$1 AND conversation_id=$2 ON CONFLICT DO NOTHING`, m.ID, id)
+		}
 	} else {
+		if containsCredential(m.Content) {
+			return response.BadRequest("不能将密码、验证码或访问凭据保存为记忆")
+		}
 		var provenance string
-		err = tx.QueryRow(ctx, `SELECT CASE WHEN sender_type='user' THEN 'USER_ASSERTED' WHEN driver_type='human' THEN 'HUMAN_AUTHORED' ELSE 'AI_FICTIONAL' END FROM messages WHERE conversation_id=$1 AND id::text=$2`, id, m.SourceMessageID).Scan(&provenance)
+		err = tx.QueryRow(ctx, `SELECT CASE WHEN sender_type='user' THEN 'USER_ASSERTED' WHEN driver_type='human' THEN 'HUMAN_AUTHORED' ELSE 'AI_FICTIONAL' END FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.id=$1 AND m.id::text=$2 AND m.id>c.memory_forget_through AND NOT EXISTS(SELECT 1 FROM agent_forgotten_sources f WHERE f.conversation_id=c.id AND f.source_message_id=m.id)`, id, m.SourceMessageID).Scan(&provenance)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return memoryConflict()
+		}
 		if err != nil {
 			return err
 		}
 		// Tombstones and uniqueness prevent a deleted memory from being recreated by stale proposals.
-		_, err = tx.Exec(ctx, `INSERT INTO conversation_memories(id,conversation_id,kind,content,source_message_id,provenance) VALUES($1,$2,$3,$4,$5::bigint,$6) ON CONFLICT DO NOTHING`, database.ID(), id, m.Kind, m.Content, m.SourceMessageID, provenance)
+		if provenance != "USER_ASSERTED" {
+			return response.BadRequest("记忆必须来自自己的消息")
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO conversation_memories(id,conversation_id,kind,content,source_message_id,provenance,manual) VALUES($1,$2,$3,$4,$5::bigint,$6,true) ON CONFLICT DO NOTHING`, database.ID(), id, m.Kind, m.Content, m.SourceMessageID, provenance)
 	}
 	if err != nil {
 		return err
@@ -90,14 +118,7 @@ func (r Repository) SaveMemory(ctx context.Context, id, actor string, m Memory, 
 	if _, err = tx.Exec(ctx, `DELETE FROM memory_proposals p WHERE p.conversation_id=$1 AND EXISTS(SELECT 1 FROM conversation_memories m WHERE m.conversation_id=p.conversation_id AND m.source_message_id=p.source_message_id AND m.kind=p.kind)`, id); err != nil {
 		return err
 	}
-	// Cancel candidates which might still contain the old/deleted memory.
-	if _, err = tx.Exec(ctx, `UPDATE conversations SET settings_version=settings_version+1,summary='' WHERE id=$1`, id); err != nil {
-		return err
-	}
-	if err = cancelJobs(ctx, tx, id); err != nil {
-		return err
-	}
-	if err = refreshPendingOpen(ctx, tx, id); err != nil {
+	if err = invalidateMemory(ctx, tx, id); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -190,7 +211,10 @@ func (r Repository) SaveDailyState(ctx context.Context, id, actor string, d Dail
 }
 
 func (r Repository) MemoryProposals(ctx context.Context, id, actor string) ([]Memory, error) {
-	rows, err := r.DB.Query(ctx, `SELECT p.id,p.kind,p.content,p.source_message_id::text,p.provenance FROM memory_proposals p JOIN conversations c ON c.id=p.conversation_id WHERE c.id=$1 AND c.user_id=$2 AND c.memory_opt_in ORDER BY p.source_message_id DESC LIMIT 20`, id, actor)
+	return r.proposalPage(ctx, id, actor, 0, 100)
+}
+func (r Repository) proposalPage(ctx context.Context, id, actor string, offset, limit int) ([]Memory, error) {
+	rows, err := r.DB.Query(ctx, `SELECT p.id,p.kind,p.content,p.source_message_id::text,p.provenance,p.version,p.fact_key,p.reason,p.valid_until,p.assertion FROM memory_proposals p JOIN conversations c ON c.id=p.conversation_id WHERE c.id=$1 AND c.user_id=$2 ORDER BY p.source_message_id DESC,p.id LIMIT $4 OFFSET $3`, id, actor, offset, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -198,10 +222,43 @@ func (r Repository) MemoryProposals(ctx context.Context, id, actor string) ([]Me
 	out := []Memory{}
 	for rows.Next() {
 		var m Memory
-		if err = rows.Scan(&m.ID, &m.Kind, &m.Content, &m.SourceMessageID, &m.Provenance); err != nil {
+		if err = rows.Scan(&m.ID, &m.Kind, &m.Content, &m.SourceMessageID, &m.Provenance, &m.Version, &m.FactKey, &m.Reason, &m.ValidUntil, &m.Assertion); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+type MemoryCollection struct {
+	Items      []Memory `json:"items"`
+	Proposals  []Memory `json:"proposals"`
+	NextCursor *int     `json:"nextCursor,omitempty"`
+}
+
+func (r Repository) MemoryCollection(ctx context.Context, id, actor string, offset int) (MemoryCollection, error) {
+	var page MemoryCollection
+	if offset < 0 || offset > 1000000 {
+		return page, response.BadRequest("无效的记忆分页")
+	}
+	var err error
+	page.Items, err = r.memoryPage(ctx, id, actor, offset, 51)
+	if err != nil {
+		return page, err
+	}
+	page.Proposals, err = r.proposalPage(ctx, id, actor, offset, 51)
+	if err != nil {
+		return page, err
+	}
+	if len(page.Items) > 50 || len(page.Proposals) > 50 {
+		next := offset + 50
+		page.NextCursor = &next
+	}
+	if len(page.Items) > 50 {
+		page.Items = page.Items[:50]
+	}
+	if len(page.Proposals) > 50 {
+		page.Proposals = page.Proposals[:50]
+	}
+	return page, nil
 }

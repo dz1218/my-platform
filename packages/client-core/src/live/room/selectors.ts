@@ -20,7 +20,6 @@ export const liveRoomSelectors = {
     refreshError: s.refreshError,
     updatesState: s.updatesState,
     isDispatchingAgent: s.isDispatchingAgent,
-    agentRequested: s.agentRequested,
     voiceToken: s.voiceToken,
     notice: s.notice,
     mediaBusy: s.mediaBusy,

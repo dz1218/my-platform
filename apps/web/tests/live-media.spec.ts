@@ -131,10 +131,11 @@ test('real host/viewer media, viewer rejoin and confirmed host ending', async ({
     let dispatches = 0;
     await page.route(`**/api/v1/rooms/${roomId}/agent/dispatch`, (route) => {
       dispatches++;
-      return route.fulfill({ status: 201, json: { item: { id: 'test-dispatch' } } });
+      return route.fulfill({ status: 201, json: { item: { id: 'test-dispatch' }, assistant: { status: 'starting', dispatchId: 'test-dispatch', sessionId: 'test-session' } } });
     });
     await page.getByRole('button', { name: '呼叫 AI 助手' }).click();
-    await expect(page.getByRole('button', { name: '已呼叫，等待助手加入' })).toBeDisabled();
+    await expect(page.getByText('等待助手加入…', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '取消呼叫', exact: true })).toBeEnabled();
     expect(dispatches).toBe(1);
 
     // A viewer can leave and rejoin without closing the host's room.
@@ -258,13 +259,13 @@ for (const width of [1440, 390]) {
       expect(rooms.rooms[0].sid).toBe(created.sid);
       await page.getByRole('button', { name: '开启摄像头', exact: true }).click();
       await expect(viewer.locator('video')).toHaveCount(1);
-      const back = page.getByRole('button', { name: width < 768 ? '返回直播大厅' : '直播大厅', exact: true });
+      const back = page.getByRole('button', { name: width < 768 ? '返回直播大厅' : '返回大厅', exact: true });
       await back.click();
       await page.getByRole('button', { name: '继续直播', exact: true }).click();
       await expect(page.getByText('已连接', { exact: true })).toBeVisible();
       await back.click();
       await page.screenshot({ path: test.info().outputPath(`return-dialog-${width}.png`), fullPage: true });
-      await page.getByRole('button', { name: '结束直播', exact: true }).click();
+      await page.getByRole('dialog').getByRole('button', { name: '结束直播', exact: true }).click();
       await expect(page).toHaveURL('/');
       await expectEnded(viewer);
     } finally {

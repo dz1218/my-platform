@@ -181,6 +181,7 @@ func proactiveFixture(t *testing.T) (*autopilotFixture, string) {
 	if err := f.repo.SavePreferences(f.ctx, "c", "operator", p, false); err != nil {
 		t.Fatal(err)
 	}
+	enableMemory(t, f, "c", "u")
 	if _, err := f.db.Exec(f.ctx, `UPDATE messages SET created_at=now()-interval '1 day'`); err != nil {
 		t.Fatal(err)
 	}
@@ -279,6 +280,7 @@ func TestV212V214MemoryDeletionAndDailyStateVersions(t *testing.T) {
 	if err := f.repo.SavePreferences(f.ctx, "c", "operator", p, false); err != nil {
 		t.Fatal(err)
 	}
+	enableMemory(t, f, "c", "u")
 	if err := f.repo.SaveMemory(f.ctx, "c", "u", Memory{Kind: "FACT", Content: "明天面试", SourceMessageID: m.ID}, false); err != nil {
 		t.Fatal(err)
 	}
@@ -289,8 +291,8 @@ func TestV212V214MemoryDeletionAndDailyStateVersions(t *testing.T) {
 	if err = f.repo.SaveMemory(f.ctx, "c", "u", items[0], true); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.repo.SaveMemory(f.ctx, "c", "u", Memory{Kind: "FACT", Content: "明天面试", SourceMessageID: m.ID}, false); err != nil {
-		t.Fatal(err)
+	if err = f.repo.SaveMemory(f.ctx, "c", "u", Memory{Kind: "FACT", Content: "明天面试", SourceMessageID: m.ID}, false); err == nil {
+		t.Fatal("forgotten source accepted for a new memory")
 	}
 	builder := aicontext.Builder{Messages: f.service.Messages, Identities: identity.Repository{DB: f.db}}
 	req, err := builder.Build(f.ctx, conversation.Conversation{ID: "c", UserID: "u", IdentityID: "identity_linwan"})
@@ -324,6 +326,7 @@ func TestContextEnrichmentConsentSourcesAndDeletionFence(t *testing.T) {
 	if err := f.repo.SavePreferences(f.ctx, "c", "operator", p, false); err != nil {
 		t.Fatal(err)
 	}
+	enableMemory(t, f, "c", "u")
 	var version int64
 	if err := f.db.QueryRow(f.ctx, `SELECT settings_version FROM conversations WHERE id='c'`).Scan(&version); err != nil {
 		t.Fatal(err)
@@ -343,7 +346,7 @@ func TestContextEnrichmentConsentSourcesAndDeletionFence(t *testing.T) {
 	if err != nil || len(memories) != 0 {
 		t.Fatal("unconfirmed memory persisted", err)
 	}
-	if err = f.repo.SaveMemory(f.ctx, "c", "u", pending[0], true); err != nil {
+	if err = f.repo.ResolveMemory(f.ctx, "c", "u", pending[0].ID, pending[0].Version, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = f.db.Exec(f.ctx, `UPDATE context_jobs SET status='RUNNING' WHERE conversation_id='c'`); err != nil {
@@ -417,7 +420,7 @@ func TestPreferencesRequireInheritedIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	saved, err := f.repo.Preferences(f.ctx, "c", "operator")
-	if err != nil || !saved.MemoryOptIn || !saved.UserOptIn || saved.AllowProactiveAI {
+	if err != nil || saved.MemoryOptIn || !saved.UserOptIn || saved.AllowProactiveAI {
 		t.Fatal("settings endpoint changed the independent proactive policy", saved, err)
 	}
 	p = saved
@@ -426,7 +429,7 @@ func TestPreferencesRequireInheritedIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	saved, err = f.repo.Preferences(f.ctx, "c", "operator")
-	if err != nil || !saved.AllowProactiveAI || !saved.MemoryOptIn || !saved.UserOptIn {
+	if err != nil || !saved.AllowProactiveAI || saved.MemoryOptIn || !saved.UserOptIn {
 		t.Fatal("policy update changed other settings", saved, err)
 	}
 	p = saved
@@ -462,13 +465,14 @@ func TestEnrichmentWorkerUsesDurableJobAndNeverSends(t *testing.T) {
 	if err := f.repo.SavePreferences(f.ctx, "c", "operator", p, false); err != nil {
 		t.Fatal(err)
 	}
+	enableMemory(t, f, "c", "u")
 	calls := 0
 	w := Worker{Repo: f.repo, Builder: aicontext.Builder{Messages: f.service.Messages, Identities: identity.Repository{DB: f.db}}, Model: contextModel(func(_ context.Context, r provider.ChatRequest) (provider.Reply, error) {
 		calls++
 		if r.Kind != "CONTEXT_UPDATE" {
 			t.Error("wrong task kind")
 		}
-		return provider.Reply{Action: "SILENCE", Summary: "用户分享了近况", MemoryProposals: []provider.MemoryProposal{{SourceMessageID: r.Messages[1].ID, Kind: "FACT", Content: "经用户确认后保存"}}}, nil
+		return provider.Reply{Action: "SILENCE", Execution: executionFor(r.Run), Summary: "用户分享了近况", MemoryProposals: []provider.MemoryProposal{{SourceMessageID: r.Messages[1].ID, Kind: "FACT", Content: "经用户确认后保存"}}}, nil
 	})}
 	if err := w.enrich(f.ctx); err != nil {
 		t.Fatal(err)

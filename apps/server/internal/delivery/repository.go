@@ -17,6 +17,7 @@ import (
 
 type Repository struct{ DB *pgxpool.Pool }
 type Job struct {
+	Run           *provider.RunContext
 	Kind          string
 	OpportunityID *string
 	Conversation  conversation.Conversation

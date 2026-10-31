@@ -5,6 +5,31 @@ import type { AddressInfo } from "node:net";
 import { createAgentServer } from "../server.js";
 import { replyErrorCode } from "../reply-error.js";
 
+test("foreground saturation leaves the independent background lane available", async () => {
+  let release!: () => void, entered!: () => void, backgroundEntered!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const foregroundReady = new Promise<void>(resolve => { entered = resolve; });
+  const backgroundReady = new Promise<void>(resolve => { backgroundEntered = resolve; });
+  let active = 0;
+  const server = createAgentServer('test-token', async input => {
+    if (input.kind === 'CONTEXT_UPDATE') backgroundEntered(); else if (++active === 4) entered();
+    await pending;
+    return { action: 'SILENCE', messages: [], promptVersion: 'test' };
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/internal/agent/generate-plan`;
+  const send = (kind = 'TURN_REPLY') => fetch(url, { method: 'POST', headers: { Authorization: 'Bearer test-token' }, body: JSON.stringify({ kind, messages: [{ role: 'system', content: 'identity' }] }), signal: AbortSignal.timeout(5000) });
+  const requests = Array.from({ length: 4 }, () => send());
+  try {
+    await foregroundReady;
+    assert.equal((await send()).status, 503);
+    const background = send('CONTEXT_UPDATE'); requests.push(background); await backgroundReady;
+    assert.equal((await send('CONTEXT_UPDATE')).status, 503);
+    release();
+    for (const response of await Promise.all(requests)) { assert.equal(response.status, 200); await response.text(); }
+  } finally { release(); await Promise.allSettled(requests); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+});
+
 test("reply diagnostics classify failures without logging provider details", () => {
   assert.equal(
     replyErrorCode(new SyntaxError("private output")),

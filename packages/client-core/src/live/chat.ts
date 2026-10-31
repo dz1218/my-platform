@@ -3,7 +3,7 @@ import { createDomainStore } from '../create-store';
 export const liveChatTopic = 'live-chat.v1';
 export const liveChatMaxLength = 500;
 const maxMessages = 200;
-type Author = { identity: string; name: string };
+type Author = { identity: string; name: string; assistant?: boolean };
 export type LiveMessage = Author & { id: string; host: boolean; text: string; time: number; own: boolean };
 export type LiveChatStore = {
   messages: LiveMessage[];
@@ -13,6 +13,7 @@ export type LiveChatStore = {
   unread: number;
   sessionVersion: number;
   setDraft: (draft: string) => void;
+  mentionAssistant: () => void;
   markRead: () => void;
   receive: (message: LiveMessage, unread: boolean) => void;
   receivePayload: (payload: Uint8Array, author: Author, unread: boolean) => void;
@@ -35,6 +36,7 @@ export function createLiveChatStore({ createRequestId, codec, now = Date.now }: 
   return createDomainStore<LiveChatStore>()((set, get) => ({
     ...initialState(), sessionVersion: 0,
     setDraft: draft => set({ draft }),
+    mentionAssistant: () => set(s => /^@AI(?:\s|$)/i.test(s.draft) ? s : s.draft.length > liveChatMaxLength - 4 ? { error: '请为 @AI 预留 4 个字符。' } : { draft: `@AI ${s.draft}`, error: '' }),
     markRead: () => set({ unread: 0 }),
     receive: (message, unread) => set(s => s.messages.some(m => m.id === message.id) ? s : ({
       messages: [...s.messages, message].slice(-maxMessages), unread: s.unread + (unread ? 1 : 0),
@@ -49,12 +51,14 @@ export function createLiveChatStore({ createRequestId, codec, now = Date.now }: 
         bucket = { count: 0, until: time + 10_000 };
         received.set(author.identity, bucket);
       }
-      if (++bucket.count > 20) return;
       try {
         const data: unknown = JSON.parse(codec.decode(payload));
         if (!data || typeof data !== 'object') return;
         const message = data as Record<string, unknown>;
         if (message.v !== 1 || typeof message.id !== 'string' || !message.id || message.id.length > 80 || typeof message.text !== 'string' || !message.text.trim() || message.text.length > liveChatMaxLength) return;
+        // Readiness replay must not consume the sender's burst allowance.
+        if (get().messages.some(item => item.id === `${author.identity}:${message.id}`)) return;
+        if (++bucket.count > 20) return;
         get().receive(makeMessage(author, message.id, message.text.trim(), false), unread);
       } catch {
         // Ignore unrelated or malformed messages from other participants.

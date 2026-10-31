@@ -7,15 +7,19 @@ export function ChatSettings({
   dialogRef,
   identityName,
   children,
+  operator = true,
+  docked = false,
 }: {
   dialogRef: RefObject<HTMLDialogElement | null>;
   identityName: string;
   children: ReactNode;
+  operator?: boolean;
+  docked?: boolean;
 }) {
   useDialogScrollLock(dialogRef);
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (!dialog) return;
+    if (!dialog || !docked) return;
     const compact = window.matchMedia("(max-width: 1099px)");
     const updateLayout = () => {
       if (dialog.open) dialog.close();
@@ -24,7 +28,7 @@ export function ChatSettings({
     updateLayout();
     compact.addEventListener("change", updateLayout);
     return () => compact.removeEventListener("change", updateLayout);
-  }, [dialogRef]);
+  }, [dialogRef, docked]);
 
   return (
     <dialog
@@ -43,7 +47,7 @@ export function ChatSettings({
       <div className="chat-settings-heading">
         <div>
           <h2 id="conversation-settings-title">会话设置</h2>
-          <p>以{identityName}的身份参与对话</p>
+          <p>{operator ? `以${identityName}的身份参与对话` : `管理你与${identityName}的陪伴记忆`}</p>
         </div>
         <button
           type="button"

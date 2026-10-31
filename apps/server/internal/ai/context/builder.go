@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 )
 
 type Builder struct {
@@ -23,18 +24,49 @@ func (b Builder) Build(ctx context.Context, c conversation.Conversation) (provid
 	if err != nil {
 		return provider.ChatRequest{}, err
 	}
-	var summary, stage string
-	if err = b.Messages.DB.QueryRow(ctx, `SELECT CASE WHEN c.memory_opt_in THEN c.summary ELSE '' END,m.status FROM conversations c JOIN matches m ON m.id=c.match_id WHERE c.id=$1`, c.ID).Scan(&summary, &stage); err != nil {
+	var summary, stage, timezone string
+	// Filter only the bounded recent page; the visible transcript is unchanged.
+	ids := []string{}
+	for _, m := range page.Items {
+		ids = append(ids, m.ID)
+	}
+	rows, err := b.Messages.DB.Query(ctx, `SELECT id::text FROM messages WHERE conversation_id=$1 AND id::text=ANY($2::text[]) AND (id<=(SELECT memory_forget_through FROM conversations WHERE id=$1) OR EXISTS(SELECT 1 FROM agent_forgotten_sources f WHERE f.conversation_id=$1 AND f.source_message_id=messages.id))`, c.ID, ids)
+	if err != nil {
+		return provider.ChatRequest{}, err
+	}
+	forgotten := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			break
+		}
+		forgotten[id] = true
+	}
+	if err == nil {
+		err = rows.Err()
+	}
+	rows.Close()
+	if err != nil {
+		return provider.ChatRequest{}, err
+	}
+	filtered := page.Items[:0]
+	for _, m := range page.Items {
+		if !forgotten[m.ID] {
+			filtered = append(filtered, m)
+		}
+	}
+	page.Items = filtered
+	if err = b.Messages.DB.QueryRow(ctx, `SELECT CASE WHEN c.memory_opt_in AND c.memory_consent_version=2 THEN c.summary ELSE '' END,m.status,COALESCE(p.timezone,'Asia/Shanghai') FROM conversations c JOIN matches m ON m.id=c.match_id LEFT JOIN proactive_preferences p ON p.conversation_id=c.id WHERE c.id=$1`, c.ID).Scan(&summary, &stage, &timezone); err != nil {
 		return provider.ChatRequest{}, err
 	}
 	var memories, state []byte
-	if err = b.Messages.DB.QueryRow(ctx, `SELECT COALESCE(jsonb_agg(x),'[]'::jsonb) FROM (SELECT kind,content,provenance FROM conversation_memories WHERE conversation_id=$1 AND deleted_at IS NULL AND (SELECT memory_opt_in FROM conversations WHERE id=$1) ORDER BY updated_at DESC LIMIT 12) x`, c.ID).Scan(&memories); err != nil {
+	if err = b.Messages.DB.QueryRow(ctx, `SELECT COALESCE(jsonb_agg(x),'[]'::jsonb) FROM (SELECT kind,content,provenance,assertion,valid_until FROM conversation_memories WHERE conversation_id=$1 AND deleted_at IS NULL AND (valid_until IS NULL OR valid_until>now()) AND (SELECT memory_opt_in AND memory_consent_version=2 FROM conversations WHERE id=$1) ORDER BY manual DESC,updated_at DESC LIMIT 12) x`, c.ID).Scan(&memories); err != nil {
 		return provider.ChatRequest{}, err
 	}
 	if err = b.Messages.DB.QueryRow(ctx, `SELECT COALESCE((SELECT jsonb_build_object('fictional',true,'activity',current_activity,'mood',mood,'version',version) FROM identity_daily_state WHERE identity_id=$1 AND NOT paused AND expires_at>now()),'null'::jsonb)`, c.IdentityID).Scan(&state); err != nil {
 		return provider.ChatRequest{}, err
 	}
-	return assembleRequest(i, stage, summary, memories, state, page.Items)
+	return assembleRequestAt(i, stage, summary, memories, state, page.Items, time.Now(), timezone)
 }
 
 // Leave room under the Agent's 64 KiB transport limit for scheduling metadata
@@ -42,6 +74,10 @@ func (b Builder) Build(ctx context.Context, c conversation.Conversation) (provid
 const requestBudget = 48 * 1024
 
 func assembleRequest(i identity.Identity, stage, summary string, memories, state json.RawMessage, history []conversation.Message) (provider.ChatRequest, error) {
+	return assembleRequestAt(i, stage, summary, memories, state, history, time.Now(), "Asia/Shanghai")
+}
+
+func assembleRequestAt(i identity.Identity, stage, summary string, memories, state json.RawMessage, history []conversation.Message, now time.Time, timezone string) (provider.ChatRequest, error) {
 	if len(memories) == 0 {
 		memories = json.RawMessage(`[]`)
 	}
@@ -49,6 +85,7 @@ func assembleRequest(i identity.Identity, stage, summary string, memories, state
 		state = json.RawMessage(`null`)
 	}
 	facts := map[string]any{
+		"clock": conversationClock(now, timezone),
 		"identity": map[string]any{
 			"id": i.ID, "name": i.Name, "age": i.Age, "gender": i.Gender,
 			"city": i.City, "background": i.Background,

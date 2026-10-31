@@ -1,3 +1,12 @@
+export type LiveAssistantState = {
+  status: 'idle' | 'starting' | 'online' | 'stopping' | 'failed';
+  sessionId?: string;
+  dispatchId?: string;
+  identity?: string;
+  deadline?: number;
+  error?: string;
+};
+
 export type ApiRoomItem = {
   id: string;
   title: string;
@@ -8,6 +17,7 @@ export type ApiRoomItem = {
 export type LiveRoomSummary = ApiRoomItem;
 
 export type LiveRoomDetail = {
+  assistant?: LiveAssistantState;
   item: ApiRoomItem;
   state: 'open' | 'closing' | 'closed';
   reason?: 'host_left' | 'owner_closed' | 'room_finished';

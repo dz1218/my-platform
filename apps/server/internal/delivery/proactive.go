@@ -96,7 +96,7 @@ func (r Repository) SavePreferences(ctx context.Context, id, actor string, p Pre
 	} else {
 		_, err = tx.Exec(ctx, `UPDATE proactive_preferences SET user_opt_in=$2,timezone=$3,quiet_start=$4,quiet_end=$5,max_batches_per_24h=$6,min_gap_minutes=$7,version=version+1 WHERE conversation_id=$1`, id, p.UserOptIn, p.Timezone, p.QuietStart, p.QuietEnd, p.MaxBatches, p.MinGap)
 		if err == nil {
-			_, err = tx.Exec(ctx, `UPDATE conversations SET automation_enabled=$2,memory_opt_in=$3 WHERE id=$1`, id, p.AutomationEnabled, p.MemoryOptIn)
+			_, err = tx.Exec(ctx, `UPDATE conversations SET automation_enabled=$2 WHERE id=$1`, id, p.AutomationEnabled)
 		}
 	}
 	if err != nil {
@@ -132,7 +132,7 @@ func (r Repository) AddOpportunity(ctx context.Context, id, actor, source, topic
 		return err
 	}
 	var ok bool
-	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM messages m JOIN conversations c ON c.id=m.conversation_id JOIN proactive_preferences p ON p.conversation_id=c.id WHERE c.id=$1 AND c.user_id=$2 AND m.id::text=$3 AND m.sender_type='user' AND p.user_opt_in AND c.memory_opt_in AND c.automation_enabled)`, id, actor, source).Scan(&ok)
+	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM messages m JOIN conversations c ON c.id=m.conversation_id JOIN proactive_preferences p ON p.conversation_id=c.id WHERE c.id=$1 AND c.user_id=$2 AND m.id::text=$3 AND m.sender_type='user' AND p.user_opt_in AND c.memory_opt_in AND c.memory_consent_version=2 AND c.automation_enabled AND m.id>c.memory_forget_through AND NOT EXISTS(SELECT 1 FROM agent_forgotten_sources f WHERE f.conversation_id=c.id AND f.source_message_id=m.id))`, id, actor, source).Scan(&ok)
 	if err != nil {
 		return err
 	}

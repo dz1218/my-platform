@@ -86,7 +86,7 @@ func main() {
 	}))
 	defer rpcProxy.Close()
 	cfg := livekit.Config{URL: strings.Replace(livekitURL, "http", "ws", 1), InternalURL: rpcProxy.URL,
-		APIKey: value("LIVEKIT_TEST_API_KEY", "devkey"), APISecret: value("LIVEKIT_TEST_API_SECRET", "devsecretdevsecretdevsecretdevsec")}
+		AgentName: value("LIVEKIT_TEST_AGENT_NAME", "room-assistant-e2e"), APIKey: value("LIVEKIT_TEST_API_KEY", "devkey"), APISecret: value("LIVEKIT_TEST_API_SECRET", "devsecretdevsecretdevsecretdevsec")}
 	authentication := auth.Handler{Service: auth.Service{VersionLookup: func(context.Context, string) (int64, error) { return 0, nil }, Secret: "voice-browser-fixture-only"}}
 	hostToken, err := authentication.Service.Token("live-test-host")
 	if err != nil {

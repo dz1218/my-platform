@@ -308,4 +308,4 @@ server.on('upgrade', (request, socket, head) => {
     snapshot(client);
   });
 });
-server.listen(18181, '127.0.0.1');
+server.listen(Number(process.env.FIXTURE_API_PORT || 18181), '127.0.0.1');

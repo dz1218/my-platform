@@ -16,6 +16,12 @@ export default defineConfig({
       command: 'go run ./tests/livevoice', cwd: '../server', url: 'http://127.0.0.1:18182/health', timeout: 120_000,
       env: { GOCACHE: process.env.GOCACHE || '/tmp/my-platform-go-cache' },
     }] : []),
+    ...(process.env.ROOM_ASSISTANT_INTEGRATION === '1' ? [
+      { command: 'node --import tsx src/tests/fixtures/room-model.ts', cwd: '../agent', url: 'http://127.0.0.1:18183/health' },
+      { command: 'node --import tsx src/room-main.ts dev', cwd: '../agent', url: 'http://127.0.0.1:18184/', timeout: 120_000,
+        env: { LIVEKIT_URL: process.env.LIVEKIT_TEST_URL || 'ws://127.0.0.1:7880', LIVEKIT_INTERNAL_URL: process.env.LIVEKIT_TEST_URL || 'ws://127.0.0.1:7880', LIVEKIT_API_KEY: process.env.LIVEKIT_TEST_API_KEY || 'devkey', LIVEKIT_API_SECRET: process.env.LIVEKIT_TEST_API_SECRET || 'devsecretdevsecretdevsecretdevsec', LIVEKIT_AGENT_NAME: 'room-assistant-e2e', ROOM_AGENT_PORT: '18184', ROOM_API_URL: 'http://127.0.0.1:18182', LLM_BASE_URL: 'http://127.0.0.1:18183/v1', LLM_API_KEY: 'local-fixture', LLM_MODEL: 'room-fixture' },
+      },
+    ] : []),
     { command: 'node tests/fixtures/api.mjs', url: 'http://127.0.0.1:18181/health' },
     {
       command: 'pnpm exec next dev --hostname 127.0.0.1 --port 3012',

@@ -20,6 +20,12 @@ export function replyErrorCode(error: unknown): string {
     return "generation_timeout";
   if (e.name === "APIConnectionError") return "provider_connection_failed";
   switch (e.message) {
+    case "run_busy":
+    case "stale_agent_run":
+    case "execution_budget_exceeded":
+    case "invalid_model_plan":
+    case "checkpoint_input_changed":
+      return e.message;
     case "Incomplete model response":
       return "incomplete_model_response";
     case "Unexpected tool call":

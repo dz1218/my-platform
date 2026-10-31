@@ -40,6 +40,7 @@ type hostAdmission struct {
 }
 
 type roomLifecycle struct {
+	Assistant         AssistantState `json:"assistant"`
 	ID                string         `json:"id"`
 	SID               string         `json:"sid"`
 	SessionVersion    int64          `json:"sessionVersion"`
@@ -121,6 +122,9 @@ func (h Handler) saveLifecycle(ctx context.Context, record *roomLifecycle) error
 	}
 	if record.State == "open" && record.ReconnectDeadline > h.clock().UnixMilli() && record.CheckAt > record.ReconnectDeadline {
 		record.CheckAt = record.ReconnectDeadline
+	}
+	if record.State == "open" && record.Assistant.Deadline > 0 && (record.Assistant.Status == "starting" || record.Assistant.Status == "stopping") && record.CheckAt > record.Assistant.Deadline {
+		record.CheckAt = record.Assistant.Deadline
 	}
 	data, err := json.Marshal(record)
 	if err != nil {
@@ -435,6 +439,10 @@ func (h Handler) reconcileRoomLocked(ctx context.Context, event RoomLifecycleEve
 	if err != nil {
 		return err
 	}
+	if err := h.reconcileAssistant(ctx, record, people); err != nil {
+		// Assistant cleanup must never block host recovery or closing the room.
+		slog.Warn("room assistant reconciliation failed", "room", record.ID, "error", err)
+	}
 	// ListRooms aggregates can lag the event that triggered this reconciliation.
 	// Participant state/tracks are the same live facts used for host admission.
 	record.Viewers, record.Status = 0, "准备中"
@@ -551,6 +559,7 @@ func (h Handler) finishClosedRoom(ctx context.Context, record *roomLifecycle, re
 		record.Reason = reason
 	}
 	record.State, record.Host = "closed", nil
+	record.Assistant = AssistantState{Status: "idle"}
 	record.RetryAt, record.Retries = 0, 0
 	if record.ClosedAt == 0 {
 		record.ClosedAt = h.clock().Unix()

@@ -18,7 +18,8 @@
   min-height: 44px;
   padding: 8px 10px;
   border-radius: 8px;
-  font-size: 12px; @apply border border-line text-accent;
+  min-width: 44px;
+  font-size: 12px; @apply text-muted;
 }
 
 .chat-settings-trigger:hover, .chat-settings-close:hover { @apply bg-surface-soft; }
@@ -71,8 +72,8 @@
   }
   .chat-layout-with-settings > header, .chat-layout-with-settings > footer, .chat-layout-with-settings > .chat-history { padding-inline: clamp(24px, 3vw, 48px); }
   .chat-layout-with-settings > header { min-height: 80px; }
-  .chat-settings { grid-area: settings; position: static; width: 100%; height: 100%; min-width: 0; min-height: 0; }
-  .chat-settings-trigger, .chat-settings-close { display: none; }
+  .chat-layout-with-settings > .chat-settings { grid-area: settings; position: static; width: 100%; height: 100%; min-width: 0; min-height: 0; }
+  .chat-layout-with-settings .chat-settings-trigger, .chat-layout-with-settings .chat-settings-close { display: none; }
 }
 
 @media (max-width: 479px) {

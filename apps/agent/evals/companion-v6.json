@@ -1,0 +1,14 @@
+[
+  { "id": "recall", "kind": "TURN_REPLY", "text": "还记得我喜欢喝什么吗？", "evidence": "USER: 我喜欢乌龙茶，不加糖。" },
+  { "id": "unknown", "kind": "TURN_REPLY", "text": "我们第一次一起去海边是在哪儿？" },
+  { "id": "natural", "kind": "TURN_REPLY", "text": "今天下班路上闻到了桂花香，突然心情好了点。" },
+  { "id": "name", "kind": "CONTEXT_UPDATE", "text": "我叫陈嘉宁", "expectedAutomatic": true },
+  { "id": "city", "kind": "CONTEXT_UPDATE", "text": "我住在杭州", "expectedAutomatic": true },
+  { "id": "preference", "kind": "CONTEXT_UPDATE", "text": "我喜欢乌龙茶", "expectedAutomatic": true },
+  { "id": "hypothesis", "kind": "CONTEXT_UPDATE", "text": "如果我住在成都，每天就能去喝茶了", "expectedAutomatic": false },
+  { "id": "future", "kind": "CONTEXT_UPDATE", "text": "我计划明年搬去上海", "expectedAutomatic": false },
+  { "id": "third-party", "kind": "CONTEXT_UPDATE", "text": "我朋友住在南京", "expectedAutomatic": false },
+  { "id": "sensitive", "kind": "CONTEXT_UPDATE", "text": "我在医院被诊断为抑郁症", "expectedAutomatic": false },
+  { "id": "credential", "kind": "CONTEXT_UPDATE", "text": "我的验证码是123456", "expectedAutomatic": false },
+  { "id": "joke", "kind": "CONTEXT_UPDATE", "text": "我其实是住在月球上的宇航员，开玩笑的", "expectedAutomatic": false }
+]

@@ -166,8 +166,7 @@ voice poll runs in the browser or API. Host departure closes the room and ends
 its call. Real voice tests run with
 `LIVEKIT_INTEGRATION=1 pnpm --filter web exec playwright test tests/live-voice.spec.ts`
 using a local Go fixture, Chrome/Chromium and temporary LiveKit rooms.
-Agent dispatch requires a separately
-running LiveKit Agents worker; `apps/agent/src/legacy-livekit.ts` is only a health-check placeholder.
+The room text assistant runs as a separate LiveKit Agents worker. `pnpm dev:all` starts it when model and LiveKit configuration are available; `pnpm room-agent:dev` starts it alone. Hosts call or remove it; everyone can ask with `@AI question`. See [room assistant](docs/room-assistant.md).
 Novel reads, writes, ownership checks and draft visibility are also handled by Go.
 Next.js contains page rendering, form-to-API adapters and a same-origin API proxy; it does not connect to the database.
 See [deployment](DEPLOYMENT.md) for API, worker and Agent deployment.

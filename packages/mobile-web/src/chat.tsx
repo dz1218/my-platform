@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type ReactNode } from 'react';
-import { ArrowUp, SlidersHorizontal } from 'lucide-react';
+import { ArrowUp, MoreHorizontal } from 'lucide-react';
 
 /** The conversation owner keeps the connection and draft when this view changes. */
 export function MobileChatHeader({ back, name, avatar, description, canManage, onSettings }: {
@@ -13,9 +13,9 @@ export function MobileChatHeader({ back, name, avatar, description, canManage, o
     <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-full bg-accent-soft text-lg text-accent">{avatar}</span>
     <div className="min-w-0 flex-1">
       <h1 className="truncate text-base font-semibold">{name}</h1>
-      <p className="mt-1 text-xs leading-5 text-muted">{description}</p>
+      {description && <p className="mt-1 text-xs leading-5 text-muted">{description}</p>}
     </div>
-    {canManage && <button type="button" aria-label="会话设置" aria-haspopup="dialog" aria-controls="conversation-settings" onClick={onSettings} className="grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-soft hover:text-ink"><SlidersHorizontal size={20} /></button>}
+    {canManage && <button type="button" aria-label="会话设置" aria-haspopup="dialog" aria-controls="conversation-settings" onClick={onSettings} className="grid size-11 shrink-0 place-items-center rounded-full text-muted hover:bg-surface-soft hover:text-ink"><MoreHorizontal size={20} /></button>}
   </header>;
 }
 

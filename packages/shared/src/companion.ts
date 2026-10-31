@@ -19,4 +19,5 @@ export type MessagePage = { items: Message[]; nextCursor?: string; replyStatus?:
 export type AutoReply = {
   ownerType: 'AI' | 'HUMAN'; mode: 'NEVER' | 'TIMEOUT' | 'ALWAYS';
   delaySeconds: number; version: number; canManage: boolean;
+  canManageMemory?: boolean;
 };

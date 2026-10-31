@@ -32,15 +32,16 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    ".next-companion-design/types/**/*.ts",
     ".next-dev/types/**/*.ts",
     ".next-live-e2e/types/**/*.ts",
+    ".next-memory-e2e/types/**/*.ts",
     ".next-notice-e2e/types/**/*.ts",
     ".next-production-e2e/types/**/*.ts",
     ".next-progress-e2e/types/**/*.ts",
     ".next-toolbar-e2e/types/**/*.ts",
     ".next/types/**/*.ts",
-    "next-env.d.ts",
-    ".next-companion-design/types/**/*.ts"
+    "next-env.d.ts"
   ],
   "exclude": [
     "node_modules"

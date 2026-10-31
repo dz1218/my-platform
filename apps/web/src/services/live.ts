@@ -1,5 +1,5 @@
 import type { ApiRoomItem } from '@/lib/api';
-import type { LiveRoomDetail, LiveRoomJoin, LiveRoomClose } from '@my-platform/shared';
+import type { LiveRoomDetail, LiveRoomJoin, LiveRoomClose, LiveAssistantState } from '@my-platform/shared';
 import { APIError, check } from './api/client';
 
 export function liveRoomService(base: string) {
@@ -26,6 +26,16 @@ export function liveRoomService(base: string) {
     }
   };
   return {
+    dispatchAssistant: async (id: string): Promise<LiveAssistantState> => {
+      const response = await request(`${base}/rooms/${encodeURIComponent(id)}/agent/dispatch`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(15_000),
+      });
+      return (await response.json()).assistant;
+    },
+    removeAssistant: async (id: string, dispatch: string): Promise<LiveAssistantState> => {
+      const response = await request(`${base}/rooms/${encodeURIComponent(id)}/agent/dispatch/${encodeURIComponent(dispatch)}`, { method: 'DELETE', signal: AbortSignal.timeout(15_000) });
+      return (await response.json()).assistant;
+    },
     refresh: async (signal?: AbortSignal): Promise<ApiRoomItem[]> => {
       const response = await check(await request(`${base}/rooms/refresh`, { method: 'POST', signal }));
       return (await response.json()).items;

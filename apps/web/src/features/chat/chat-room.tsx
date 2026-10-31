@@ -10,6 +10,7 @@ import { useConversation } from "./hooks/use-conversation";
 import { CompanionPreferences } from "./companion-preferences";
 import { AutoReplyPanel } from "./auto-reply-panel";
 import { ChatSettings } from "./chat-settings";
+import { CompanionMemoryPanel } from "./memory-panel";
 import { MessageBubble } from "./message-bubble";
 import { MessageComposer } from "./message-composer";
 import type { Match } from "@/types/companion";
@@ -72,6 +73,9 @@ export function Conversation({
   }, []);
   const settingsDialog = useRef<HTMLDialogElement | null>(null);
   const canManage = !chat.settings.isError && !!chat.settings.data?.canManage;
+  const canManageMemory = !operator && !chat.settings.isError && !!chat.settings.data?.canManageMemory;
+  const canOpenSettings = canManage || canManageMemory;
+  const dockSettings = operator && canManage;
   const bottom = useRef<HTMLDivElement | null>(null);
   const scroll = useRef<HTMLDivElement | null>(null);
   const nearBottom = useRef(true);
@@ -103,7 +107,7 @@ export function Conversation({
       id="main-content"
       tabIndex={-1}
       ref={layout}
-      className={`chat-layout${canManage ? " chat-layout-with-settings" : ""}`}
+      className={`chat-layout${dockSettings ? " chat-layout-with-settings" : ""}`}
       aria-label={
         operator
           ? `与${participantName ?? "用户"}的对话`
@@ -114,8 +118,8 @@ export function Conversation({
         back={<ChatBack intercepted={intercepted} operator={operator} aria-label={operator ? "返回我的 AI 身份" : "返回陪伴"} className="grid size-11 shrink-0 place-items-center rounded-full text-2xl text-muted hover:bg-surface-soft hover:text-ink">←</ChatBack>}
         name={operator ? `与${participantName ?? "用户"}的对话` : match.identity.name}
         avatar={match.identity.name.slice(-1)}
-        description={operator ? `以${match.identity.name}的身份回复` : `${match.identity.occupation ? `${match.identity.occupation} · ` : ""}当前使用本账户 · 对话可能由 AI 与真人共同参与`}
-        canManage={canManage}
+        description={operator ? `以${match.identity.name}的身份回复` : ""}
+        canManage={canOpenSettings}
         onSettings={() => settingsDialog.current?.showModal()}
       />
       <header className="hidden items-center gap-2.5 md:flex border-b border-line bg-panel px-3.5 py-3 sm:py-2.5">
@@ -137,25 +141,20 @@ export function Conversation({
               ? `与${participantName ?? "用户"}的对话`
               : match.identity.name}
           </h1>
-          <p className="mt-1 text-xs text-muted">
-            {operator
-              ? `以${match.identity.name}的身份回复`
-              : `${match.identity.occupation ? `${match.identity.occupation} · ` : ""}当前使用本账户 · 对话可能由 AI 与真人共同参与`}
-          </p>
+          {operator && <p className="mt-1 text-xs text-muted">以{match.identity.name}的身份回复</p>}
         </div>
-        {canManage && (
+        {canOpenSettings && (
           <button
             type="button"
             className="chat-settings-trigger"
+            aria-label="会话设置"
             aria-haspopup="dialog"
             aria-controls="conversation-settings"
             onClick={() => settingsDialog.current?.showModal()}
           >
             <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-              <path d="M4 7h9m4 0h3M4 17h3m4 0h9" />
-              <circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" />
+              <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
             </svg>
-            <span>会话设置</span>
           </button>
         )}
       </header>
@@ -268,10 +267,10 @@ export function Conversation({
           }}
         />
       </footer>
-      {canManage && chat.settings.data && (
-        <ChatSettings dialogRef={settingsDialog} identityName={match.identity.name}>
-          <AutoReplyPanel id={match.conversationId} settings={chat.settings.data} />
-          <CompanionPreferences id={match.conversationId} />
+      {canOpenSettings && chat.settings.data && (
+        <ChatSettings dialogRef={settingsDialog} identityName={match.identity.name} operator={canManage} docked={dockSettings}>
+          {canManage && <><AutoReplyPanel id={match.conversationId} settings={chat.settings.data} /><CompanionPreferences id={match.conversationId} /></>}
+          {canManageMemory && <CompanionMemoryPanel key={match.conversationId} id={match.conversationId} />}
         </ChatSettings>
       )}
     </main>

@@ -1,4 +1,5 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { z } from "zod";
 import {
   createServer,
   type IncomingMessage,
@@ -25,6 +26,7 @@ export type ReplyRunner = (
   content?: string;
   messages?: { clientItemKey: string; content: string; delayMs: number }[];
   promptVersion: string;
+  modelCalls?: number;
   action?: string;
   waitSeconds?: number;
 }>;
@@ -33,8 +35,11 @@ export function createAgentServer(
   run: ReplyRunner,
   ready = true,
   ask?: AssistantRunner,
+  maintenance?: { embed: (texts: string[], signal: AbortSignal) => Promise<unknown>; purge: (conversationId: string, beforeRevision: number) => Promise<boolean> },
 ) {
   let active = 0;
+  let background = 0;
+  let reading = 0;
   const respond = (res: ServerResponse, status: number, body: unknown) => {
     if (res.destroyed) return;
     res.writeHead(status, {
@@ -65,21 +70,31 @@ export function createAgentServer(
           "/internal/reply",
           "/internal/agent/generate-plan",
           "/internal/assistant/chat",
+          "/internal/embeddings",
+          "/internal/checkpoints/purge",
         ].includes(req.url ?? "")
       ) {
         respond(res, 404, { error: "not_found" });
         return;
       }
       const isAssistant = req.url === "/internal/assistant/chat";
-      if (!ready || (isAssistant && !ask)) {
+      const isMaintenance = req.url === "/internal/embeddings" || req.url === "/internal/checkpoints/purge";
+      if ((!ready && !isMaintenance) || (isAssistant && !ask) || (isMaintenance && !maintenance)) {
         respond(res, 503, { error: "model_not_configured" });
         return;
       }
-      if (active >= 4) {
+      let lane: "reading" | "foreground" | "background" = "reading";
+      if (reading >= 8) {
         respond(res, 503, { error: "busy" });
         return;
       }
-      active++;
+      reading++;
+      const acquire = (target: "foreground" | "background") => {
+        if (target === "foreground" ? active >= 4 : background >= 1) { respond(res, 503, { error: "busy" }); return false; }
+        reading--; lane = target;
+        if (target === "foreground") active++; else background++;
+        return true;
+      };
       const requestId = randomUUID(),
         started = Date.now();
       const abort = new AbortController();
@@ -107,12 +122,27 @@ export function createAgentServer(
           respond(res, 400, { error: "invalid_request" });
           return;
         }
+        if (isMaintenance && maintenance) {
+          if (!acquire("background")) return;
+          if (req.url === "/internal/embeddings") {
+            const parsed = z.object({ texts: z.array(z.string().min(1).max(6000)).min(1).max(8) }).strict().safeParse(raw);
+            if (!parsed.success) { respond(res, 400, { error: "invalid_request" }); return; }
+            respond(res, 200, await maintenance.embed(parsed.data.texts, abort.signal));
+          } else {
+            const parsed = z.object({ conversationId: z.string().min(1).max(128), beforeRevision: z.number().int().positive() }).strict().safeParse(raw);
+            if (!parsed.success) { respond(res, 400, { error: "invalid_request" }); return; }
+            const done = await maintenance.purge(parsed.data.conversationId, parsed.data.beforeRevision);
+            respond(res, done ? 200 : 503, { ok: done });
+          }
+          return;
+        }
         if (isAssistant && ask) {
           const parsed = assistantInput.safeParse(raw);
           if (!parsed.success) {
             respond(res, 400, { error: "invalid_request" });
             return;
           }
+          if (!acquire("foreground")) return;
           const reply = await ask(parsed.data, abort.signal);
           respond(res, 200, parseAssistantReply(reply.content));
           return;
@@ -123,6 +153,7 @@ export function createAgentServer(
           return;
         }
         const input: ReplyInput = parsed.data;
+        if (!acquire(input.kind === "CONTEXT_UPDATE" ? "background" : "foreground")) return;
         if (req.url === "/internal/agent/generate-plan") {
           const reply = await run(input, abort.signal);
           logReply(requestId, reply, Date.now() - started);
@@ -162,7 +193,7 @@ export function createAgentServer(
       } finally {
         clearTimeout(timer);
         clearInterval(heartbeat);
-        active--;
+        if ((lane as string) === "foreground") active--; else if ((lane as string) === "background") background--; else reading--;
         console.info(
           JSON.stringify({
             event: "agent_request_finished",

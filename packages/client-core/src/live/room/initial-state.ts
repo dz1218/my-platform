@@ -26,7 +26,6 @@ export type LiveRoomState = {
   refreshError: string | null;
   updatesState: LiveUpdatesState;
   isDispatchingAgent: boolean;
-  agentRequested: boolean;
   voiceToken: string;
   notice: string;
   mediaBusy: 'camera' | 'microphone' | null;
@@ -57,7 +56,6 @@ export const initialLiveRoomState = (nickname = ''): LiveRoomState => ({
   refreshError: null,
   updatesState: 'connecting',
   isDispatchingAgent: false,
-  agentRequested: false,
   voiceToken: '',
   notice: '',
   mediaBusy: null,

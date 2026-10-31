@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { runContext } from "./runtime.js";
 export const replyInput = z
   .object({
+    contractVersion: z.literal(2).optional(),
+    run: runContext.optional(),
     messages: z
       .array(
         z
@@ -45,6 +48,10 @@ export const planOutput = z
             sourceMessageId: z.string().min(1),
             kind: z.enum(["FACT", "PREFERENCE", "EXPERIENCE", "BOUNDARY"]),
             content: z.string().min(1).max(300),
+            factKey: z.enum(["preferred_name", "city", "occupation", "food_preference", "communication_preference", "hobby", "boundary", "other"]).optional(),
+            sourceQuote: z.string().max(300).optional(),
+            assertion: z.enum(["ASSERTION", "PLAN", "UNCERTAIN"]).optional(),
+            validUntil: z.string().datetime({ offset: true }).nullable().optional(),
           })
           .strict(),
       )

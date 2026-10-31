@@ -11,6 +11,7 @@
     "./auth": "./src/auth/index.ts",
     "./catalog": "./src/catalog/index.ts",
     "./chat": "./src/chat/index.ts",
+    "./chat/memory": "./src/chat/memory.ts",
     "./chat/preferences": "./src/chat/preferences/index.ts",
     "./companion": "./src/companion/index.ts",
     "./identity": "./src/identity/index.ts",

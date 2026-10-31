@@ -11,7 +11,6 @@ export type SessionActions = {
   setError: (value: LiveRoomState['error']) => void;
   setIsJoining: (value: LiveRoomState['isJoining']) => void;
   setIsDispatchingAgent: (value: LiveRoomState['isDispatchingAgent']) => void;
-  setAgentRequested: (value: LiveRoomState['agentRequested']) => void;
   setVoiceToken: (value: LiveRoomState['voiceToken']) => void;
   setNotice: (value: LiveRoomState['notice']) => void;
 };
@@ -24,7 +23,6 @@ export const createSessionSlice: StateCreator<LiveRoomStore, [], [], SessionActi
   setError: (error) => set({ error }),
   setIsJoining: (isJoining) => set({ isJoining }),
   setIsDispatchingAgent: (isDispatchingAgent) => set({ isDispatchingAgent }),
-  setAgentRequested: (agentRequested) => set({ agentRequested }),
   setVoiceToken: (voiceToken) => set({ voiceToken }),
   setNotice: (notice) => set({ notice }),
 });

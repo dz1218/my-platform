@@ -209,7 +209,7 @@ test('room operations enforce role and ignore late dispatch/media results after 
   dispatch.resolve();
   media.resolve({ cameraEnabled: true, microphoneEnabled: true });
   await Promise.all([pending, enabling]);
-  expect(room.getState()).toMatchObject({ agentRequested: false, isDispatchingAgent: false, cameraEnabled: false, microphoneEnabled: false, mediaBusy: null });
+  expect(room.getState()).toMatchObject({ isDispatchingAgent: false, cameraEnabled: false, microphoneEnabled: false, mediaBusy: null });
 });
 
 test('live chat validates payloads and old publish completion cannot overwrite a new session', async () => {

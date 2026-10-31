@@ -72,3 +72,7 @@ pnpm typecheck
 本地开发默认使用 `pnpm db:up` 启动 PostgreSQL/Redis，使用 `pnpm livekit:up` 启动 Docker LiveKit。本地 `apps/server/.env` 使用示例中的本机数据库、Redis、`LIVEKIT_URL=ws://localhost:7880` 及 `devkey` 开发密钥对；前端 `.env.local` 指向 `http://127.0.0.1:8080`。切换配置后重启相应进程，不能只修改浏览器地址。
 
 生产使用独立数据库、Redis 和 LiveKit Cloud 项目。共用 Cloud 项目会让本地与线上查询到同一批 LiveKit 房间；共用 Redis 或数据库也会混用房间状态和账号数据。若本地必须测试 Cloud，请使用独立测试项目及其密钥，并将该项目 Webhook 指向本地 Go 的公网 HTTPS 隧道；不要把生产项目回调改到本地。Docker LiveKit 已将回调指向 `http://host.docker.internal:8080/api/v1/livekit/webhook`，无需修改生产 Cloud 配置。
+
+## Live-room text assistant
+
+Deploy `apps/agent/Dockerfile.livekit` as a separate service alongside the existing HTTP Agent. Give it matching `LIVEKIT_*` and `LLM_*` variables and set `ROOM_API_URL` to the private Go API origin. Its health listener uses `ROOM_AGENT_PORT` (default 8082); it needs outbound WebSocket/RTC connectivity to LiveKit and HTTP connectivity to Go and the model provider. Deploy Go before the room worker and web. See [configuration and validation](docs/room-assistant.md).

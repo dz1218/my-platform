@@ -350,6 +350,7 @@ func TestCatalogImportPreservesConfirmedMemoriesAndUserScopedContext(t *testing.
 		if err = f.repo.SavePreferences(f.ctx, u.conversation, "operator", preferences, false); err != nil {
 			t.Fatal(err)
 		}
+		enableMemory(t, f, u.conversation, u.actor)
 		message, err := f.service.Send(f.ctx, u.actor, u.conversation, "confirmed-memory-source", u.content)
 		if err != nil {
 			t.Fatal(err)
