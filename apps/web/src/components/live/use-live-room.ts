@@ -98,12 +98,13 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
     },
     query: { client: queryClient, apiBaseUrl, roomId },
   }));
-  const { role, roomNotice, nickname, connectionState, participants, error, isJoining, joinFailure, recovering, returnToLobby, closeConfirmOpen, isClosing, closeError, isRefreshing, refreshError, updatesState, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, voiceToken, notice, isFullscreen } = useStore(ui, useShallow(liveRoomSelectors.view));
+  const { role, roomNotice, nickname, connectionState, participants, error, isJoining, connectionPending, joinFailure, recovering, returnToLobby, closeConfirmOpen, isClosing, closeError, isRefreshing, refreshError, updatesState, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, voiceToken, notice, isFullscreen } = useStore(ui, useShallow(liveRoomSelectors.view));
   const { dispatchAgent, setNickname, setConnectionState, setParticipants, setError, setIsJoining, setCameraEnabled, setMicrophoneEnabled, setAudioBlocked, setSideTab, setNotice, setIsFullscreen, setCloseConfirmOpen, refreshRoom } = ui.getState();
   const isHost = role === '主播';
   const roomMissing = roomQuery.data === null || (roomQuery.error instanceof APIError && roomQuery.error.status === 404);
   const roomEnded = joinFailure === 'closed' || joinFailure === 'missing' || roomMissing || (!!roomQuery.data && roomQuery.data.state !== 'open');
-  const roomInUse = joinFailure === 'in-use';
+  // A reload may briefly wait for the previous host session to be released.
+  const roomInUse = joinFailure === 'in-use' && !connectionPending;
   const hostRecovering = roomQuery.data?.hostConnection === 'reconnecting';
   const roomTitle = roomQuery.data?.item.title ?? '直播间';
   const updatesLabel = updatesState === 'connected' ? '房间状态实时更新' : updatesState === 'reconnecting' ? '状态更新重新连接中…' : '正在连接状态更新…';
@@ -372,5 +373,5 @@ export function useLiveRoom({ apiBaseUrl, roomId, isLoggedIn, hostNickname }: Li
     } catch { setNotice('当前浏览器暂不支持全屏观看。'); }
   }
 
-  return { roomTitle, roomTitlePending: roomQuery.isPending, roomEnded, roomInUse, hostRecovering, recovering, returnToLobby, returnToHall, roomReason: roomQuery.data?.reason, closeConfirmOpen, setCloseConfirmOpen, isClosing, closeError, closeDialogRef, endRoom, refreshRoom, isRefreshing, refreshError, updatesLabel, role, isHost, roomNotice, nickname, setNickname, participants, error, setError, isJoining, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, voice, joinRoom, toggleLocalMedia, dispatchAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen };
+  return { roomTitle, roomTitlePending: roomQuery.isPending, roomEnded, roomInUse, hostRecovering, recovering, returnToLobby, returnToHall, roomReason: roomQuery.data?.reason, closeConfirmOpen, setCloseConfirmOpen, isClosing, closeError, closeDialogRef, endRoom, refreshRoom, isRefreshing, refreshError, updatesLabel, role, isHost, roomNotice, nickname, setNickname, participants, error, setError, isJoining, connectionPending, isDispatchingAgent, agentRequested, mediaBusy, cameraEnabled, microphoneEnabled, audioBlocked, sideTab, setSideTab, notice, isFullscreen, stageRef, roomRef, remoteAudioRef, isConnected, isReconnecting, isInRoom, hasAgent, voice, joinRoom, toggleLocalMedia, dispatchAgent, leaveRoom, enableAudio, shareRoom, toggleFullscreen };
 }

@@ -19,7 +19,7 @@ function CatalogSearchBar({ search = '', count = 0, open = false, disabled = fal
 }) {
   const input = useRef<HTMLInputElement>(null);
   return <div className="flex items-center gap-2">
-    <form role="search" className="flex min-w-0 flex-1 items-center rounded-full bg-surface-soft transition-colors focus-within:bg-surface-selected focus-within:ring-1 focus-within:ring-control" onSubmit={event => { event.preventDefault(); onSearch?.(); input.current?.blur(); }}>
+    <form role="search" className="input-group flex min-w-0 flex-1 items-center" onSubmit={event => { event.preventDefault(); onSearch?.(); input.current?.blur(); }}>
       <button type="submit" disabled={disabled} aria-label="搜索" className="grid size-11 shrink-0 place-items-center rounded-full text-muted hover:text-ink focus-visible:outline-offset-0"><Search aria-hidden="true" className="size-[18px]" /></button>
       {/* Only the outer frame is rounded; an input radius clips the caret at the text's start. */}
       <input ref={input} disabled={disabled} aria-label="姓名" type="search" enterKeyHint="search" autoComplete="off" placeholder="搜索名字" value={search} maxLength={80} onChange={event => onEdit?.(event.target.value)} className="h-11 min-w-0 w-full appearance-none rounded-none bg-transparent pr-3 pl-px text-base leading-6 text-ink caret-ink placeholder:text-muted focus:placeholder:text-transparent focus-visible:outline-none [&::-webkit-search-cancel-button]:appearance-none" />
@@ -76,7 +76,7 @@ export function MobileCatalogFilters({ value, occupations, onChange, anchored = 
   const ageInputClass = anchored ? 'h-11 w-full min-w-0 bg-transparent px-1 text-center text-base leading-6 text-ink caret-ink placeholder:text-muted focus:placeholder:text-transparent focus-visible:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none' : 'input-field min-w-0 px-2 focus:placeholder:text-transparent';
   const fields = <form aria-label="筛选角色" className="grid grid-cols-2 gap-2" onSubmit={event => { event.preventDefault(); const next = apply(); if (next) { onChange(next); if (anchored) restoreTrigger(); } }}>
         <div className="col-span-2 grid gap-2 text-sm text-muted"><label htmlFor={`${id}-occupation`} className={anchored ? 'sr-only' : undefined}>职业</label><Select id={`${id}-occupation`} appearance={anchored ? 'quiet' : 'default'} label="职业" searchPlaceholder="搜索职业" value={draft.occupationCode} options={[{ value: '', label: '全部职业' }, ...occupations.map(item => ({ value: item.code, label: item.name }))]} onChange={occupationCode => edit({ occupationCode })} /></div>
-        <fieldset className={`col-span-2 flex min-w-0 items-center gap-2 ${anchored ? 'rounded-control bg-surface-soft px-3 focus-within:ring-1 focus-within:ring-control' : ''}`}>
+        <fieldset className={`col-span-2 flex min-w-0 items-center gap-2 ${anchored ? 'input-group px-3' : ''}`}>
           <legend className="sr-only">年龄范围</legend><span aria-hidden="true" className="shrink-0 text-xs text-muted">年龄</span>
           <label htmlFor={`${id}-min`} className="min-w-0 flex-1"><span className="sr-only">最小年龄</span><input id={`${id}-min`} className={ageInputClass} type="number" inputMode="numeric" min={18} max={50} step={1} placeholder="18" value={draft.ageMin} aria-describedby={error ? `${id}-error` : undefined} onChange={event => edit({ ageMin: event.target.value })} /></label>
           <span aria-hidden="true" className="text-xs text-muted">—</span>

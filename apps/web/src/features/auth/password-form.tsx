@@ -86,7 +86,7 @@ export function PasswordForm({ mode, onBusyChange, onSwitchMode }: {
     const form = new FormData(event.currentTarget);
     startTransition(() => submit(form));
   }
-  const inputClass = 'w-full min-w-0 rounded-control border border-control bg-panel px-3 py-3 text-base text-ink placeholder:text-faint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
+  const inputClass = 'input-field min-w-0';
   const errorLine = (field: string) => fieldError(field) && <p id={`password-${field}-error`} role="alert" className="text-xs leading-5 text-danger">{errorText(field)}</p>;
   const describedBy = (field: string) => fieldError(field) ? `password-${field}-error` : undefined;
   const alternateClass = 'inline-flex min-h-11 items-center rounded-control px-3 text-sm text-muted hover:bg-surface-soft hover:text-ink disabled:opacity-50 aria-disabled:opacity-50';

@@ -66,7 +66,7 @@ async function login(context: BrowserContext) {
 }
 
 async function exitCall(page: Page) {
-  await page.getByRole('button', { name: '退出', exact: true }).click();
+  await page.getByRole('button', { name: '退出', exact: true }).hover();
   await page.getByRole('menuitem', { name: '退出连麦', exact: true }).click();
 }
 
@@ -124,6 +124,20 @@ test.describe('single viewer voice with real Go API and LiveKit', () => {
       await expect(controls.getByRole('switch').nth(1)).toHaveAccessibleName('麦克风');
       const leave = controls.getByRole('button', { name: '退出', exact: true });
       const leaveMenu = caller.page.getByRole('menu', { name: '离开选项', exact: true });
+      await expect(leaveMenu).toBeHidden();
+      const camera = controls.getByRole('switch', { name: '摄像头', exact: true });
+      await camera.focus();
+      await leave.hover();
+      await expect(leaveMenu).toBeVisible();
+      await expect(leave).toHaveAttribute('aria-expanded', 'true');
+      await expect(camera).toBeFocused();
+      const triggerBounds = (await leave.boundingBox())!;
+      await caller.page.mouse.move(triggerBounds.x + triggerBounds.width / 2, triggerBounds.y - 4);
+      await leaveMenu.getByRole('menuitem', { name: '退出连麦', exact: true }).hover();
+      await expect(leaveMenu).toBeVisible();
+      await leave.click();
+      await expect(leaveMenu).toBeVisible();
+      await camera.hover();
       await expect(leaveMenu).toBeHidden();
       await leave.focus();
       await caller.page.keyboard.press('ArrowDown');

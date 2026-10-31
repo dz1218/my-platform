@@ -20,12 +20,17 @@ func (h Handler) viewer(c *gin.Context) string {
 	return session.UserID
 }
 func (h Handler) List(c *gin.Context) {
-	items, err := h.Repo.List(c.Request.Context())
+	filters, err := ParseFilters(c.Request.URL.Query())
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"items": items})
+	page, err := h.Repo.List(c.Request.Context(), filters)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	c.JSON(200, page)
 }
 func (h Handler) Get(c *gin.Context) {
 	n, err := h.Repo.Get(c.Request.Context(), c.Param("id"), h.viewer(c))

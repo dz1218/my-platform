@@ -24,6 +24,7 @@
   --color-accent-soft: var(--rf-accent-soft);
   --color-accent-line: var(--rf-accent-line);
   --color-focus: var(--rf-focus);
+  --color-field-focus: var(--rf-field-focus, var(--rf-focus));
   --color-success: var(--rf-success);
   --color-success-soft: var(--rf-success-soft);
   --color-success-line: var(--rf-success-line);

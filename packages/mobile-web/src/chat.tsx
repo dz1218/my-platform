@@ -31,7 +31,7 @@ export function MobileMessageComposer({ name, draft, sending, disabled, onChange
     element.style.height = `${Math.min(element.scrollHeight, 144)}px`;
   }, [draft]);
   return <form onSubmit={event => { event.preventDefault(); onSend(); }} className="min-w-0">
-    <div className="flex items-end gap-2 rounded-scene border border-control bg-surface-soft p-2 focus-within:border-focus">
+    <div className="input-group flex items-end gap-2 p-2">
       <label className="min-w-0 flex-1 px-2 py-2">
         <span className="sr-only">给{name}发消息</span>
         <textarea ref={input} name="message" autoComplete="off" rows={1} maxLength={2000} disabled={disabled} value={draft}

@@ -9,6 +9,7 @@ export const liveRoomSelectors = {
     participants: s.participants,
     error: s.error,
     isJoining: s.isJoining,
+    connectionPending: s.isJoining || s.joinRetryAt > 0,
     joinFailure: s.joinFailure,
     recovering: s.recovering,
     returnToLobby: s.returnToLobby,

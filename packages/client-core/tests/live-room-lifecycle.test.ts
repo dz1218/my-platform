@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { QueryClient } from '@tanstack/query-core';
 import { RoomConnectionState, type ApiRoomItem, type LiveRoomDetail, type LiveRoomJoin } from '@my-platform/shared';
-import { createLiveRoomStore } from '../src/live/room';
+import { createLiveRoomStore, liveRoomSelectors } from '../src/live/room';
 
 const joined: LiveRoomJoin = {
   role: 'host', identity: 'host-session', roomId: 'room', token: 'join-token',
@@ -33,16 +33,21 @@ test('a lost join response retries the same in-memory attempt and never sends co
   let connections = 0;
   const connect = async () => { connections++; };
   const first = store.getState().joinSession(connect);
+  assert.equal(liveRoomSelectors.view(store.getState()).connectionPending, true);
   assert.equal(await store.getState().joinSession(connect), false);
   pending.reject(new Error('network response lost'));
   assert.equal(await first, false);
+  assert.equal(store.getState().isJoining, false);
+  assert.equal(liveRoomSelectors.view(store.getState()).connectionPending, true);
   store.getState().resetSession();
+  assert.equal(liveRoomSelectors.view(store.getState()).connectionPending, true);
   assert.equal(await store.getState().joinSession(connect), true);
   assert.deepEqual(attempts, ['attempt-1', 'attempt-1']);
   assert.equal(ids, 1);
   assert.equal(connections, 1);
   assert.equal(store.getState().role, '主播');
   assert.equal(store.getState().isJoining, false);
+  assert.equal(liveRoomSelectors.view(store.getState()).connectionPending, false);
   assert.equal(store.getState().joinAttemptId, null);
 });
 
@@ -64,6 +69,7 @@ for (const [status, code, failure] of [
     store.getState().resetSession();
     assert.equal(await store.getState().joinSession(connect), false);
     assert.equal(store.getState().joinFailure, failure);
+    assert.equal(liveRoomSelectors.view(store.getState()).connectionPending, false);
     assert.equal(store.getState().role, null);
     assert.equal(store.getState().voiceToken, '');
     assert.equal(requests, 1);
@@ -94,9 +100,11 @@ test('a disconnected host schedules recovery and can establish a fresh session',
   } });
   store.getState().handleHostDisconnected();
   assert.ok(store.getState().joinRetryAt > 0);
+  assert.equal(liveRoomSelectors.view(store.getState()).connectionPending, true);
   assert.equal(await store.getState().joinSession(async () => {}), true);
   assert.equal(requests, 1);
   assert.equal(store.getState().joinFailure, null);
+  assert.equal(liveRoomSelectors.view(store.getState()).connectionPending, false);
 });
 
 test('ending requires host confirmation, guards duplicate requests, and closes both query caches', async () => {
@@ -162,6 +170,19 @@ test('pending admission respects the independent 90-second wait and rate retry h
   assert.ok(store.getState().joinRetryAt >= until);
   store.getState().cancelJoinRecovery();
   assert.equal(store.getState().joinRetryAt, 0);
+  assert.equal(liveRoomSelectors.view(store.getState()).connectionPending, false);
+});
+
+test('reload session conflicts stay pending until automatic recovery stops', async () => {
+  const store = createLiveRoomStore('主播', { ...defaults, session: {
+    createAttemptId: () => 'attempt', canRetryBusy: () => true,
+    join: async () => { throw apiError(409, 'host_session_in_use'); },
+  } });
+  for (let attempt = 1; attempt <= 13; attempt++) {
+    await store.getState().joinSession(async () => {});
+    assert.equal(store.getState().joinFailure, 'in-use');
+    assert.equal(liveRoomSelectors.view(store.getState()).connectionPending, attempt <= 12);
+  }
 });
 
 test('a lost close response confirms closing from durable state before permitting a lobby return', async () => {

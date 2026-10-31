@@ -3,41 +3,47 @@
 import { MobileNovelShelfFrame, MobileNovelShelfSkeleton } from '@my-platform/mobile-web/novels';
 import { useViewport } from '@my-platform/web-ui/use-viewport';
 import type { ReactNode } from 'react';
-import { RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import { SkeletonBlock, SkeletonRegion } from '@/components/skeleton';
-import { SceneBanner } from '@/components/scene-banner';
-import { PageHeading } from '@/components/page-heading';
+import { NovelShelfSearch } from './novel-shelf-controls';
 
 export const novelShelfGridClassName = 'grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] md:gap-7';
 
 /** The shelf chrome is available before account and query providers resolve. */
-export function NovelShelfFrame({ actions, count, refreshing = false, onRefresh, children }: {
+export function NovelShelfFrame({ actions, count, search, children }: {
   actions?: ReactNode;
   count?: number;
-  refreshing?: boolean;
-  onRefresh?: () => void;
+  search?: ReactNode;
   children: ReactNode;
 }) {
   const viewport = useViewport();
-  if (viewport === 'mobile') return <MobileNovelShelfFrame actions={actions} count={count}>{children}</MobileNovelShelfFrame>;
-  return <main id="main-content" tabIndex={-1} className="page-shell page-content">
-    <PageHeading title="小说" description="找一本小说，慢慢读。" actions={actions} />
-    <SceneBanner scene="reading" title="翻开一页，走进另一种生活。" description="读几页书，让想象慢下来。下一段故事，从此刻开始。" />
-    <div className="section-heading">
-      <h2>书架</h2>
-      <div className="flex items-center gap-3">
-        <span className="text-xs font-normal text-muted">{count === undefined ? '' : `${count} 本小说`}</span>
-        <button type="button" aria-label="刷新小说" title="刷新小说" disabled={refreshing || !onRefresh} onClick={onRefresh} className="grid size-11 place-items-center rounded-control text-muted hover:bg-surface-soft hover:text-ink disabled:opacity-50">
-          <RefreshCw aria-hidden="true" className={`size-4 ${refreshing ? 'motion-safe:animate-spin' : ''}`} />
-        </button>
+  if (viewport === 'mobile') return <MobileNovelShelfFrame actions={actions} count={count} search={search}>{children}</MobileNovelShelfFrame>;
+  return <main id="main-content" tabIndex={-1} className="page-shell page-content md:px-8 xl:px-10">
+    <h1 className="sr-only">小说</h1>
+    <section aria-labelledby="novel-shelf-heading">
+      <div className="mb-6 flex min-h-11 items-center justify-between gap-6">
+        <div className="flex shrink-0 items-baseline gap-3">
+          <h2 id="novel-shelf-heading" className="text-base font-semibold text-ink">书架</h2>
+          {count !== undefined && <span className="text-xs tabular-nums text-muted">{count} 本</span>}
+        </div>
+        <div className="flex min-w-0 items-center justify-end gap-3">{search}{actions && <div className="shrink-0">{actions}</div>}</div>
       </div>
-    </div>
-    {children}
+      {children}
+    </section>
   </main>;
 }
 
+export function NovelShelfCreateAction({ disabled = false }: { disabled?: boolean }) {
+  const className = 'btn-primary md:gap-1.5 md:border-line md:bg-panel md:px-3 md:text-sm md:font-medium md:text-ink md:hover:border-control md:hover:bg-surface-soft';
+  const label = <><Plus aria-hidden="true" className="hidden size-4 md:block" />创建小说</>;
+  return disabled
+    ? <button type="button" className={className} disabled>{label}</button>
+    : <Link href="/novels/create" className={className}>{label}</Link>;
+}
+
 export function NovelShelfLoading() {
-  return <NovelShelfFrame actions={<button type="button" className="btn-primary" disabled>创建小说</button>}>
+  return <NovelShelfFrame actions={<NovelShelfCreateAction disabled />} search={<NovelShelfSearch draft="" onDraftChange={() => {}} onSearch={() => {}} searching={false} busy disabled />}>
     <NovelShelfSkeleton />
   </NovelShelfFrame>;
 }

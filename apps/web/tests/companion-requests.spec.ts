@@ -4,7 +4,7 @@ const identity = { id: 'request-friend', name: '林晚', age: 26, city: '杭州'
 const match = { id: 'request-match', conversationId: 'request-conversation', identity };
 const secondMatch = { id: 'request-second-match', conversationId: 'request-second-conversation', identity: { ...identity, id: 'request-second-friend', name: '苏禾' } };
 
-async function setup(page: Page) {
+async function setup(page: Page, friends = [identity]) {
   await page.context().addCookies([{ name: 'companion_session', value: 'inheritance-test-completed', domain: '127.0.0.1', path: '/' }]);
   const requests: string[] = [];
   let matchReads = 0;
@@ -25,7 +25,7 @@ async function setup(page: Page) {
     // count every business read and only actual route work for this assertion.
     if (url.pathname.startsWith('/api/v1/') || (url.searchParams.has('_rsc') && request.headers()['next-router-prefetch'] !== '1')) requests.push(request.url());
   });
-  await page.route('**/api/v1/discover?*', route => route.fulfill({ json: { items: [identity], total: 1, page: 1, nextPage: null, occupations: [] } }));
+  await page.route('**/api/v1/discover?*', route => route.fulfill({ json: { items: friends, total: friends.length, page: 1, nextPage: null, occupations: [] } }));
   await page.route('**/api/v1/matches', route => {
     matchReads++;
     return route.fulfill({ json: { items } });
@@ -261,11 +261,14 @@ test('WebSocket receives and deduplicates messages, resumes after disconnect, an
 });
 
 async function startDelayedGreeting(page: Page) {
-  const state = await setup(page);
   const friend = { ...identity, id: 'delayed-friend', name: '迟来朋友' };
+  const state = await setup(page, [identity, friend]);
   const created = { id: 'delayed-match', conversationId: 'delayed-conversation', identity: friend };
-  await page.route('**/api/v1/discover?*', route => route.fulfill({ json: { items: [friend], total: 1, page: 1, nextPage: null, occupations: [] } }));
-  await page.getByRole('button', { name: '刷新人物目录', exact: true }).click();
+  // Browser history remains available even while page interactions are locked.
+  const nav = page.getByRole('navigation', { name: '主导航', exact: true });
+  await nav.getByRole('link', { name: '我的', exact: true }).click();
+  await expect(page).toHaveURL('/me');
+  await nav.getByRole('link', { name: '陪伴', exact: true }).click();
   const greeting = page.getByRole('button', { name: '和迟来朋友打个招呼', exact: true });
   await expect(greeting).toBeEnabled();
   let release!: () => void;
@@ -293,10 +296,11 @@ async function settleGreetingNavigation(page: Page) {
   }));
 }
 
-test('a delayed greeting updates the shared list without leaving the newly selected tab', async ({ page }) => {
+test('a delayed greeting updates the shared list after browser back without reopening chat', async ({ page }) => {
   const state = await startDelayedGreeting(page);
-  await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '我的', exact: true }).click();
+  await page.goBack();
   await expect(page).toHaveURL('/me');
+  await expect(page.locator('.app-shell')).not.toHaveAttribute('inert');
   state.release();
   await expect(page.getByRole('link', { name: '继续和迟来朋友聊天', exact: true })).toBeVisible();
   await settleGreetingNavigation(page);
@@ -305,15 +309,15 @@ test('a delayed greeting updates the shared list without leaving the newly selec
   expect(state.connections()).toBe(0);
 });
 
-test('leaving and returning invalidates a delayed greeting navigation intent', async ({ page }) => {
+test('browser back and forward invalidate a delayed greeting navigation intent', async ({ page }) => {
   const state = await startDelayedGreeting(page);
-  const nav = page.getByRole('navigation', { name: '主导航', exact: true });
-  await nav.getByRole('link', { name: '我的', exact: true }).click();
+  await page.goBack();
   await expect(page).toHaveURL('/me');
-  await nav.getByRole('link', { name: '陪伴', exact: true }).click();
+  await page.goForward();
   await expect(page).toHaveURL('/companion');
   state.release();
   await expect(page.getByRole('link', { name: /继续聊天\s*，和迟来朋友/ })).toBeVisible();
+  await expect(page.locator('.app-shell')).not.toHaveAttribute('inert');
   await settleGreetingNavigation(page);
   await expect(page).toHaveURL('/companion');
   expect(state.requests.some(url => new URL(url).pathname === '/chat/delayed-match')).toBe(false);

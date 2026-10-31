@@ -19,7 +19,7 @@
 .auth-form { margin-top: 32px; }
 .auth-form fieldset { display: grid; gap: 19px; min-width: 0; padding: 0; border: 0; }
 .auth-label { display: grid; min-width: 0; gap: 9px; font-size: 12px; @apply text-ink; }
-.auth-input, .auth-phone-field, .auth-code-field, .auth-password-field, .auth-panel .input-field { min-height: 49px; width: 100%; border-radius: 10px; @apply border border-control bg-surface-soft shadow-panel text-ink; }
+.auth-input, .auth-phone-field, .auth-code-field, .auth-password-field, .auth-panel .input-field { min-height: 49px; width: 100%; @apply field-surface; }
 .auth-input, .auth-panel .input-field { padding: 12px 14px; font-size: 14px; }
 .auth-phone-field, .auth-code-field, .auth-password-field { display: flex; align-items: center; }
 .auth-phone-field > span { padding: 0 15px; font-size: 13px; @apply border-r border-r-control; }
@@ -29,12 +29,12 @@
 .auth-form { --auth-input-background: var(--rf-surface-soft); --auth-input-color: var(--rf-ink); }
 .auth-form input:is(:autofill, :-webkit-autofill) {
   -webkit-box-shadow: inset 0 0 0 1000px var(--auth-input-background);
-  box-shadow: inset 0 0 0 1000px var(--auth-input-background);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), inset 0 0 0 1000px var(--auth-input-background);
   -webkit-text-fill-color: var(--auth-input-color);
   caret-color: var(--auth-input-color);
 }
 .auth-phone-field, .auth-code-field, .auth-password-field { overflow: hidden; }
-.auth-phone-field:focus-within, .auth-code-field:focus-within, .auth-password-field:focus-within, .auth-input:focus, .auth-panel .input-field:focus-visible { @apply border-action ring-3 ring-focus/15; }
+.auth-phone-field:focus-within, .auth-code-field:focus-within, .auth-password-field:focus-within, .auth-input:focus, .auth-panel .input-field:focus { @apply field-focus; }
 .auth-password-field button { display: grid; padding: 13px; @apply text-muted; }
 .auth-code-field button { margin-right: 13px; flex-shrink: 0; font-size: 12px; @apply text-action; }
 .auth-page button:disabled { opacity: .5; cursor: not-allowed; }
@@ -180,7 +180,7 @@
   .auth-form fieldset { margin: 0; gap: 18px; }
   .auth-label { gap: 9px; font-size: 13px; @apply text-ink; }
   .auth-input, .auth-phone-field, .auth-code-field, .auth-password-field, .auth-panel .input-field {
-    min-height: 54px; border-radius: 14px; @apply border border-line bg-panel text-ink;
+    min-height: 54px; @apply bg-panel;
     box-shadow: none;
   }
   .auth-phone-field input, .auth-code-field input, .auth-password-field input { @apply text-ink; }
@@ -188,7 +188,7 @@
   .auth-form input:not([type=checkbox], [type=hidden]) { font-size: 16px; }
   .auth-form input::placeholder { font-size: 13px; @apply text-muted; }
   .auth-phone-field > span { padding-inline: 16px; @apply border-line text-muted; }
-  .auth-phone-field:focus-within, .auth-code-field:focus-within, .auth-password-field:focus-within, .auth-input:focus, .auth-panel .input-field:focus-visible { @apply border-action ring-3 ring-focus/15; }
+  .auth-phone-field:focus-within, .auth-code-field:focus-within, .auth-password-field:focus-within, .auth-input:focus, .auth-panel .input-field:focus { @apply field-focus; }
   .auth-password-field button { min-width: 48px; min-height: 48px; place-items: center; @apply text-muted; }
   .auth-code-field button { min-height: 48px; font-weight: 600; @apply text-action; }
   .auth-submit {
@@ -233,7 +233,6 @@
 }
 
 .auth-field-error { margin: 0; font-size: 12px; font-weight: 400; line-height: 1.6; @apply text-danger; }
-.auth-phone-field:has([aria-invalid=true]), .auth-code-field:has([aria-invalid=true]) { @apply border-danger-line; }
 
 @media (max-width: 767px) and (max-height: 740px) {
   .auth-brand-bar { min-height: 132px; }

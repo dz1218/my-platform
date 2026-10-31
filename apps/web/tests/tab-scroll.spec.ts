@@ -186,14 +186,14 @@ test('ordinary pages restore cached content and their own scroll on tabs and his
   }));
   await page.route('**/api/v1/novels', route => {
     reads++;
-    return route.fulfill({ json: { items: novels } });
+    return route.fulfill({ json: { items: novels.slice(0, 12), total: novels.length, page: 1, pageSize: 12 } });
   });
   await page.goto('/novels');
   await expect(page.getByRole('link', { name: /滚动小说0 / })).toBeVisible();
-  await page.evaluate(() => window.scrollTo(0, 1350));
+  await page.evaluate(() => window.scrollTo(0, 400));
   await settle(page);
   const saved = await page.evaluate(() => window.scrollY);
-  expect(saved).toBeGreaterThan(1000);
+  expect(saved).toBeGreaterThan(300);
   const nav = page.getByRole('navigation', { name: '主导航', exact: true });
   await nav.getByRole('link', { name: '我的', exact: true }).click();
   await expect(page).toHaveURL('/me');
@@ -221,11 +221,11 @@ test('the bookshelf restores the same book after changing viewport columns', asy
   }));
   await page.route('**/api/v1/novels', route => {
     reads++;
-    return route.fulfill({ json: { items: novels } });
+    return route.fulfill({ json: { items: novels.slice(0, 12), total: novels.length, page: 1, pageSize: 12 } });
   });
   await page.goto('/novels');
   await expect(page.locator('[data-browse-anchor="novel:resize-book-0"]')).toBeVisible();
-  await page.evaluate(() => window.scrollTo(0, 1350));
+  await page.evaluate(() => window.scrollTo(0, 400));
   await settle(page);
 
   for (const width of [390, 1440]) {

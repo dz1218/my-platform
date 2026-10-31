@@ -10,6 +10,7 @@ import { discover } from '@/services/companion';
 import { matchesQueryOptions, sessionQueryOptions } from '@/services/query-options';
 import { subscribeCompanionFilters } from '@/stores/companion/subscriptions';
 import { useCompanionNavigation } from './companion-navigation';
+import { useCompanionEntryLock } from './use-companion-entry-lock';
 import { useAccountLifecycle } from '@/features/account/account-lifecycle';
 import type { Identity, Match } from '@/types/companion';
 
@@ -28,6 +29,8 @@ export function useCompanionHome(accountId: string | null, inheritedIdentity?: I
   const isOwnerActive = useCallback(() => mounted.current && !isLeavingAccount(), [isLeavingAccount]);
   const ui = useStoreInstance(() => createCompanionStore({ client, accountId, isOwnerActive, captureNavigationIntent, openLogin: () => router.push('/login'), prepareChat: captureChat, openChat: id => router.push(`/chat/${id}`, { scroll: false }) }));
   const { filters, pendingIds, enteringId, error: meetError } = useStore(ui, useShallow(companionSelectors.view));
+  const entryLocked = useStore(ui, companionSelectors.entryLocked);
+  const pageRef = useCompanionEntryLock(ui, paused);
   const { applyFilters, meetIdentity, clearError, finishEntry, beginEntry } = ui.getState();
   const prepareChat = useCallback(() => { finishEntry(); captureChat(); }, [finishEntry, captureChat]);
   useLayoutEffect(() => {
@@ -58,6 +61,6 @@ export function useCompanionHome(accountId: string | null, inheritedIdentity?: I
   const error = conversations.error ?? meetError;
   const page = identities.data?.pages[0];
   const retry = () => { if (isLoggedIn && conversations.error) void conversations.refetch(); clearError(); };
-  return { isLoggedIn, paused, prepareChat, filters, applyFilters, heading, identities, conversations, friends, recent, cardContext, loadMore, error, page, retry };
+  return { isLoggedIn, paused, entryLocked, pageRef, prepareChat, filters, applyFilters, heading, identities, conversations, friends, recent, cardContext, loadMore, error, page, retry };
 }
 export type CompanionModel = ReturnType<typeof useCompanionHome>;

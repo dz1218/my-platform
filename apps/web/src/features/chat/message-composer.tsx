@@ -38,7 +38,7 @@ export function MessageComposer({
         event.preventDefault();
         void submit();
       }}
-      className="rounded-panel border border-control bg-surface-soft px-3.5 pb-2.5 pt-3 transition-colors focus-within:border-focus"
+      className="input-group px-3.5 pb-2.5 pt-3"
     >
       <label className="block">
         <span className="sr-only">给{name}发消息</span>

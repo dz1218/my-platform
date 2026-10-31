@@ -6,6 +6,7 @@ import (
 	"companion/server/pkg/database"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -159,4 +160,54 @@ func TestRepositoryIntegration(t *testing.T) {
 	if err = db.QueryRow(ctx, `SELECT count(*) FROM "Chapter" WHERE "novelId"=$1`, id).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("cascade: %d %v", count, err)
 	}
+	t.Run("shelf pagination and search", func(t *testing.T) {
+		if _, err := db.Exec(ctx, `UPDATE users SET name='夜行人' WHERE id='owner'`); err != nil {
+			t.Fatal(err)
+		}
+		for i := 1; i <= 25; i++ {
+			if _, err := db.Exec(ctx, `INSERT INTO "Novel"(id,title,description,"authorId","updatedAt") VALUES($1,$2,$3,'owner','2026-01-01')`, fmt.Sprintf("book-%02d", i), fmt.Sprintf("雨夜 %02d", i), "literal 100% _ \\ voyage"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		seen := map[string]bool{}
+		for p := 1; p <= 3; p++ {
+			page, err := r.List(ctx, Filters{Page: p, PageSize: 12})
+			want := 12
+			if p == 3 {
+				want = 1
+			}
+			if err != nil || page.Total != 25 || page.Page != p || len(page.Items) != want {
+				t.Fatalf("page %d: %+v, %v", p, page, err)
+			}
+			for _, n := range page.Items {
+				if seen[n.ID] {
+					t.Fatalf("duplicate novel across pages: %s", n.ID)
+				}
+				seen[n.ID] = true
+			}
+			if p == 1 && page.Items[0].ID != "book-25" {
+				t.Fatal("equal timestamps must have stable ID ordering")
+			}
+		}
+		for _, tc := range []struct {
+			q     string
+			total int
+		}{{"雨夜 13", 1}, {"夜行人", 25}, {"VOYAGE", 25}, {"100%", 25}, {"_", 25}, {`\`, 25}, {"100_", 0}, {"不存在", 0}} {
+			page, err := r.List(ctx, Filters{Q: tc.q, Page: 1, PageSize: 12})
+			if err != nil || page.Total != tc.total || len(page.Items) != min(12, tc.total) {
+				t.Fatalf("search %q: %+v, %v", tc.q, page, err)
+			}
+		}
+		if _, err := db.Exec(ctx, `DELETE FROM "Novel" WHERE id='book-01'`); err != nil {
+			t.Fatal(err)
+		}
+		page, err := r.List(ctx, Filters{Page: 3, PageSize: 12})
+		if err != nil || page.Page != 2 || page.Total != 24 || len(page.Items) != 12 {
+			t.Fatalf("deleted last page: %+v, %v", page, err)
+		}
+		page, err = r.List(ctx, Filters{Q: "不存在", Page: 999, PageSize: 12})
+		if err != nil || page.Page != 1 || page.Total != 0 || page.Items == nil || len(page.Items) != 0 {
+			t.Fatalf("empty search: %+v, %v", page, err)
+		}
+	})
 }

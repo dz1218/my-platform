@@ -153,7 +153,7 @@ export function Select({ id, label, options, value, onChange, placeholder = '请
       aria-haspopup="listbox" aria-expanded={open} aria-controls={`${id}-options`}
       aria-activedescendant={searchPlaceholder ? undefined : activeId} aria-required={required || undefined}
       aria-invalid={invalid || undefined} aria-describedby={[describedBy, invalid ? `${id}-error` : undefined].filter(Boolean).join(' ') || undefined}
-      className={quiet ? 'flex min-h-11 w-full items-center justify-between gap-3 rounded-control bg-surface-soft px-3 text-base text-ink transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-control aria-invalid:ring-danger' : 'input-field select-trigger'} onClick={() => open ? close() : expand()} onKeyDown={handleKey}>
+      className={quiet ? 'input-field select-trigger hover:bg-surface-hover' : 'input-field select-trigger'} onClick={() => open ? close() : expand()} onKeyDown={handleKey}>
       <span className={`truncate ${selected ? '' : 'text-muted'}`}>{selected?.label ?? placeholder}</span>
       <ChevronDown aria-hidden="true" size={16} strokeWidth={1.75} className={`shrink-0 text-muted transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`} />
     </button>
@@ -161,7 +161,7 @@ export function Select({ id, label, options, value, onChange, placeholder = '请
       {searchPlaceholder && <div className={`relative shrink-0 p-2 ${quiet ? '' : 'border-b border-line'}`}>
         <Search aria-hidden="true" size={16} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-muted" />
         <input ref={search} type="search" aria-label={searchPlaceholder} aria-controls={`${id}-options`} aria-activedescendant={activeId}
-          autoComplete="off" placeholder={searchPlaceholder} className={quiet ? 'h-11 w-full min-w-0 rounded-control bg-surface-soft pr-3 pl-9 text-base leading-6 text-ink caret-ink placeholder:text-muted focus:placeholder:text-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-control [&::-webkit-search-cancel-button]:appearance-none' : 'input-field pl-9 focus:placeholder:text-transparent'} value={query}
+          autoComplete="off" placeholder={searchPlaceholder} className={quiet ? 'input-field min-w-0 pl-9 focus:placeholder:text-transparent [&::-webkit-search-cancel-button]:appearance-none' : 'input-field pl-9 focus:placeholder:text-transparent'} value={query}
           onChange={event => { setQuery(event.target.value); setActive(0); }} onKeyDown={handleKey} />
       </div>}
       <ul ref={list} id={`${id}-options`} role="listbox" aria-label={label} className="min-h-0 overflow-y-auto overscroll-contain p-1">

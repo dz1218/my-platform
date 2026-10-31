@@ -54,6 +54,14 @@ function createFixtureNovels() {
 }
 let fixtureNovels = createFixtureNovels();
 
+function novelPage(items, url) {
+  const q = (url.searchParams.get('q') ?? '').trim().toLowerCase();
+  const filtered = items.filter(item => [item.title, item.author.name, item.description].some(value => value?.toLowerCase().includes(q)));
+  const pageSize = 12;
+  const page = Math.max(1, Math.min(Number(url.searchParams.get('page') ?? 1), Math.ceil(filtered.length / pageSize)));
+  return { items: filtered.slice((page - 1) * pageSize, page * pageSize), total: filtered.length, page, pageSize };
+}
+
 const server = createServer(async (request, response) => {
   response.setHeader('Content-Type', 'application/json');
   response.setHeader('Cache-Control', 'no-store');
@@ -194,7 +202,7 @@ const server = createServer(async (request, response) => {
   // Stateful novels stay in this isolated process so server-action redirects can
   // be checked against an already-cached client bookshelf without real writes.
   if (session?.startsWith('inheritance-test-') && request.url?.startsWith('/api/v1/novels')) {
-    const parts = request.url.split('/').filter(Boolean);
+    const parts = url.pathname.split('/').filter(Boolean);
     if (request.method === 'POST') {
       let body = ''; for await (const part of request) body += part;
       const data = JSON.parse(body || '{}');
@@ -222,7 +230,7 @@ const server = createServer(async (request, response) => {
       }
       return response.end(JSON.stringify(novel));
     }
-    if (parts.length === 3) return response.end(JSON.stringify({ items: fixtureNovels }));
+    if (parts.length === 3) return response.end(JSON.stringify(novelPage(fixtureNovels, url)));
     const novel = fixtureNovels.find(item => item.id === parts[3]);
     if (!novel) { response.statusCode = 404; return response.end('{}'); }
     if (parts.length === 4) return response.end(JSON.stringify(novel));
@@ -245,7 +253,7 @@ const server = createServer(async (request, response) => {
   if (request.method === 'POST' && /^\/api\/v1\/rooms\/[^/]+\/presence$/.test(request.url ?? '')) {
     return response.end(JSON.stringify({ ok: true }));
   }
-  if (request.url === '/api/v1/novels') return response.end(JSON.stringify({ items: [] }));
+  if (url.pathname === '/api/v1/novels') return response.end(JSON.stringify(novelPage([], url)));
   response.statusCode = 401;
   response.end(JSON.stringify({ error: { message: '请先登录' } }));
 });

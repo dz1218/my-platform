@@ -15,18 +15,35 @@ export function LiveViewerLeave({ hasCall, disabled, endCallDisabled, onEndCall,
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const anchorPosition = useRef<DOMRect | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
 
   function items() {
     return Array.from(panel.current?.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]:not(:disabled)') ?? []);
   }
 
+  function cancelClose() {
+    if (closeTimer.current !== null) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  }
+
   function close(restoreFocus = false) {
+    cancelClose();
     panel.current?.hidePopover();
     if (restoreFocus) trigger.current?.focus({ preventScroll: true });
   }
 
-  function expand(last = false) {
+  function scheduleClose() {
+    cancelClose();
+    // Allow the pointer to cross the gap without interrupting keyboard navigation.
+    closeTimer.current = setTimeout(() => {
+      closeTimer.current = null;
+      if (!panel.current?.contains(document.activeElement)) close();
+    }, 180);
+  }
+
+  function expand(focus?: 'first' | 'last') {
+    cancelClose();
     if (disabled || !hasCall || !panel.current || !trigger.current) return;
     const menu = panel.current;
     menu.showPopover();
@@ -37,9 +54,13 @@ export function LiveViewerLeave({ hasCall, disabled, endCallDisabled, onEndCall,
     const top = bounds.top - menu.offsetHeight - 8;
     menu.style.left = `${Math.max(margin, Math.min(bounds.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - margin))}px`;
     menu.style.top = `${Math.max(margin, Math.min(top >= margin ? top : bounds.bottom + 8, window.innerHeight - menu.offsetHeight - margin))}px`;
-    const enabled = items();
-    (last ? enabled.at(-1) : enabled[0])?.focus({ preventScroll: true });
+    if (focus) {
+      const enabled = items();
+      (focus === 'last' ? enabled.at(-1) : enabled[0])?.focus({ preventScroll: true });
+    }
   }
+
+  useEffect(() => cancelClose, []);
 
   useEffect(() => {
     if (!hasCall || disabled) close(!!panel.current?.contains(document.activeElement));
@@ -87,11 +108,13 @@ export function LiveViewerLeave({ hasCall, disabled, endCallDisabled, onEndCall,
       aria-haspopup={hasCall ? 'menu' : undefined}
       aria-expanded={hasCall ? open : undefined}
       aria-controls={hasCall ? menuId : undefined}
-      onClick={() => hasCall ? open ? close(true) : expand() : onLeave()}
+      onPointerEnter={event => { if (event.pointerType === 'mouse') expand(); }}
+      onPointerLeave={event => { if (event.pointerType === 'mouse') scheduleClose(); }}
+      onClick={event => hasCall ? expand(event.detail === 0 ? 'first' : undefined) : onLeave()}
       onKeyDown={event => {
         if (hasCall && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
           event.preventDefault();
-          expand(event.key === 'ArrowUp');
+          expand(event.key === 'ArrowUp' ? 'last' : 'first');
         }
       }}
     >
@@ -105,7 +128,12 @@ export function LiveViewerLeave({ hasCall, disabled, endCallDisabled, onEndCall,
       role="menu"
       aria-label="离开选项"
       className="fixed inset-auto m-0 w-60 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-panel border border-line bg-panel p-1.5 text-ink shadow-popover"
-      onToggle={event => setOpen(event.newState === 'open')}
+      onToggle={event => {
+        setOpen(event.newState === 'open');
+        if (event.newState === 'closed') cancelClose();
+      }}
+      onPointerEnter={cancelClose}
+      onPointerLeave={event => { if (event.pointerType === 'mouse') scheduleClose(); }}
       onKeyDown={handleMenuKey}
       onBlur={event => {
         if (!event.currentTarget.contains(event.relatedTarget) && event.relatedTarget !== trigger.current) close();

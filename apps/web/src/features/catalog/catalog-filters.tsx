@@ -15,7 +15,7 @@ export function CatalogFilters({ value, occupations, onChange, sheet = false, co
   const ui = useStoreInstance(() => createCatalogFormStore(value));
   const draft = useStore(ui, catalogSelectors.draft);
   const { setDraft, resetDraft, prepareFilters } = ui.getState();
-  return <form aria-label="筛选角色" className={`mb-5 grid grid-cols-2 gap-3 ${compact ? 'items-end border-b border-line pb-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_80px_80px_auto] [&_.input-field]:border-line [&_.input-field]:hover:border-control [&_.input-field]:focus:border-focus' : 'rounded-panel bg-panel p-4 sm:p-5 xl:grid-cols-4'}`} onSubmit={event => {
+  return <form aria-label="筛选角色" className={`mb-5 grid grid-cols-2 gap-3 ${compact ? 'items-end border-b border-line pb-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_80px_80px_auto]' : 'rounded-panel bg-panel p-4 sm:p-5 xl:grid-cols-4'}`} onSubmit={event => {
     event.preventDefault();
     const next = prepareFilters();
     if (next) onChange(next);

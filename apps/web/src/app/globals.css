@@ -124,9 +124,10 @@
   .surface { @apply rounded-panel border border-line bg-panel; }
   .surface-soft { @apply rounded-control border border-line bg-panel; }
   .link-muted { @apply text-sm text-muted hover:text-accent; }
-  .input-field { @apply min-h-11 w-full rounded-control border border-control bg-panel px-3 py-2.5 text-base text-ink placeholder:text-faint transition-colors focus:border-focus focus:outline-none focus:ring-3 focus:ring-focus/15 disabled:cursor-not-allowed disabled:bg-surface-soft disabled:text-muted sm:text-sm; }
+  .input-field { @apply field-surface min-h-11 w-full px-3 py-2.5 text-base placeholder:text-faint focus:field-focus disabled:cursor-not-allowed disabled:text-muted sm:text-sm; }
+  .input-group { @apply field-surface focus-within:field-focus; }
   .select-trigger { @apply flex items-center justify-between gap-3 text-left; }
-  .select-trigger[aria-expanded="true"] { @apply border-focus; }
+  .select-trigger[aria-expanded="true"] { @apply field-focus; }
   .select-trigger[aria-invalid="true"] { @apply border-danger; }
   .select-menu { @apply absolute inset-x-0 z-30 rounded-control border border-line bg-panel p-1 text-base text-ink shadow-popover sm:text-sm; }
   .select-popover { @apply fixed inset-auto m-0 overflow-hidden p-0; }
@@ -156,6 +157,20 @@
 
 @utility btn-solid {
   @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-control px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+/* Standalone fields and compound frames share one boundary and focus treatment. */
+@utility field-surface {
+  --rf-field-focus: var(--rf-focus);
+  @apply rounded-control border border-control bg-surface-soft text-ink transition-colors;
+  &[aria-invalid="true"], &:has(input[aria-invalid="true"], textarea[aria-invalid="true"]) {
+    --rf-field-focus: var(--rf-danger);
+    @apply border-danger;
+  }
+}
+
+@utility field-focus {
+  @apply border-field-focus outline-none ring-3 ring-field-focus/15;
 }
 
 /* Keep the masonry's column widths unchanged when a full-page chat locks scroll. */

@@ -18,7 +18,7 @@ async function prepare(page: Page) {
   await expect(page.getByRole('button', { name: '收起侧边栏' })).toBeVisible();
   // The viewport-specific catalog controls appear only after hydration. A visible
   // SSR nav alone can still follow a native document link before React attaches.
-  await expect(page.getByRole('searchbox', { name: '姓名', exact: true })).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: '搜索名字', exact: true })).toBeVisible();
 }
 
 test.beforeEach(async ({ request }) => { await configure(request); });
@@ -218,10 +218,10 @@ test('errors and login redirects release navigation feedback', async ({ page, re
   await configure(request, { delays: { '/api/v1/novels': 800 }, failures: { '/api/v1/novels': 503 } });
   await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link', { name: '小说', exact: true }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText('书架暂时加载失败');
-  await expect(page.getByRole('heading', { name: '小说', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '书架', exact: true })).toBeVisible();
   await expect(page.locator('[data-navigation-pending]')).toHaveCount(0);
   await configure(request);
-  await page.getByRole('button', { name: '刷新小说', exact: true }).click();
+  await page.getByRole('alert').getByRole('button', { name: '重试', exact: true }).click();
   await expect(page.getByText('暂无小说', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('navigation', { name: '手机主导航' }).getByRole('link', { name: '我的', exact: true }).click();
@@ -397,7 +397,8 @@ for (const width of [390, 1440]) {
           frameBottom = details.y;
         } else {
           const title = tab === 'companion' ? width < 768 ? '发现朋友' : '今天想和谁聊聊？' : tab === 'live' ? width < 768 ? '直播' : '直播大厅' : '小说';
-          await expect(main.getByRole('heading', { name: title, exact: true, level: 1 })).toBeVisible();
+          if (tab === 'novels') await expect(main.getByRole('heading', { name: title, exact: true, level: 1 })).toHaveClass('sr-only');
+          else await expect(main.getByRole('heading', { name: title, exact: true, level: 1 })).toBeVisible();
           if (tab === 'companion' && width < 768) {
             await expect(main.getByRole('navigation', { name: '陪伴内容', exact: true })).toHaveCount(0);
             const search = main.getByRole('searchbox', { name: '姓名', exact: true });
@@ -418,6 +419,11 @@ for (const width of [390, 1440]) {
             }
             await expect(directory.getByRole('button', { name: '全部', exact: true })).toHaveAttribute('aria-pressed', 'true');
             const bounds = (await directory.getByRole('button', { name: '准备中', exact: true }).boundingBox())!;
+            frameBottom = bounds.y + bounds.height;
+          } else if (tab === 'novels') {
+            await expect(main.getByRole('region', { name: '故事漫游', exact: true })).toHaveCount(0);
+            const shelfHeading = main.getByRole('heading', { name: '书架', exact: true });
+            const bounds = (await shelfHeading.boundingBox())!;
             frameBottom = bounds.y + bounds.height;
           } else {
             const scene = main.getByRole('region', { name: tab === 'companion' ? '温暖陪伴' : tab === 'live' ? '深夜电台' : '故事漫游', exact: true });
@@ -447,7 +453,10 @@ for (const width of [390, 1440]) {
         else if (width < 768) {
           await expect(page.getByRole('button', { name: '刷新小说', exact: true })).toHaveCount(0);
           await expect(page.getByRole('button', { name: '刷新当前页面', exact: true })).toBeEnabled();
-        } else await expect(page.getByRole('button', { name: '刷新小说', exact: true })).toBeEnabled();
+        } else {
+          await expect(page.getByRole('button', { name: '刷新小说', exact: true })).toHaveCount(0);
+          await expect(page.getByRole('link', { name: '创建小说', exact: true })).toBeVisible();
+        }
         expect(errors).toEqual([]);
       } finally { release(); }
     });
@@ -555,7 +564,10 @@ test('four tabs reuse ordinary data and one account subscription until an explic
     document.dispatchEvent(new Event('stop-loading-observer'));
     return document.documentElement.dataset.cachedLoadingFrame ?? null;
   })).toBeNull();
-  await page.getByRole('button', { name: '刷新小说', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const refresh = page.getByRole('button', { name: '刷新当前页面', exact: true });
+  await refresh.focus();
+  await refresh.press('Enter');
   await expect.poll(async () => (await requests(request)).filter(item => item.method === 'GET' && item.path === '/api/v1/novels').length).toBe(2);
   expect((await requests(request)).filter(item => item.path === '/api/v1/me')).toHaveLength(1);
   expect(discoveryReads).toBe(1);
@@ -563,15 +575,17 @@ test('four tabs reuse ordinary data and one account subscription until an explic
   await testInfo.attach('cached-tab-requests', { body: JSON.stringify({ requests: await requests(request), discoveryReads, matchesReads, accountConnections }), contentType: 'application/json' });
 });
 
-test('failed manual refresh retains the bookshelf and retries only its data', async ({ page, request }) => {
+test('failed mobile refresh retains the bookshelf and retries only its data on desktop', async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
   await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
   await page.goto('/novels');
   const book = page.getByRole('heading', { name: '雨停之前的来信', exact: true });
   await expect(book).toBeVisible();
   await configure(request, { delays: { '/api/v1/novels': 800 }, failures: { '/api/v1/novels': 503 } });
-  const refresh = page.getByRole('button', { name: '刷新小说', exact: true });
-  await refresh.click();
+  const refresh = page.getByRole('button', { name: '刷新当前页面', exact: true });
+  await refresh.focus();
+  await refresh.press('Enter');
   await expect(refresh).toBeDisabled();
   await expect(book).toBeVisible();
   await expect(page.getByRole('main').locator('[data-loading-overlay]')).toHaveCount(0);
@@ -579,7 +593,9 @@ test('failed manual refresh retains the bookshelf and retries only its data', as
   await expect(page.getByRole('main').getByRole('alert')).toBeVisible();
   await expect(book).toBeVisible();
   await configure(request);
-  await refresh.click();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.getByRole('button', { name: '刷新小说', exact: true })).toHaveCount(0);
+  await page.getByRole('alert').getByRole('button', { name: '重试', exact: true }).click();
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
   await expect(book).toBeVisible();
   expect((await requests(request)).filter(item => item.path === '/api/v1/novels')).toHaveLength(1);

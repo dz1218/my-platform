@@ -405,10 +405,14 @@ test('refresh during the first admission waits beyond 60 seconds and recovers af
     const result = await waiting;
     expect((await result.json()).error.code).toBe('host_admission_pending');
     expect(Number(result.headers()['retry-after'])).toBeGreaterThan(60);
-    await page.getByRole('button', { name: '重新加入', exact: true }).click();
+    await expect(page.locator('[data-player-loading]')).toBeVisible();
+    await expect(page.getByRole('button', { name: '重新加入', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '取消连接', exact: true })).toBeEnabled();
     await page.waitForTimeout(500);
-    expect(joinAttempts).toBe(2); // Manual retry also respects the server deadline.
+    expect(joinAttempts).toBe(2); // The loading frame respects the server retry deadline.
     await page.waitForTimeout(61_000);
+    await expect(page.locator('[data-player-loading]')).toBeVisible();
+    await expect(page.getByText('连接时间较长，请稍候…')).toBeVisible();
     await expect(page.getByRole('heading', { name: '直播间已结束' })).toHaveCount(0);
     await expect(page.getByText('已连接', { exact: true })).toBeVisible({ timeout: 45_000 });
     await expect(page.getByRole('button', { name: '开启摄像头', exact: true })).toBeEnabled();

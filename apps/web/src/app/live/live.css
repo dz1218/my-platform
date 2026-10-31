@@ -32,8 +32,8 @@
 .live-create-sheet > header button svg { @apply size-4; }
 .live-create-sheet > header button:focus-visible { @apply outline-offset-0 bg-surface-soft text-ink; }
 .live-create-sheet > .sheet-content { @apply px-6 pt-0 pb-6; }
-.live-create-name { @apply block h-11 w-full rounded-control border border-ink/10 bg-ink/5 px-3 text-sm text-ink placeholder:text-muted; }
-.live-page .live-create-name:focus { @apply border-ink/25 bg-ink/10 outline-none shadow-none ring-0; }
+.live-create-name { @apply field-surface block h-11 w-full px-3 text-sm placeholder:text-muted; }
+.live-page .live-create-name:focus { @apply field-focus; }
 .live-create-name[aria-invalid=true] { @apply border-danger; }
 @media (min-width: 768px) {
   .live-lobby-page { @apply min-h-dvh max-w-none px-8 pt-8 pb-10 xl:px-10; }
@@ -51,8 +51,8 @@
 .live-filters button[aria-pressed=true] { @apply bg-surface-selected text-ink; }
 .live-filters button > span { @apply text-sm tabular-nums; }
 .live-search-actions { @apply ml-auto flex max-w-full items-center gap-3; }
-.live-search { @apply flex h-11 w-48 min-w-0 items-center gap-3 rounded-control bg-canvas px-4 text-muted; }
-.live-search:focus-within { @apply bg-surface-soft text-ink; }
+.live-search { @apply field-surface flex h-11 w-48 min-w-0 items-center gap-3 px-4 text-muted; }
+.live-search:focus-within { @apply field-focus text-ink; }
 .live-search svg { flex-shrink: 0; }
 .live-search input { @apply min-w-0 w-full bg-transparent text-sm outline-none; }
 .live-page .live-search input:focus { outline: none; box-shadow: none; }
@@ -88,8 +88,8 @@
 .live-create-panel form { margin-top: 28px; }
 .live-create-panel label { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 9px; font-size: 12px; font-weight: 500; }
 .live-create-panel label span { font-size: 11px; font-weight: 400; @apply text-muted; }
-.live-input { display: block; width: 100%; min-width: 0; height: 46px; padding: 10px 12px; border-radius: 6px; font-size: 13px; @apply bg-panel border border-control text-ink; }
-.live-page .live-input:focus { @apply outline-none border-focus ring-3 ring-focus/15; }
+.live-input { display: block; width: 100%; min-width: 0; height: 46px; padding: 10px 12px; font-size: 13px; @apply field-surface; }
+.live-page .live-input:focus { @apply field-focus; }
 .live-input::placeholder { @apply text-muted; }
 .live-button { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-transparent px-4 py-2.5 text-sm font-medium leading-normal; }
 .live-button-primary { @apply bg-action text-on-action; }
@@ -246,8 +246,8 @@
 .live-message.is-own .live-message-body > p { @apply bg-surface-selected; }
 .live-message.is-own .live-message-avatar { @apply bg-surface-selected; }
 .live-chat-compose { display: contents; }
-.live-chat-form { flex-shrink: 0; margin: 0 14px 14px; border-radius: 7px; padding: 10px; @apply border border-line bg-panel; }
-.live-chat-form:focus-within { @apply border-focus ring-3 ring-focus/15; }
+.live-chat-form { flex-shrink: 0; margin: 0 14px 14px; padding: 10px; @apply field-surface; }
+.live-chat-form:focus-within { @apply field-focus; }
 .live-chat-form textarea { display: block; width: 100%; resize: none; outline: none; font-size: 13px; line-height: 1.8; min-height: 49px; @apply text-ink; }
 .live-page .live-chat-form textarea:focus { outline: none; }
 .live-chat-form textarea:disabled { opacity: .65; }
@@ -446,8 +446,8 @@
   .live-chat-empty p { @apply text-xs; }
   .live-chat-form { @apply m-0 rounded-none border-0 bg-transparent p-4; }
   .live-chat-form:focus-within { @apply ring-0; }
-  .live-chat-compose { @apply flex items-end gap-2 rounded-control border border-line/60 bg-surface-soft p-1.5; }
-  .live-chat-compose:focus-within { @apply border-control; }
+  .live-chat-compose { @apply field-surface flex items-end gap-2 p-1.5; }
+  .live-chat-compose:focus-within { @apply field-focus; }
   .live-chat-form textarea { @apply min-w-0 flex-1 bg-transparent px-2 py-2.5 text-sm leading-6; field-sizing: content; min-height: 44px; max-height: 140px; }
   .live-chat-form-footer { @apply shrink-0 gap-0 p-0; }
   .live-chat-form-footer > span { display: none; }
@@ -500,7 +500,8 @@
   .live-room-page .live-control-bar { min-height: 64px; padding: 8px 0; @apply bg-transparent; }
   .live-room-page .live-chat-form { margin: 0; padding: 12px; border: 0; border-radius: 0; @apply bg-transparent; }
   .live-room-page .live-chat-form:focus-within { box-shadow: none; }
-  .live-room-page .live-chat-compose { display: flex; align-items: flex-end; gap: 8px; padding: 6px; @apply rounded-scene bg-surface-soft; }
+  .live-room-page .live-chat-compose { display: flex; align-items: flex-end; gap: 8px; padding: 6px; @apply field-surface; }
+  .live-room-page .live-chat-compose:focus-within { @apply field-focus; }
   .live-room-page .live-chat-form textarea { min-height: 44px; max-height: 112px; padding: 10px; font-size: 16px; line-height: 24px; field-sizing: content; @apply bg-transparent; }
   .live-room-page .live-chat-form-footer { padding: 0; flex-shrink: 0; }
   .live-room-page .live-chat-form-footer > span { display: none; }

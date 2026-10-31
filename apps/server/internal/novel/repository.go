@@ -67,22 +67,6 @@ func scanNovel(row pgx.Row) (Novel, error) {
 	n.Chapters = []Chapter{}
 	return n, err
 }
-func (r Repository) List(ctx context.Context) ([]Novel, error) {
-	rows, err := r.DB.Query(ctx, `SELECT `+novelColumns+` FROM "Novel" n JOIN users u ON u.id=n."authorId" ORDER BY n."updatedAt" DESC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Novel{}
-	for rows.Next() {
-		n, err := scanNovel(rows)
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, n)
-	}
-	return items, rows.Err()
-}
 func (r Repository) Get(ctx context.Context, id, userID string) (Novel, error) {
 	n, err := scanNovel(r.DB.QueryRow(ctx, `SELECT `+novelColumns+` FROM "Novel" n JOIN users u ON u.id=n."authorId" WHERE n.id=$1`, id))
 	if err != nil {

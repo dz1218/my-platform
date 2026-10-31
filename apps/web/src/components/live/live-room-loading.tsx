@@ -1,17 +1,11 @@
 import Link from 'next/link';
-import { LoaderCircle } from 'lucide-react';
 import { MobileLiveRoomHeader } from '@my-platform/mobile-web/live-room';
 import { SkeletonBlock, SkeletonRegion } from '@/components/skeleton';
 import { LiveIcon } from './live-icon';
+import { LiveConnectionPending } from './live-connection-pending';
 import '@/app/live/live.css';
 
-/** Only the player waits here; metadata and chat resolve independently. */
-export function LiveConnectionPending({ label = '正在连接直播间' }: { label?: string }) {
-  return <div data-player-loading role="status" aria-label={label} aria-busy="true" className="pointer-events-none absolute inset-0 grid place-items-center">
-    <LoaderCircle aria-hidden="true" className="size-6 text-muted motion-safe:animate-spin" strokeWidth={1.75} />
-    <span className="sr-only">{label}</span>
-  </div>;
-}
+export { LiveConnectionPending };
 
 export function LiveRoomTitle({ title }: { title?: string }) {
   return <h1 title={title} data-room-title-pending={!title || undefined}>{title ? <span className="truncate">{title}</span> : <><span className="sr-only">直播间</span><span aria-hidden="true" className="h-6 w-36 max-w-full rounded bg-surface-soft" /></>}</h1>;
