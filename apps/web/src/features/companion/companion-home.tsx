@@ -1,20 +1,20 @@
 'use client';
 import Link from 'next/link';
 import { MatchLink } from '@/features/chat/match-link';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Users } from 'lucide-react';
+import { EmptyState } from '@my-platform/web-ui/empty-state';
 import { useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuthExit } from '@/features/auth/auth-exit-transition';
 import { useAppUI, useBrowseUI } from '@/stores/provider';
 import { useBrowseNavigation } from '@/components/browse-navigation';
-import { CompanionHeading, CompanionLoadingContent, CompanionCatalogSkeleton, companionDesktopLayout, companionRecentRail } from './companion-frame';
+import { CompanionHeading, CompanionLoadingContent, CompanionCatalogSkeleton, companionPageClassName, companionDesktopLayout, companionRecentRail } from './companion-frame';
 import { DiscoveryToolbar } from './discovery-toolbar';
 import { RecentConversationsFrame, RecentConversationsSkeleton } from './recent-conversations-frame';
 import { useViewport } from '@/components/use-viewport';
 import { Avatar } from '@/features/identity/avatar';
 import { IdentityModeSwitch } from '@/features/identity/identity-mode-switch';
 import { MobileCatalogFilters } from '@/features/catalog/catalog-filters';
-import { emptyCatalogFilters } from '@/services/catalog';
 import { IdentityMasonry } from '@/features/catalog/identity-masonry';
 import { FriendCard } from './friend-card';
 import { useCompanionHome, type CompanionModel } from './use-companion-home';
@@ -38,8 +38,8 @@ export function CompanionHome({ accountId, inheritedIdentity }: { accountId: str
     // transition needs the actual heading and final viewport/sidebar layout.
     if (viewport && layoutReady && !model.paused) onHomeReady();
   }, [viewport, layoutReady, model.paused, onHomeReady]);
-  if (!viewport) return <main ref={model.pageRef} id={model.paused ? undefined : 'main-content'} tabIndex={-1} className="page-shell page-content md:px-8 xl:px-10"><CompanionLoadingContent /></main>;
-  return <main ref={model.pageRef} id={model.paused ? undefined : 'main-content'} tabIndex={-1} className="page-shell page-content md:px-8 xl:px-10">
+  if (!viewport) return <main ref={model.pageRef} id={model.paused ? undefined : 'main-content'} tabIndex={-1} className={companionPageClassName}><CompanionLoadingContent /></main>;
+  return <main ref={model.pageRef} id={model.paused ? undefined : 'main-content'} tabIndex={-1} className={companionPageClassName}>
     {model.entryLocked && !model.paused && createPortal(<span role="status" className="sr-only">正在进入聊天…</span>, document.body)}
     <MobilePullToRefresh enabled={viewport === 'mobile' && !model.paused && !model.entryLocked} label="人物目录" busy={model.identities.isFetching} onRefresh={() => model.identities.refetch({ throwOnError: true, cancelRefetch: false })} />
     {viewport === 'mobile' ? <MobileCompanionHeading actions={!model.isLoggedIn && <Link href="/login" className="btn-secondary">登录 / 注册</Link>} /> : <CompanionHeading />}
@@ -55,15 +55,15 @@ function DesktopCompanion({ model }: { model: CompanionModel }) {
 
 function Discovery({ model: m, mobile = false }: { model: CompanionModel; mobile?: boolean }) {
   const { restorationPending } = useBrowseNavigation();
-  return <section aria-labelledby="discover-heading" className="min-w-0">
+  return <section aria-labelledby="discover-heading" className="flex min-w-0 flex-1 flex-col self-stretch">
     <div ref={m.heading} className="relative scroll-mt-8">
       {mobile ? <><h2 id="discover-heading" className="sr-only">这里的朋友</h2><MobileCatalogFilters anchored active={!m.paused} value={m.filters} occupations={m.page?.occupations ?? []} onChange={m.applyFilters} /></> : <DiscoveryToolbar headingId="discover-heading" active={!m.paused} value={m.filters} occupations={m.page?.occupations ?? []} onChange={m.applyFilters} />}
     </div>
     {m.identities.isError && !m.identities.isFetchNextPageError && <div role="alert" className="my-4 flex items-center justify-between gap-4 rounded-control border border-danger-line bg-danger-soft p-4 text-sm text-danger"><span>{m.identities.data ? '人物目录更新失败，已保留上次内容。' : '人物目录暂时加载失败。'}{m.identities.error.message}</span><button type="button" disabled={m.identities.isFetching} className="min-h-11 shrink-0 hover:text-danger-hover disabled:opacity-50" onClick={() => void m.identities.refetch()}>重试</button></div>}
     {m.identities.isPending && (mobile ? <MobileCatalogSkeleton /> : <CompanionCatalogSkeleton />)}
-    {!m.identities.isPending && !m.identities.error && m.friends.length === 0 && (mobile ? <p className="empty-state">没有找到符合条件的朋友，试试其他筛选条件。</p> : <div className="py-16 text-center"><p className="text-sm text-muted">没有找到符合条件的朋友</p>{Object.values(m.filters).some(Boolean) && <button type="button" className="btn-secondary mt-5" onClick={() => m.applyFilters({ ...emptyCatalogFilters })}>清除筛选</button>}</div>)}
+    {!m.identities.isPending && !m.identities.error && m.friends.length === 0 && <EmptyState icon={Users} title="没有找到符合条件的朋友" />}
     {/* Each filter result owns its measurements; cached results must not reuse a shorter list's column ranges. */}
-    <IdentityMasonry key={JSON.stringify(m.filters)} items={m.friends} context={m.cardContext} ItemContent={mobile ? MobileFriendCardAdapter : FriendCard} paused={m.paused} autoLoad={!restorationPending && !m.identities.isRefetchError} mobileColumns={2} gutter={mobile ? 12 : 16} hasNextPage={m.identities.hasNextPage} loading={m.identities.isFetchingNextPage} error={m.identities.isFetchNextPageError ? m.identities.error : null} loadMore={m.loadMore} />
+    {(m.friends.length > 0 || m.identities.hasNextPage) && <IdentityMasonry key={JSON.stringify(m.filters)} items={m.friends} context={m.cardContext} ItemContent={mobile ? MobileFriendCardAdapter : FriendCard} paused={m.paused} autoLoad={!restorationPending && !m.identities.isRefetchError} mobileColumns={2} gutter={mobile ? 12 : 16} hasNextPage={m.identities.hasNextPage} loading={m.identities.isFetchingNextPage} error={m.identities.isFetchNextPageError ? m.identities.error : null} loadMore={m.loadMore} />}
     {mobile && <p className="mt-6 max-w-prose text-xs leading-6 text-muted">这里的 AI 身份可能由真实用户参与互动。<Link href="/privacy" className="ml-1 text-accent hover:text-ink">了解互动方式</Link></p>}
   </section>;
 }

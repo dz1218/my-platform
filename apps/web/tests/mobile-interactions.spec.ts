@@ -280,7 +280,7 @@ test('chat settings lock the history and become a nonmodal panel on desktop', as
 
 for (const scenario of [
   { path: '/companion?view=discover', endpoint: '**/api/v1/discover?*', json: { items: [], total: 0, nextPage: null, occupations: [] } },
-  { path: '/novels', endpoint: '**/api/v1/novels', json: { items: [] } },
+  { path: '/novels', endpoint: '**/api/v1/novels', json: { items: [], total: 0, page: 1, pageSize: 12 } },
   { path: '/me', endpoint: '**/api/v1/matches', json: { items: [] } },
 ]) {
   test(`${scenario.path} refreshes its own data without document navigation`, async ({ page, context }) => {
@@ -291,10 +291,14 @@ for (const scenario of [
     await page.goto(scenario.path);
     await expect(page.locator('html')).toHaveClass(/has-pull-refresh/);
     await expect.poll(() => calls).toBeGreaterThan(0);
+    await expect(page.getByRole('button', { name: '刷新当前页面', exact: true })).toBeEnabled();
     const before = calls;
     const navCount = await page.evaluate(() => performance.getEntriesByType('navigation').length);
     const initialTop = (await page.getByRole('main').boundingBox())!.y;
-    await swipe(page, { x: 25, y: 90 }, { x: 25, y: 310 }, false, async () => {
+    // The shelf now has a search field at y=90; inputs must not start a refresh.
+    const shelfHeading = scenario.path === '/novels' ? await page.getByRole('heading', { name: '书架', exact: true }).boundingBox() : null;
+    const startY = shelfHeading ? shelfHeading.y + shelfHeading.height / 2 : 90;
+    await swipe(page, { x: 25, y: startY }, { x: 25, y: 310 }, false, async () => {
       await expect(page.locator('[data-pull-refresh]')).toHaveText('松开刷新');
       expect((await page.getByRole('main').boundingBox())!.y - initialTop).toBeGreaterThan(80);
       expect(calls).toBe(before);

@@ -9,7 +9,7 @@ const novels = Array.from({ length: 25 }, (_, index) => ({
 }));
 
 async function mockShelf(page: Page) {
-  const state = { items: novels, calls: [] as URL[], failPage: 0, slowQuery: '' };
+  const state = { items: novels, calls: [] as URL[], failPage: 0, slowQuery: '', beforeReply: async (_url: URL) => {} };
   await page.route(/\/api\/v1\/novels(?:\?|$)/, async route => {
     const url = new URL(route.request().url());
     state.calls.push(url);
@@ -17,6 +17,7 @@ async function mockShelf(page: Page) {
     const requestedPage = Number(url.searchParams.get('page') ?? 1);
     const filtered = state.items.filter(novel => [novel.title, novel.author.name, novel.description].some(value => value.toLowerCase().includes(query)));
     const currentPage = Math.max(1, Math.min(requestedPage, Math.ceil(filtered.length / 12)));
+    await state.beforeReply(url);
     if (query && query === state.slowQuery) await new Promise(resolve => setTimeout(resolve, 500));
     if (requestedPage === state.failPage) return route.fulfill({ status: 503, json: { error: { message: '书架暂时不可用' } } });
     return route.fulfill({ json: { items: filtered.slice((currentPage - 1) * 12, currentPage * 12), total: filtered.length, page: currentPage, pageSize: 12 } });
@@ -88,7 +89,7 @@ for (const width of [320, 390, 768, 1440]) {
     await expect(results).toContainText('没有找到相关小说');
     await expect(results.getByRole('link')).toHaveCount(0);
     await expect(pagination).toHaveCount(0);
-    await results.getByRole('button', { name: '清空搜索' }).click();
+    await search.getByRole('button', { name: '清空搜索' }).click();
     await expect(results.getByRole('link')).toHaveCount(12);
   });
 }
@@ -142,4 +143,89 @@ test('a newer search wins over a slow response', async ({ page, context }) => {
   await page.waitForTimeout(600);
   await expect(results.getByRole('link')).toHaveCount(1);
   await expect(input).toHaveValue('星际旅行');
+});
+
+for (const width of [390, 1440]) {
+  test(`search and pagination keep the current shelf mounted at ${width}px`, async ({ page, context }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await context.addCookies([cookie]);
+    const state = await mockShelf(page);
+    await page.goto('/novels');
+    const results = page.getByRole('region', { name: '小说列表' });
+    const pagination = page.getByRole('navigation', { name: '书架分页' });
+    const input = page.getByRole('searchbox');
+    await expect(results.getByRole('link')).toHaveCount(12);
+    await results.evaluate(element => {
+      const firstBook = element.querySelector('[data-browse-anchor]')!;
+      const observer = new MutationObserver(() => {
+        if (!firstBook.isConnected || element.querySelector('[data-page-skeleton]')) element.setAttribute('data-flashed', 'true');
+      });
+      observer.observe(element, { childList: true, subtree: true });
+      document.addEventListener('stop-shelf-observer', () => observer.disconnect(), { once: true });
+    });
+
+    let release!: () => void;
+    const heldSearch = new Promise<void>(resolve => { release = resolve; });
+    state.beforeReply = url => url.searchParams.get('q') === '夜行人' ? heldSearch : Promise.resolve();
+    await input.fill('夜行人');
+    await input.press('Enter');
+    await expect(results).toHaveAttribute('aria-busy', 'true');
+    await expect(page.getByRole('button', { name: '搜索小说' }).locator('svg')).toHaveClass(/animate-spin/);
+    await expect(results.getByRole('link')).toHaveCount(12);
+    await expect(page.locator('[data-page-skeleton]')).toHaveCount(0);
+    expect(await results.getAttribute('data-flashed')).toBeNull();
+    await page.screenshot({ path: `/tmp/radio-friday-review/novel-search-pending-${width}.png` });
+    release();
+    await expect(results).toHaveAttribute('aria-busy', 'false');
+    await expect(pagination).toContainText('第 1 / 2 页');
+    expect(await results.getAttribute('data-flashed')).toBeNull();
+    await page.evaluate(() => document.dispatchEvent(new Event('stop-shelf-observer')));
+
+    const heldPage = new Promise<void>(resolve => { release = resolve; });
+    state.beforeReply = url => url.searchParams.get('page') === '2' ? heldPage : Promise.resolve();
+    await pagination.getByRole('button', { name: '下一页' }).click();
+    await expect(results).toHaveAttribute('aria-busy', 'true');
+    await expect(results.getByRole('link')).toHaveCount(12);
+    await expect(page.locator('[data-page-skeleton]')).toHaveCount(0);
+    await expect(pagination).toContainText('第 2 / 2 页');
+    await expect(pagination.getByRole('button', { name: '上一页' })).toBeDisabled();
+    release();
+    await expect(results).toHaveAttribute('aria-busy', 'false');
+    await expect(results.getByRole('link')).toHaveCount(1);
+    await expect(results.getByRole('link')).toContainText('雨夜来信 13');
+    await expect(pagination).toContainText('第 2 / 2 页');
+
+    await input.fill('不存在的故事');
+    await input.press('Enter');
+    await expect(results).toHaveAttribute('aria-busy', 'false');
+    await expect(results).toContainText('没有找到相关小说');
+    await page.getByRole('search').getByRole('button', { name: '清空搜索' }).click();
+    await expect(results.getByRole('link')).toHaveCount(12);
+    await expect(page.locator('[data-page-skeleton]')).toHaveCount(0);
+  });
+}
+
+test('composition confirmation does not submit a partial search', async ({ page, context }) => {
+  await context.addCookies([cookie]);
+  const state = await mockShelf(page);
+  await page.goto('/novels');
+  await expect(page.getByRole('region', { name: '小说列表' }).getByRole('link')).toHaveCount(12);
+  const input = page.getByRole('searchbox');
+  const reads = state.calls.length;
+  await input.dispatchEvent('compositionstart');
+  await input.fill('夜行');
+  await input.press('Enter');
+  expect(state.calls).toHaveLength(reads);
+  await input.dispatchEvent('compositionend');
+  await input.press('Enter');
+  await expect.poll(() => state.calls.at(-1)?.searchParams.get('q')).toBe('夜行');
+});
+
+test('an unpaged API response is not displayed as a successful search', async ({ page, context }) => {
+  await context.addCookies([cookie]);
+  await page.route(/\/api\/v1\/novels(?:\?|$)/, route => route.fulfill({ json: { items: novels } }));
+  await page.goto('/novels');
+  const results = page.getByRole('region', { name: '小说列表' });
+  await expect(results.getByRole('alert')).toContainText('书架暂时加载失败');
+  await expect(results.getByRole('link')).toHaveCount(0);
 });

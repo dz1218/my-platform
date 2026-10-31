@@ -5,7 +5,8 @@ import { SkeletonBlock, SkeletonRegion } from '@/components/skeleton';
 import { DiscoveryToolbarLoading } from './discovery-toolbar';
 
 // At 1440px: 1124px canvas = 832px directory + 32px gap + 260px rail.
-export const companionDesktopLayout = 'grid items-start gap-8 min-[1100px]:grid-cols-[minmax(0,1fr)_260px]';
+export const companionPageClassName = 'page-shell page-content flex min-h-[calc(100dvh-var(--mobile-nav-height)-env(safe-area-inset-bottom))] flex-col md:min-h-dvh md:px-8 xl:px-10';
+export const companionDesktopLayout = 'grid flex-1 grid-rows-[auto_1fr] items-start gap-8 min-[1100px]:grid-cols-[minmax(0,1fr)_260px] min-[1100px]:grid-rows-1';
 export const companionRecentRail = 'order-first min-w-0 min-[1100px]:sticky min-[1100px]:top-8 min-[1100px]:order-last';
 
 export function CompanionHeading() {
@@ -15,7 +16,7 @@ export function CompanionHeading() {
 /** Only presentation mounts here; catalog requests and subscriptions wait for the account owner. */
 export function CompanionLoadingContent() {
   return <>
-    <div className="hidden md:block">
+    <div className="hidden md:flex md:flex-1 md:flex-col">
       <CompanionHeading />
       <div className={companionDesktopLayout}>
         <section className="min-w-0">
@@ -25,7 +26,7 @@ export function CompanionLoadingContent() {
         <aside aria-label="最近聊天" className={companionRecentRail}><RecentConversationsLoading /></aside>
       </div>
     </div>
-    <div className="md:hidden">
+    <div className="flex flex-1 flex-col md:hidden">
       <MobileCompanionHeading />
       <h2 className="sr-only">这里的朋友</h2>
       <CatalogFiltersLoading mobile />
@@ -35,7 +36,7 @@ export function CompanionLoadingContent() {
 }
 
 export function CompanionLoading() {
-  return <main id="main-content" tabIndex={-1} className="page-shell page-content md:px-8 xl:px-10"><CompanionLoadingContent /></main>;
+  return <main id="main-content" tabIndex={-1} className={companionPageClassName}><CompanionLoadingContent /></main>;
 }
 
 export function CompanionCatalogSkeleton({ label = '正在寻找可以认识的人…' }: { label?: string }) {

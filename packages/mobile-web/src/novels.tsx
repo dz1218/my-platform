@@ -5,7 +5,7 @@ import { SkeletonBlock, SkeletonRegion } from '@my-platform/web-ui/skeleton';
 export function MobileNovelShelfFrame({ actions, count, search, children }: {
   actions?: ReactNode; count?: number; search?: ReactNode; children: ReactNode;
 }) {
-  return <main id="main-content" tabIndex={-1} data-mobile-page="novels" className="page-shell page-content">
+  return <main id="main-content" tabIndex={-1} data-mobile-page="novels" className="page-shell page-content flex min-h-[calc(100dvh-var(--mobile-nav-height)-env(safe-area-inset-bottom))] flex-col">
     <h1 className="sr-only">小说</h1>
     <div className="mb-4 flex min-h-11 items-center justify-between gap-3">
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1"><h2 className="text-base font-semibold">书架</h2>{count !== undefined && <span className="text-xs text-muted">{count} 本小说</span>}</div>

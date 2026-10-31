@@ -1,6 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
+import { Search, X } from 'lucide-react';
 import { SkeletonBlock, SkeletonRegion } from '@/components/skeleton';
 import { LiveIcon } from './live-icon';
 import '@/app/live/live.css';
@@ -17,24 +18,35 @@ export function DesktopLiveLobbyFrame({ directory }: { directory: ReactNode }) {
   </div>;
 }
 
-export function LiveDirectoryFrame({ count, liveCount, waitingCount, filter = '全部', search = '', onFilter, onSearch, updatesLabel = '正在连接实时更新…', children, result, action }: {
+export function LiveDirectoryFrame({ count, liveCount, waitingCount, filter = '全部', search = '', searchDraft = search, onFilter, onSearch, onSearchDraftChange, updatesLabel = '正在连接实时更新…', children, result, action }: {
   count?: number;
   liveCount?: number;
   waitingCount?: number;
   filter?: LobbyFilter;
   search?: string;
+  searchDraft?: string;
   onFilter?: (filter: LobbyFilter) => void;
   onSearch?: (search: string) => void;
+  onSearchDraftChange?: (draft: string) => void;
   updatesLabel?: string;
   children: ReactNode;
   result?: ReactNode;
   action?: ReactNode;
 }) {
+  const input = useRef<HTMLInputElement>(null);
+  const composing = useRef(false);
   return <section className="live-directory" aria-label="直播间列表">
     <div className="sr-only"><h2>直播间列表{count !== undefined && `，共 ${count} 个`}</h2><span role="status">{updatesLabel}</span></div>
     <div className="live-directory-toolbar">
       <div className="live-filters" aria-label="筛选直播间">{(['全部', '直播中', '准备中'] as const).map(value => <button type="button" key={value} aria-pressed={filter === value} disabled={!onFilter} onClick={() => onFilter?.(value)}>{value}{value !== '全部' && (value === '直播中' ? liveCount : waitingCount) !== undefined && <span>({value === '直播中' ? liveCount : waitingCount})</span>}</button>)}</div>
-      <div className="live-search-actions"><label className="live-search"><LiveIcon name="search" size={16} /><input type="search" aria-label="搜索直播间" placeholder="搜索直播间" value={search} disabled={!onSearch} onChange={event => onSearch?.(event.target.value)} /></label>{action}</div>
+      <div className="live-search-actions">
+        <form role="search" aria-label="搜索直播间" className="live-search" onSubmit={event => { event.preventDefault(); if (!composing.current) onSearch?.(searchDraft); }}>
+          <button type="submit" aria-label="搜索直播间" disabled={!onSearch} className="grid size-11 shrink-0 place-items-center rounded-control text-muted hover:text-ink"><Search aria-hidden="true" className="size-4" /></button>
+          <input ref={input} type="search" aria-label="搜索直播间" placeholder="搜索直播间" maxLength={80} autoComplete="off" enterKeyHint="search" value={searchDraft} disabled={!onSearchDraftChange} onChange={event => onSearchDraftChange?.(event.target.value)} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} onKeyDown={event => { if (event.key === 'Enter' && (composing.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) event.preventDefault(); }} className="pr-3 [&::-webkit-search-cancel-button]:appearance-none" />
+          {(searchDraft || search) && <button type="button" aria-label="清空搜索" disabled={!onSearch} onClick={() => { onSearch?.(''); input.current?.focus(); }} className="grid size-11 shrink-0 place-items-center rounded-control text-muted hover:text-ink"><X aria-hidden="true" className="size-4" /></button>}
+        </form>
+        {action}
+      </div>
     </div>
     {children}
     <p className="sr-only" aria-live="polite">{result}</p>

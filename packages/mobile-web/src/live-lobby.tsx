@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode, Ref } from "react";
+import { useRef, type ReactNode, type Ref } from "react";
 import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { createDomainStore } from "@my-platform/client-core";
@@ -125,6 +125,7 @@ export function MobileLiveDirectory({
   renderLink?: RenderLink;
 }) {
   const store = useStoreInstance(createFinderStore);
+  const composing = useRef(false);
   const finder = useStore(
     store,
     useShallow((state) => ({
@@ -248,11 +249,11 @@ export function MobileLiveDirectory({
           <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 text-center [@media(max-height:700px)]:py-4">
             <QuietRecord />
             <h2 className="font-literary text-[28px] leading-relaxed">
-              {filtered ? "还没找到这个声音" : "今晚，还很安静。"}
+              {search ? "没有找到相关直播间" : filtered ? "没有符合筛选条件的直播间" : "今晚，还很安静。"}
             </h2>
             <p className="mt-3 text-sm leading-7 text-muted">
               {filtered
-                ? "换个关键词，再找找。"
+                ? "换个关键词或调整筛选条件，再试试。"
                 : "暂无直播间，等一个声音，也可以是你。"}
             </p>
             {filtered && (
@@ -274,6 +275,7 @@ export function MobileLiveDirectory({
         <form
           onSubmit={(event) => {
             event.preventDefault();
+            if (composing.current) return;
             onSearch?.(finder.search.trim());
             onFilter?.(finder.filter);
             close();
@@ -285,9 +287,14 @@ export function MobileLiveDirectory({
             <input
               aria-label="搜索直播间"
               type="search"
+              maxLength={80}
+              enterKeyHint="search"
               placeholder="想听什么？"
               value={finder.search}
               onChange={(event) => editSearch(event.target.value)}
+              onCompositionStart={() => { composing.current = true; }}
+              onCompositionEnd={() => { composing.current = false; }}
+              onKeyDown={event => { if (event.key === 'Enter' && (composing.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) event.preventDefault(); }}
               className="input-field"
             />
           </label>

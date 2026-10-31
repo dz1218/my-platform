@@ -23,7 +23,6 @@
 .live-avatar { width: 38px; height: 38px; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 50%; font-size: 15px; font-weight: 600; @apply bg-surface-soft text-muted; }
 .live-avatar.is-host { @apply bg-surface-soft text-action; }
 .live-lobby-start { @apply inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-action px-4 text-sm font-medium text-on-action hover:bg-action-hover; }
-.live-lobby-empty { @apply flex min-h-80 flex-1 flex-col items-center justify-center px-6 pt-24 pb-10 text-center; }
 .live-create-sheet { @apply w-96 rounded-panel border border-ink/10 bg-surface-soft/65 bg-glass-sheen p-0 shadow-glass-dialog backdrop-blur-2xl backdrop-saturate-125; }
 .live-create-sheet::backdrop { @apply bg-canvas/40 backdrop-blur-sm; }
 .live-create-sheet > header { @apply border-0 px-6 pt-3 pb-0; }
@@ -51,7 +50,7 @@
 .live-filters button[aria-pressed=true] { @apply bg-surface-selected text-ink; }
 .live-filters button > span { @apply text-sm tabular-nums; }
 .live-search-actions { @apply ml-auto flex max-w-full items-center gap-3; }
-.live-search { @apply field-surface flex h-11 w-48 min-w-0 items-center gap-3 px-4 text-muted; }
+.live-search { @apply field-surface flex h-11 w-60 min-w-0 items-center text-muted; }
 .live-search:focus-within { @apply field-focus text-ink; }
 .live-search svg { flex-shrink: 0; }
 .live-search input { @apply min-w-0 w-full bg-transparent text-sm outline-none; }

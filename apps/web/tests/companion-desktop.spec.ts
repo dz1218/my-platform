@@ -70,7 +70,7 @@ test('desktop filters apply explicitly, discard cancelled edits and clear indepe
   await search.fill('不存在的人');
   await search.press('Enter');
   await expect(page.getByText('没有找到符合条件的朋友', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '清除筛选', exact: true }).click();
+  await page.getByRole('button', { name: '清除全部', exact: true }).click();
   await expect(page.locator('[data-identity-id]')).toHaveCount(friends.length);
 });
 

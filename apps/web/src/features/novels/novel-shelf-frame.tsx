@@ -19,9 +19,9 @@ export function NovelShelfFrame({ actions, count, search, children }: {
 }) {
   const viewport = useViewport();
   if (viewport === 'mobile') return <MobileNovelShelfFrame actions={actions} count={count} search={search}>{children}</MobileNovelShelfFrame>;
-  return <main id="main-content" tabIndex={-1} className="page-shell page-content md:px-8 xl:px-10">
+  return <main id="main-content" tabIndex={-1} className="page-shell page-content flex min-h-dvh flex-col md:px-8 xl:px-10">
     <h1 className="sr-only">小说</h1>
-    <section aria-labelledby="novel-shelf-heading">
+    <section aria-labelledby="novel-shelf-heading" className="flex flex-1 flex-col">
       <div className="mb-6 flex min-h-11 items-center justify-between gap-6">
         <div className="flex shrink-0 items-baseline gap-3">
           <h2 id="novel-shelf-heading" className="text-base font-semibold text-ink">书架</h2>

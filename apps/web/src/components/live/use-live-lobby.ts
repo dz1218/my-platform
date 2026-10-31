@@ -99,8 +99,10 @@ export function useLiveLobby({
     };
   }, [queryClient, apiBaseUrl, ui]);
   const search = useBrowseUI((s) => s.liveSearch);
+  const searchDraft = useBrowseUI((s) => s.liveSearchDraft);
   const filter = useBrowseUI((s) => s.liveFilter);
   const setSearch = useBrowseUI((s) => s.setLiveSearch);
+  const setSearchDraft = useBrowseUI((s) => s.setLiveSearchDraft);
   const setFilter = useBrowseUI((s) => s.setLiveFilter);
   useEffect(
     () =>
@@ -156,7 +158,9 @@ export function useLiveLobby({
     title,
     setTitle,
     search,
+    searchDraft,
     setSearch,
+    setSearchDraft,
     filter,
     setFilter,
     isCreating,

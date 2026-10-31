@@ -679,8 +679,11 @@ test("filters and search work together; closing can be cancelled with Escape", a
   await page.getByRole("button", { name: "直播中" }).click();
   await expect(page.getByRole("article")).toHaveCount(1);
   await page.getByRole("searchbox", { name: "搜索直播间" }).fill("不存在");
-  await expect(page.getByText("没有找到匹配的直播间")).toBeVisible();
-  await page.getByRole("button", { name: "查看全部直播间" }).click();
+  await expect(page.getByRole("article")).toHaveCount(1);
+  await page.getByRole("searchbox", { name: "搜索直播间" }).press("Enter");
+  await expect(page.getByText("没有找到相关直播间")).toBeVisible();
+  await page.getByRole("button", { name: "清空搜索" }).click();
+  await page.getByRole("button", { name: "全部", exact: true }).click();
   await expect(page.getByRole("article")).toHaveCount(2);
   const close = page.getByRole("button", { name: `关闭直播间：${room.title}` });
   await close.click();

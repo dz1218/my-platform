@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { AudioLines } from "lucide-react";
+import { EmptyState } from '@my-platform/web-ui/empty-state';
 import { useDialogScrollLock } from '@my-platform/web-ui/dialog-scroll-lock';
 import { MobilePullToRefresh } from '@my-platform/mobile-web/pull-to-refresh';
 import { Sheet } from "@/components/sheet";
@@ -208,8 +209,10 @@ function LobbyDirectory({
       waitingCount={roomsQuery.isPending ? undefined : model.waitingCount}
       filter={filter}
       search={search}
+      searchDraft={model.searchDraft}
       onFilter={setFilter}
       onSearch={setSearch}
+      onSearchDraftChange={model.setSearchDraft}
       updatesLabel={updatesLabel}
       result={
         !roomsQuery.isPending &&
@@ -304,17 +307,7 @@ function LobbyDirectory({
         </div>
       ) : (
         !listError && (
-          <div className="live-lobby-empty" role="status">
-            <div
-              className="mb-6 flex items-center gap-6 text-muted"
-              aria-hidden="true"
-            >
-              <span className="h-px w-14 bg-line" />
-              <AudioLines className="size-12" strokeWidth={1.25} />
-              <span className="h-px w-14 bg-line" />
-            </div>
-            <h3 className="text-sm font-normal text-muted">暂无直播间</h3>
-          </div>
+          <EmptyState icon={AudioLines} title={search ? '没有找到相关直播间' : filter !== '全部' ? '没有符合筛选条件的直播间' : '暂无直播间'} />
         )
       )}
     </LiveDirectoryFrame>

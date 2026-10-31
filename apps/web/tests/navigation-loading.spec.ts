@@ -3,6 +3,27 @@ import { expect, test, type Page, type Locator, type APIRequestContext, type Req
 const fixture = 'http://127.0.0.1:18181/__performance';
 async function configure(request: APIRequestContext, config: object = {}) { await request.post(fixture, { data: config }); }
 async function requests(request: APIRequestContext) { return (await (await request.get(fixture)).json()).requests as Array<{ path: string; method: string; startedAt: number; finishedAt: number | null; abortedAt: number | null }>; }
+function observeShelfReads(page: Page, request: APIRequestContext, production: boolean) {
+  let completedShelfReads = 0;
+  let abortedShelfReads = 0;
+  const isShelfRead = (outgoing: Request) => outgoing.method() === 'GET' && new URL(outgoing.url()).pathname === '/api/v1/novels';
+  page.on('requestfinished', outgoing => { if (isShelfRead(outgoing)) completedShelfReads++; });
+  page.on('requestfailed', outgoing => {
+    if (isShelfRead(outgoing) && outgoing.failure()?.errorText === 'net::ERR_ABORTED') abortedShelfReads++;
+  });
+  return async (expected: number) => {
+    await expect.poll(() => completedShelfReads).toBe(expected);
+    const backendReads = (await requests(request)).filter(item => item.path === '/api/v1/novels' && item.method === 'GET').length;
+    if (production) expect(backendReads).toBe(expected);
+    else {
+      // StrictMode can cancel the first subscription's stale fetch before the
+      // second subscribes. Only an observed abort may explain an extra API read.
+      expect(backendReads).toBeGreaterThanOrEqual(expected);
+      expect(backendReads).toBeLessThanOrEqual(expected + abortedShelfReads);
+    }
+  };
+}
+
 async function visibleBounds(locator: Locator) {
   await expect(locator).toBeVisible();
   // Streaming can replace a node between visibility and measurement. Locator
@@ -105,7 +126,7 @@ for (const width of [390, 1440]) {
       const isCatalog = kind === 'catalog';
       await page.route(isCatalog ? '**/api/v1/discover?*' : '**/api/v1/novels', async route => {
         await held;
-        await route.fulfill({ json: isCatalog ? { items: [], total: 0, nextPage: null, occupations: [] } : { items: [] } }).catch(() => {});
+        await route.fulfill({ json: isCatalog ? { items: [], total: 0, nextPage: null, occupations: [] } : { items: [], total: 0, page: 1, pageSize: 12 } }).catch(() => {});
       });
       try {
         await page.goto(isCatalog ? '/companion?view=discover' : '/novels');
@@ -622,24 +643,7 @@ test('leaving the live tab stops room updates and returning reuses cached rooms 
 });
 
 test('saved novel metadata and chapter creation invalidate an already visited bookshelf', async ({ page, request }, testInfo) => {
-  let completedShelfReads = 0;
-  let abortedShelfReads = 0;
-  const isShelfRead = (outgoing: Request) => outgoing.method() === 'GET' && new URL(outgoing.url()).pathname === '/api/v1/novels';
-  page.on('requestfinished', outgoing => { if (isShelfRead(outgoing)) completedShelfReads++; });
-  page.on('requestfailed', outgoing => {
-    if (isShelfRead(outgoing) && outgoing.failure()?.errorText === 'net::ERR_ABORTED') abortedShelfReads++;
-  });
-  const expectShelfReads = async (expected: number) => {
-    await expect.poll(() => completedShelfReads).toBe(expected);
-    const backendReads = (await requests(request)).filter(item => item.path === '/api/v1/novels' && item.method === 'GET').length;
-    if (testInfo.config.configFile?.includes('production')) expect(backendReads).toBe(expected);
-    else {
-      // StrictMode can cancel the first subscription's stale fetch before the
-      // second subscribes. Only an observed abort may explain an extra API read.
-      expect(backendReads).toBeGreaterThanOrEqual(expected);
-      expect(backendReads).toBeLessThanOrEqual(expected + abortedShelfReads);
-    }
-  };
+  const expectShelfReads = observeShelfReads(page, request, testInfo.config.configFile?.includes('production') ?? false);
   await signIn(page);
   await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
   await page.goto('/novels');
@@ -664,7 +668,8 @@ test('saved novel metadata and chapter creation invalidate an already visited bo
   await expectShelfReads(3);
 });
 
-test('creating and deleting a novel update the cached shelf across server-action redirects', async ({ page, request }) => {
+test('creating and deleting a novel update the cached shelf across server-action redirects', async ({ page, request }, testInfo) => {
+  const expectShelfReads = observeShelfReads(page, request, testInfo.config.configFile?.includes('production') ?? false);
   await signIn(page);
   await page.routeWebSocket('**/api/v1/matches/socket?*', () => {});
   await page.goto('/novels');
@@ -683,7 +688,7 @@ test('creating and deleting a novel update the cached shelf across server-action
   await expect(page).toHaveURL('/novels');
   await expect(page.getByRole('heading', { name: '刚刚写下的新故事', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: '雨停之前的来信', exact: true })).toBeVisible();
-  expect((await requests(request)).filter(item => item.path === '/api/v1/novels' && item.method === 'GET')).toHaveLength(3);
+  await expectShelfReads(3);
 });
 
 for (const status of [401, 403]) {

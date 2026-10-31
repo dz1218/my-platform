@@ -10,10 +10,12 @@ export type BrowseState = {
   setNovelSearchDraft: (draft: string) => void;
   searchNovels: (query: string) => void;
   setNovelPage: (page: number) => void;
+  liveSearchDraft: string;
   liveSearch: string;
   liveFilter: '全部' | '直播中' | '准备中';
   lastCompanionHref: string;
   setProfileTab: (tab: BrowseState['profileTab']) => void;
+  setLiveSearchDraft: (draft: string) => void;
   setLiveSearch: (search: string) => void;
   setLiveFilter: (filter: BrowseState['liveFilter']) => void;
   rememberCompanionHref: (href: string) => void;
@@ -22,7 +24,7 @@ export type BrowseState = {
 /** Harmless browsing choices last for this account's current document only. */
 export function createBrowseStore() {
   return createDomainStore<BrowseState>()(set => ({
-    profileTab: 'recent', liveSearch: '', liveFilter: '全部', lastCompanionHref: '/companion',
+    profileTab: 'recent', liveSearchDraft: '', liveSearch: '', liveFilter: '全部', lastCompanionHref: '/companion',
     profileChatPage: 1,
     novelSearchDraft: '', novelSearch: '', novelPage: 1,
     setNovelSearchDraft: novelSearchDraft => set({ novelSearchDraft }),
@@ -37,7 +39,11 @@ export function createBrowseStore() {
       if (Number.isInteger(page) && page > 0) set({ profileChatPage: page });
     },
     setProfileTab: profileTab => set({ profileTab }),
-    setLiveSearch: liveSearch => set({ liveSearch }),
+    setLiveSearchDraft: liveSearchDraft => set({ liveSearchDraft }),
+    setLiveSearch: query => {
+      const liveSearch = query.trim().slice(0, 80);
+      set({ liveSearch, liveSearchDraft: liveSearch });
+    },
     setLiveFilter: liveFilter => set({ liveFilter }),
     rememberCompanionHref: lastCompanionHref => {
       if (lastCompanionHref === '/companion' || lastCompanionHref.startsWith('/companion?')) set({ lastCompanionHref });
