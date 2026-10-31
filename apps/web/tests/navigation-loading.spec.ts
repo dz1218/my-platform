@@ -61,7 +61,7 @@ for (const width of [390, 768, 1440]) {
         const start = performance.now();
         document.documentElement.dataset.navigationStartedAt = String(start);
         const observer = new MutationObserver(() => {
-          if (document.querySelector('[data-navigation-pending="/"], [role="status"][aria-label="正在加载直播间…"]')) {
+          if (document.querySelector('nav a[href="/"][data-pending="true"], [role="status"][aria-label="正在加载直播间…"]')) {
             document.documentElement.dataset.navigationFeedbackMs = String(performance.now() - start);
             observer.disconnect();
           }

@@ -4,7 +4,7 @@ import {
   type MobileNavigationLinkProps,
 } from "@my-platform/mobile-web/navigation";
 import NextLink, { useLinkStatus } from "next/link";
-import { InlineLoading, LoadingPlaceholder } from "./page-skeleton";
+import { LoadingPlaceholder } from "./page-skeleton";
 import { AccountStartupContent } from "./account-startup-content";
 import { SkeletonBlock, SkeletonRegion } from "./skeleton";
 import {
@@ -284,14 +284,6 @@ function AppFrame({
         >
           {!immersive && <div aria-hidden="true" className="shell-ambient" />}
           <BrowsingPages user={user}>{children}</BrowsingPages>
-          {pendingHref && (
-            <div
-              data-navigation-pending={pendingHref}
-              className="pointer-events-none fixed right-4 top-4 z-20 rounded-control border border-line bg-panel px-4 shadow-lg"
-            >
-              <InlineLoading label="正在打开页面…" className="min-h-11 py-2" />
-            </div>
-          )}
         </div>
         <MobileNavigation path={path} pendingHref={pendingHref} Link={Link} />
       </div>
