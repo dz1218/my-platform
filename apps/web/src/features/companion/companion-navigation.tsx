@@ -3,13 +3,13 @@
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 
-type Navigation = { paused: boolean; prepareChat: () => void; captureNavigationIntent: () => () => boolean; registerChatRoute: () => () => void };
-const NavigationContext = createContext<Navigation>({ paused: false, prepareChat: () => {}, captureNavigationIntent: () => () => false, registerChatRoute: () => () => {} });
+type Navigation = { paused: boolean; prepareChat: () => void; cancelChat: () => void; captureNavigationIntent: () => () => boolean; registerChatRoute: () => () => void };
+const NavigationContext = createContext<Navigation>({ paused: false, prepareChat: () => {}, cancelChat: () => {}, captureNavigationIntent: () => () => false, registerChatRoute: () => () => {} });
 export const useCompanionNavigation = () => useContext(NavigationContext);
 
 /** The stable browsing owner supplies lifecycle commands; Next still owns the actual chat route. */
-export function CompanionNavigation({ children, paused, prepareChat, captureNavigationIntent, registerChatRoute }: Navigation & { children: ReactNode }) {
-  const value = useMemo(() => ({ paused, prepareChat, captureNavigationIntent, registerChatRoute }), [paused, prepareChat, captureNavigationIntent, registerChatRoute]);
+export function CompanionNavigation({ children, paused, prepareChat, cancelChat, captureNavigationIntent, registerChatRoute }: Navigation & { children: ReactNode }) {
+  const value = useMemo(() => ({ paused, prepareChat, cancelChat, captureNavigationIntent, registerChatRoute }), [paused, prepareChat, cancelChat, captureNavigationIntent, registerChatRoute]);
   return <NavigationContext.Provider value={value}>{children}</NavigationContext.Provider>;
 }
 

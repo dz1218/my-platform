@@ -10,7 +10,6 @@ import { discover } from '@/services/companion';
 import { matchesQueryOptions, sessionQueryOptions } from '@/services/query-options';
 import { subscribeCompanionFilters } from '@/stores/companion/subscriptions';
 import { useCompanionNavigation } from './companion-navigation';
-import { useCompanionEntryLock } from './use-companion-entry-lock';
 import { useAccountLifecycle } from '@/features/account/account-lifecycle';
 import type { Identity, Match } from '@/types/companion';
 
@@ -19,7 +18,7 @@ export function useCompanionHome(accountId: string | null, inheritedIdentity?: I
   const isLoggedIn = !!accountId;
   const router = useRouter();
   const client = useQueryClient();
-  const { paused, prepareChat: captureChat, captureNavigationIntent } = useCompanionNavigation();
+  const { paused, prepareChat: captureChat, cancelChat, captureNavigationIntent } = useCompanionNavigation();
   const { isLeavingAccount } = useAccountLifecycle();
   const mounted = useRef(true);
   useLayoutEffect(() => {
@@ -28,11 +27,17 @@ export function useCompanionHome(accountId: string | null, inheritedIdentity?: I
   }, []);
   const isOwnerActive = useCallback(() => mounted.current && !isLeavingAccount(), [isLeavingAccount]);
   const ui = useStoreInstance(() => createCompanionStore({ client, accountId, isOwnerActive, captureNavigationIntent, openLogin: () => router.push('/login'), prepareChat: captureChat, openChat: id => router.push(`/chat/${id}`, { scroll: false }) }));
-  const { filters, pendingIds, enteringId, error: meetError } = useStore(ui, useShallow(companionSelectors.view));
+  const { filters, pendingIds, enteringId, entryIdentityId, error: meetError } = useStore(ui, useShallow(companionSelectors.view));
   const entryLocked = useStore(ui, companionSelectors.entryLocked);
-  const pageRef = useCompanionEntryLock(ui, paused);
+  const pageRef = useRef<HTMLElement>(null);
   const { applyFilters, meetIdentity, clearError, finishEntry, beginEntry } = ui.getState();
   const prepareChat = useCallback(() => { finishEntry(); captureChat(); }, [finishEntry, captureChat]);
+  const dismissEntry = () => {
+    cancelChat();
+    finishEntry();
+    // Supersede a route request that may already be in flight after POST success.
+    router.replace(window.location.pathname + window.location.search, { scroll: false });
+  };
   useLayoutEffect(() => {
     if (paused) finishEntry();
   }, [paused, finishEntry]);
@@ -56,11 +61,12 @@ export function useCompanionHome(accountId: string | null, inheritedIdentity?: I
   const friends = useMemo(() => [...new Map((identities.data?.pages.flatMap(page => page.items) ?? []).filter(identity => identity.id !== inheritedIdentity?.id).map(identity => [identity.id, identity])).values()], [identities.data, inheritedIdentity?.id]);
   const recent = conversations.data?.items.filter(match => match.identity.id !== inheritedIdentity?.id);
   const known = useMemo(() => new Map(conversations.data?.items.map(match => [match.identity.id, match])), [conversations.data]);
+  const entryIdentity = friends.find(identity => identity.id === entryIdentityId) ?? (entryIdentityId ? known.get(entryIdentityId)?.identity : undefined);
   const cardContext = useMemo<CardContext>(() => ({ known, matchesReady: !isLoggedIn || !!conversations.data, pendingIds, enteringId, meet: meetIdentity, beginEntry }), [known, isLoggedIn, pendingIds, enteringId, conversations.data, meetIdentity, beginEntry]);
   const loadMore = useCallback(() => { if (!paused && !identities.isFetching) void identities.fetchNextPage(); }, [paused, identities.isFetching, identities.fetchNextPage]);
   const error = conversations.error ?? meetError;
   const page = identities.data?.pages[0];
   const retry = () => { if (isLoggedIn && conversations.error) void conversations.refetch(); clearError(); };
-  return { isLoggedIn, paused, entryLocked, pageRef, prepareChat, filters, applyFilters, heading, identities, conversations, friends, recent, cardContext, loadMore, error, page, retry };
+  return { isLoggedIn, paused, entryLocked, pageRef, prepareChat, filters, applyFilters, heading, identities, conversations, friends, recent, cardContext, loadMore, error, page, retry, entryIdentity, entryError: meetError, dismissEntry };
 }
 export type CompanionModel = ReturnType<typeof useCompanionHome>;

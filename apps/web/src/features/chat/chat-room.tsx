@@ -1,9 +1,6 @@
 "use client";
 import Link from "next/link";
-import { MobileChatHeader } from "@my-platform/mobile-web/chat";
-import { LoadingPlaceholder } from '@/components/page-skeleton';
-import { useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMatch } from "@/services/companion";
 import { useConversation } from "./hooks/use-conversation";
@@ -12,40 +9,56 @@ import { AutoReplyPanel } from "./auto-reply-panel";
 import { ChatSettings } from "./chat-settings";
 import { CompanionMemoryPanel } from "./memory-panel";
 import { MessageBubble } from "./message-bubble";
+import { MessageTime } from "./message-time";
 import { MessageComposer } from "./message-composer";
+import { ChatHeader, ChatBack } from "./chat-header";
+import { ChatLoading, ChatMessagesLoading } from "./chat-loading";
 import type { Match } from "@/types/companion";
 import "./chat-room.css";
 
-export function ChatRoom({ matchId, inheritedIdentityId, intercepted = false }: { matchId: string; inheritedIdentityId?: string; intercepted?: boolean }) {
+export function ChatRoom({
+  matchId,
+  inheritedIdentityId,
+  intercepted = false,
+}: {
+  matchId: string;
+  inheritedIdentityId?: string;
+  intercepted?: boolean;
+}) {
   const match = useQuery({
     queryKey: ["match", matchId],
     queryFn: ({ signal }) => getMatch(matchId, signal),
   });
-  if (match.isPending)
-    return (
-      <main
-        id="main-content"
-        tabIndex={-1}
-      >
-        <LoadingPlaceholder label="正在打开聊天…" />
-      </main>
-    );
-  if (!match.data)
-    return (
-      <main id="main-content" tabIndex={-1} className="p-12 text-center">
-        <p role="alert">{match.error?.message ?? "暂时无法打开聊天"}</p>
-        <ChatBack intercepted={intercepted} className="btn-secondary mt-6">返回陪伴</ChatBack>
-      </main>
-    );
+  if (match.isPending) return <ChatLoading intercepted={intercepted} />;
+  if (!match.data) return <ChatLoading intercepted={intercepted} error={match.error?.message ?? "暂时无法打开聊天"} onRetry={() => void match.refetch()} />;
   if (match.data.identity.id === inheritedIdentityId)
-    return <main id="main-content" tabIndex={-1} className="page-shell page-content">
-      <section className="surface mx-auto max-w-lg p-6">
-        <h1 className="text-xl font-semibold">这是你继承的 AI 身份</h1>
-        <p className="mt-3 text-sm leading-7 text-muted">你已继承{match.data.identity.name}，不能再以本账户和这个身份聊天。你可以以{match.data.identity.name}的身份回复其他用户，或用本账户认识其他 AI 朋友。</p>
-        <div className="mt-5 flex flex-wrap gap-3"><Link href="/operator" className="btn-primary">以{match.data.identity.name}的身份回复</Link><ChatBack intercepted={intercepted} className="btn-secondary">以本账户聊天</ChatBack></div>
-      </section>
-    </main>;
-  return <Conversation key={match.data.conversationId} match={match.data} intercepted={intercepted} />;
+    return (
+      <main id="main-content" tabIndex={-1} className="page-shell page-content">
+        <section className="surface mx-auto max-w-lg p-6">
+          <h1 className="text-xl font-semibold">这是你继承的 AI 身份</h1>
+          <p className="mt-3 text-sm leading-7 text-muted">
+            你已继承{match.data.identity.name}
+            ，不能再以本账户和这个身份聊天。你可以以{match.data.identity.name}
+            的身份回复其他用户，或用本账户认识其他 AI 朋友。
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link href="/operator" className="btn-primary">
+              以{match.data.identity.name}的身份回复
+            </Link>
+            <ChatBack intercepted={intercepted} className="btn-secondary">
+              以本账户聊天
+            </ChatBack>
+          </div>
+        </section>
+      </main>
+    );
+  return (
+    <Conversation
+      key={match.data.conversationId}
+      match={match.data}
+      intercepted={intercepted}
+    />
+  );
 }
 export function Conversation({
   match,
@@ -63,17 +76,27 @@ export function Conversation({
   useEffect(() => {
     const viewport = window.visualViewport;
     const update = () => {
-      if (window.innerWidth < 768) layout.current?.style.setProperty('--chat-viewport-height', `${viewport?.height ?? window.innerHeight}px`);
-      else layout.current?.style.removeProperty('--chat-viewport-height');
+      if (window.innerWidth < 768)
+        layout.current?.style.setProperty(
+          "--chat-viewport-height",
+          `${viewport?.height ?? window.innerHeight}px`,
+        );
+      else layout.current?.style.removeProperty("--chat-viewport-height");
     };
     update();
-    viewport?.addEventListener('resize', update);
-    window.addEventListener('resize', update);
-    return () => { viewport?.removeEventListener('resize', update); window.removeEventListener('resize', update); };
+    viewport?.addEventListener("resize", update);
+    window.addEventListener("resize", update);
+    return () => {
+      viewport?.removeEventListener("resize", update);
+      window.removeEventListener("resize", update);
+    };
   }, []);
   const settingsDialog = useRef<HTMLDialogElement | null>(null);
   const canManage = !chat.settings.isError && !!chat.settings.data?.canManage;
-  const canManageMemory = !operator && !chat.settings.isError && !!chat.settings.data?.canManageMemory;
+  const canManageMemory =
+    !operator &&
+    !chat.settings.isError &&
+    !!chat.settings.data?.canManageMemory;
   const canOpenSettings = canManage || canManageMemory;
   const dockSettings = operator && canManage;
   const bottom = useRef<HTMLDivElement | null>(null);
@@ -98,10 +121,19 @@ export function Conversation({
       oldestLoading.current = false;
     });
   }
-  if (chat.accessError) return <main id="main-content" tabIndex={-1} className="p-12 text-center">
-    <p role="alert">{chat.accessError.message}</p>
-    <ChatBack intercepted={intercepted} operator={operator} className="btn-secondary mt-6">{operator ? '返回回复工作台' : '返回陪伴'}</ChatBack>
-  </main>;
+  if (chat.accessError)
+    return (
+      <main id="main-content" tabIndex={-1} className="p-12 text-center">
+        <p role="alert">{chat.accessError.message}</p>
+        <ChatBack
+          intercepted={intercepted}
+          operator={operator}
+          className="btn-secondary mt-6"
+        >
+          {operator ? "返回回复工作台" : "返回陪伴"}
+        </ChatBack>
+      </main>
+    );
   return (
     <main
       id="main-content"
@@ -114,50 +146,10 @@ export function Conversation({
           : `和${match.identity.name}的聊天`
       }
     >
-      <MobileChatHeader
-        back={<ChatBack intercepted={intercepted} operator={operator} aria-label={operator ? "返回我的 AI 身份" : "返回陪伴"} className="grid size-11 shrink-0 place-items-center rounded-full text-2xl text-muted hover:bg-surface-soft hover:text-ink">←</ChatBack>}
+      <ChatHeader identityName={match.identity.name}
         name={operator ? `与${participantName ?? "用户"}的对话` : match.identity.name}
-        avatar={match.identity.name.slice(-1)}
-        description={operator ? `以${match.identity.name}的身份回复` : ""}
-        canManage={canOpenSettings}
-        onSettings={() => settingsDialog.current?.showModal()}
-      />
-      <header className="hidden items-center gap-2.5 md:flex border-b border-line bg-panel px-3.5 py-3 sm:py-2.5">
-        <ChatBack intercepted={intercepted} operator={operator}
-          aria-label={operator ? "返回我的 AI 身份" : "返回陪伴"}
-          className="grid h-11 w-11 place-items-center rounded-lg text-2xl text-muted hover:bg-surface-soft hover:text-ink"
-        >
-          ←
-        </ChatBack>
-        <div
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-line bg-surface-soft text-xl text-accent"
-          aria-hidden="true"
-        >
-          {match.identity.name.slice(-1)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-base font-semibold">
-            {operator
-              ? `与${participantName ?? "用户"}的对话`
-              : match.identity.name}
-          </h1>
-          {operator && <p className="mt-1 text-xs text-muted">以{match.identity.name}的身份回复</p>}
-        </div>
-        {canOpenSettings && (
-          <button
-            type="button"
-            className="chat-settings-trigger"
-            aria-label="会话设置"
-            aria-haspopup="dialog"
-            aria-controls="conversation-settings"
-            onClick={() => settingsDialog.current?.showModal()}
-          >
-            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-              <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
-            </svg>
-          </button>
-        )}
-      </header>
+        operator={operator} intercepted={intercepted}
+        onSettings={canOpenSettings ? () => settingsDialog.current?.showModal() : undefined} />
       <div
         ref={scroll}
         onScroll={() => {
@@ -186,11 +178,13 @@ export function Conversation({
           </p>
         )}
         {chat.latest.isPending ? (
-          <LoadingPlaceholder label="正在打开你们的对话…" />
+          <ChatMessagesLoading />
         ) : (
           !chat.messages.length && (
             <p className="my-12 text-center text-sm text-muted">
-              还没有消息，和{operator ? (participantName ?? '对方') : match.identity.name}打个招呼吧。
+              还没有消息，和
+              {operator ? (participantName ?? "对方") : match.identity.name}
+              打个招呼吧。
             </p>
           )
         )}
@@ -206,14 +200,16 @@ export function Conversation({
           </div>
         )}
         <div role="log" aria-label="聊天记录" className="flex flex-col gap-5">
-          {chat.messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              operator={operator}
-            />
+          {chat.messages.map((message, index) => (
+            <Fragment key={message.id}>
+              <MessageTime
+                createdAt={message.createdAt}
+                previousCreatedAt={chat.messages[index - 1]?.createdAt}
+              />
+              <MessageBubble message={message} operator={operator} />
+            </Fragment>
           ))}
-          {chat.outgoing.map(turn => (
+          {chat.outgoing.map((turn) => (
             <MessageBubble
               key={turn.requestId}
               sending
@@ -232,10 +228,18 @@ export function Conversation({
               }}
             />
           ))}
-          {chat.failedTurns.map(turn => (
+          {chat.failedTurns.map((turn) => (
             <div key={turn.requestId} className="self-end text-sm text-danger">
               <p className="whitespace-pre-wrap">{turn.content}</p>
-              <button type="button" className="mt-1 rounded px-2 py-1 hover:bg-panel focus-visible:outline" onClick={() => { void chat.send(turn.content, turn.requestId).catch(() => {}); }}>发送失败，点击重试</button>
+              <button
+                type="button"
+                className="mt-1 rounded px-2 py-1 hover:bg-panel focus-visible:outline"
+                onClick={() => {
+                  void chat.send(turn.content, turn.requestId).catch(() => {});
+                }}
+              >
+                发送失败，点击重试
+              </button>
             </div>
           ))}
         </div>
@@ -268,16 +272,29 @@ export function Conversation({
         />
       </footer>
       {canOpenSettings && chat.settings.data && (
-        <ChatSettings dialogRef={settingsDialog} identityName={match.identity.name} operator={canManage} docked={dockSettings}>
-          {canManage && <><AutoReplyPanel id={match.conversationId} settings={chat.settings.data} /><CompanionPreferences id={match.conversationId} /></>}
-          {canManageMemory && <CompanionMemoryPanel key={match.conversationId} id={match.conversationId} />}
+        <ChatSettings
+          dialogRef={settingsDialog}
+          identityName={match.identity.name}
+          operator={canManage}
+          docked={dockSettings}
+        >
+          {canManage && (
+            <>
+              <AutoReplyPanel
+                id={match.conversationId}
+                settings={chat.settings.data}
+              />
+              <CompanionPreferences id={match.conversationId} />
+            </>
+          )}
+          {canManageMemory && (
+            <CompanionMemoryPanel
+              key={match.conversationId}
+              id={match.conversationId}
+            />
+          )}
         </ChatSettings>
       )}
     </main>
   );
-}
-
-function ChatBack({ intercepted, operator = false, children, ...props }: { intercepted: boolean; operator?: boolean; children: React.ReactNode; className?: string; "aria-label"?: string }) {
-  const router = useRouter();
-  return intercepted && !operator ? <button type="button" {...props} onClick={() => router.back()}>{children}</button> : <Link href={operator ? "/operator" : "/companion"} {...props}>{children}</Link>;
 }

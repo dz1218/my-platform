@@ -16,7 +16,6 @@ export function MessageComposer({
   onTyping?: () => void;
   onSend: (content: string) => Promise<unknown>;
 }) {
-  const viewport = useViewport();
   const draft = useChatUI(chatSelectors.draft(matchId));
   const setDraft = useChatUI((state) => state.setDraft);
   const clearSentDraft = useChatUI((state) => state.clearSentDraft);
@@ -30,13 +29,23 @@ export function MessageComposer({
       /* The conversation hook renders the error and retains the request ID. */
     }
   }
+  return <MessageComposerView name={name} draft={draft} disabled={disabled}
+    onChange={value => { setDraft(matchId, value); onTyping?.(); }} onSubmit={() => void submit()} />;
+}
+
+/** Shared presentation also renders before an account/store is available. */
+export function MessageComposerView({ name, draft, disabled, onChange, onSubmit }: {
+  name: string; draft: string; disabled: boolean;
+  onChange: (value: string) => void; onSubmit: () => void;
+}) {
+  const viewport = useViewport();
   if (viewport === 'mobile') return <MobileMessageComposer name={name} draft={draft} sending={false} disabled={disabled}
-    onChange={value => { setDraft(matchId, value); onTyping?.(); }} onSend={() => void submit()} />;
+    onChange={onChange} onSend={onSubmit} />;
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        void submit();
+        onSubmit();
       }}
       className="input-group px-3.5 pb-2.5 pt-3"
     >
@@ -50,8 +59,7 @@ export function MessageComposer({
           disabled={disabled}
           value={draft}
           onChange={(event) => {
-            setDraft(matchId, event.target.value);
-            onTyping?.();
+            onChange(event.target.value);
           }}
           onKeyDown={(event) => {
             if (
@@ -61,7 +69,7 @@ export function MessageComposer({
               !event.nativeEvent.isComposing
             ) {
               event.preventDefault();
-              void submit();
+              onSubmit();
             }
           }}
           placeholder={`和${name}说点什么…`}

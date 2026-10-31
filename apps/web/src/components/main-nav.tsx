@@ -148,13 +148,13 @@ export function AppStartup() {
         <LoadingPlaceholder label="正在加载账户…" className="min-h-dvh" />
       </div>
     );
-  const liveRoom = /^\/live\/[^/]+$/.test(path);
+  const immersive = /^\/live\/[^/]+$/.test(path) || path.startsWith("/chat/");
   return (
     <div
       data-app-startup
       className="app-shell md:theme-graphite md:bg-canvas md:text-ink"
       data-nav-collapsed={collapsed}
-      data-immersive={liveRoom}
+      data-immersive={immersive}
     >
       <header className="site-nav text-ink" data-collapsed={collapsed}>
         <div className="site-brand">
@@ -209,10 +209,10 @@ export function AppStartup() {
       <div
         className={cn(
           "app-content md:min-h-dvh md:bg-canvas",
-          !liveRoom && "relative isolate app-content-ambient",
+          !immersive && "relative isolate app-content-ambient",
         )}
       >
-        {!liveRoom && <div aria-hidden="true" className="shell-ambient" />}
+        {!immersive && <div aria-hidden="true" className="shell-ambient" />}
         <AccountStartupContent path={path} />
       </div>
       <MobileNavigation path={path} Link={StartupMobileLink} />

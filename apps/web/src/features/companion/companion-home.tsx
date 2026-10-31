@@ -4,7 +4,7 @@ import { MatchLink } from '@/features/chat/match-link';
 import { ChevronRight, Users } from 'lucide-react';
 import { EmptyState } from '@my-platform/web-ui/empty-state';
 import { useLayoutEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { ChatEntryPreview } from '@/features/chat/chat-entry-preview';
 import { useAuthExit } from '@/features/auth/auth-exit-transition';
 import { useAppUI, useBrowseUI } from '@/stores/provider';
 import { useBrowseNavigation } from '@/components/browse-navigation';
@@ -40,7 +40,8 @@ export function CompanionHome({ accountId, inheritedIdentity }: { accountId: str
   }, [viewport, layoutReady, model.paused, onHomeReady]);
   if (!viewport) return <main ref={model.pageRef} id={model.paused ? undefined : 'main-content'} tabIndex={-1} className={companionPageClassName}><CompanionLoadingContent /></main>;
   return <main ref={model.pageRef} id={model.paused ? undefined : 'main-content'} tabIndex={-1} className={companionPageClassName}>
-    {model.entryLocked && !model.paused && createPortal(<span role="status" className="sr-only">正在进入聊天…</span>, document.body)}
+    {model.entryIdentity && !model.paused && <ChatEntryPreview identityName={model.entryIdentity.name} onBack={model.dismissEntry}
+      error={model.entryError?.message} onRetry={() => model.cardContext.meet(model.entryIdentity!.id)} />}
     <MobilePullToRefresh enabled={viewport === 'mobile' && !model.paused && !model.entryLocked} label="人物目录" busy={model.identities.isFetching} onRefresh={() => model.identities.refetch({ throwOnError: true, cancelRefetch: false })} />
     {viewport === 'mobile' ? <MobileCompanionHeading actions={!model.isLoggedIn && <Link href="/login" className="btn-secondary">登录 / 注册</Link>} /> : <CompanionHeading />}
     {inheritedIdentity && <IdentityModeSwitch identity={inheritedIdentity} />}

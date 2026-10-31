@@ -102,6 +102,7 @@ export function BrowseNavigationProvider({ children }: { children: ReactNode }) 
     capture();
   }, [capture]);
   const prepareChat = useCallback(() => prepareNavigation('/chat/'), [prepareNavigation]);
+  const cancelChat = useCallback(() => { navigationGeneration.current++; }, []);
   const captureNavigationIntent = useCallback(() => {
     const generation = navigationGeneration.current;
     return () => navigationGeneration.current === generation && isCompanion(currentHref.current) && window.location.pathname === '/companion';
@@ -246,7 +247,7 @@ export function BrowseNavigationProvider({ children }: { children: ReactNode }) 
   const companionVisible = !companionPaused || (isChat(href) && chatOwner !== null);
   const value = useMemo(() => ({ prepareNavigation, hrefForTab, background, pageContent, backgroundSnapshot, companionVisible, companionPaused, restorationPending }), [prepareNavigation, hrefForTab, companionVisible, companionPaused, restorationPending]);
   return <BrowseContext.Provider value={value}>
-    <CompanionNavigation paused={companionPaused} prepareChat={prepareChat} captureNavigationIntent={captureNavigationIntent} registerChatRoute={registerChatRoute}>{children}</CompanionNavigation>
+    <CompanionNavigation paused={companionPaused} prepareChat={prepareChat} cancelChat={cancelChat} captureNavigationIntent={captureNavigationIntent} registerChatRoute={registerChatRoute}>{children}</CompanionNavigation>
   </BrowseContext.Provider>;
 }
 

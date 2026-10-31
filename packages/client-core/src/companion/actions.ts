@@ -22,11 +22,11 @@ export const createCompanionActions = ({ client, service, accountId, isOwnerActi
     set({ filters });
   },
   clearError: () => set({ error: null }),
-  finishEntry: () => set({ enteringId: null }),
+  finishEntry: () => set({ enteringId: null, entryIdentityId: null }),
   beginEntry: id => {
     if (!isOwnerActive() || get().enteringId !== null || get().pendingIds.length > 0) return false;
     prepareChat();
-    set({ enteringId: id, error: null });
+    set({ enteringId: id, entryIdentityId: id, error: null });
     return true;
   },
   meetIdentity: async id => {
@@ -37,9 +37,9 @@ export const createCompanionActions = ({ client, service, accountId, isOwnerActi
     // A failed background refresh can leave usable cached matches with status=error.
     if (!client.getQueryData(['matches', accountId])) return;
     // Capture focus before the pending state disables/replaces the trigger.
-    prepareChat();
+    if (get().entryIdentityId !== id) prepareChat();
     const canNavigate = captureNavigationIntent();
-    set({ pendingIds: [id], enteringId: null, error: null });
+    set({ pendingIds: [id], enteringId: null, entryIdentityId: id, error: null });
     try {
       const match = await service.meet(id);
       if (!isOwnerActive()) return;

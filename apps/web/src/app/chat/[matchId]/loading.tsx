@@ -1,5 +1,5 @@
-import { PageLoading } from '@/components/page-skeleton';
+import { ChatRouteLoading } from '@/features/chat/chat-loading';
 
 export default function Loading() {
-  return <PageLoading kind="chat" />;
+  return <ChatRouteLoading />;
 }
